@@ -1,5 +1,44 @@
 import { Tool } from './components/Tool'
 
+const CONGIX_URL = 'https://congix.uz'
+
+function PromoBanner({ slot, size = 'banner' }: { slot: string; size?: 'banner' | 'inline' }) {
+  const compact = size === 'inline'
+  return (
+    <aside className={`promo promo-${size}`} data-ad-slot={slot} aria-label="Реклама проектов автора">
+      <span className="promo-label">Реклама</span>
+      <div className="promo-body">
+        <span className="promo-mark" aria-hidden="true">
+          C
+        </span>
+        <div className="promo-copy">
+          <p className="promo-title">Congix — ИИ-репетитор для школьников</p>
+          <p className="promo-text">
+            {compact
+              ? 'Объяснит тему и решит задачу по шагам — по математике, физике и химии.'
+              : 'Застрял на задаче? Congix объяснит тему по шагам, разберёт домашку и потренирует перед контрольной. Бесплатно, в браузере, на русском и узбекском.'}
+          </p>
+        </div>
+        <a className="promo-cta" href={CONGIX_URL} target="_blank" rel="noopener">
+          {compact ? 'Открыть' : 'Открыть congix.uz'}
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path
+              d="M7 17 17 7m0 0H9m8 0v8"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </a>
+      </div>
+      {!compact && (
+        <p className="promo-note">Бесплатно · ~30 вопросов каждые 8 часов · без рекламы внутри</p>
+      )}
+    </aside>
+  )
+}
+
 const Arrow = () => (
   <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
     <path
@@ -160,43 +199,57 @@ export default function App() {
           </div>
 
           <div className="hero-art" aria-hidden="true">
-            <div className="art-card art-pdf">
-              <span className="art-tag">PDF</span>
-              <span className="art-line w-90" />
-              <span className="art-line w-70" />
-              <span className="art-line w-80" />
-              <span className="art-line w-45" />
-            </div>
-            <div className="art-arrow">
-              <svg viewBox="0 0 24 24" fill="none">
-                <path
-                  d="M5 12h13m0 0-5-5m5 5-5 5"
-                  stroke="currentColor"
-                  strokeWidth="1.8"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            </div>
-            <div className="art-card art-doc">
-              <span className="art-tag art-tag-alt">DOCX</span>
-              <span className="art-line w-85" />
-              <span className="art-line w-60" />
-              <span className="art-line w-75" />
-              <span className="art-line w-40" />
-              <div className="art-photos">
-                <span />
-                <span />
-                <span />
+            <div className="art-window">
+              <div className="art-bar">
+                <span className="art-dot" />
+                <span className="art-dot" />
+                <span className="art-dot" />
+                <span className="art-url">rekpdf · всё в браузере</span>
+              </div>
+              <div className="art-stage">
+                <div className="art-card art-pdf">
+                  <span className="art-tag">PDF</span>
+                  <span className="art-line w-90" />
+                  <span className="art-line w-70" />
+                  <span className="art-line w-80" />
+                  <span className="art-line w-45" />
+                </div>
+                <div className="art-arrow">
+                  <svg viewBox="0 0 24 24" fill="none">
+                    <path
+                      d="M5 12h13m0 0-5-5m5 5-5 5"
+                      stroke="currentColor"
+                      strokeWidth="1.8"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                </div>
+                <div className="art-card art-doc">
+                  <span className="art-tag art-tag-alt">DOCX</span>
+                  <span className="art-line w-85" />
+                  <span className="art-line w-60" />
+                  <span className="art-line w-75" />
+                  <span className="art-line w-40" />
+                  <div className="art-photos">
+                    <span />
+                    <span />
+                    <span />
+                  </div>
+                </div>
+                <span className="art-chip chip-a">12 фото · ZIP</span>
+                <span className="art-chip chip-b">текст редактируется</span>
               </div>
             </div>
-            <span className="art-chip chip-a">12 фото · ZIP</span>
-            <span className="art-chip chip-b">текст редактируется</span>
-            <span className="art-chip chip-c">0 загрузок</span>
+            <span className="art-badge">
+              <span className="art-badge-dot" />0 загрузок на сервер
+            </span>
           </div>
         </section>
 
         <Tool />
+
+        <PromoBanner slot="after-tool" />
 
         <section className="features" id="features">
           <div className="section-head">
@@ -207,8 +260,9 @@ export default function App() {
             </p>
           </div>
           <div className="feature-grid">
-            {features.map((feature) => (
+            {features.map((feature, index) => (
               <article className="feature" key={feature.title}>
+                <span className="feature-index">0{index + 1}</span>
                 <span className="feature-icon">
                   <svg viewBox="0 0 24 24" fill="none">
                     {feature.icon}
@@ -236,6 +290,8 @@ export default function App() {
             ))}
           </div>
         </section>
+
+        <PromoBanner slot="before-faq" size="inline" />
 
         <section className="faq" id="faq">
           <div className="section-head">
