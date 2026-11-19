@@ -59,7 +59,7 @@ function PromoBanner({ slot, size = 'banner' }: { slot: string; size?: 'banner' 
               <small>онлайн · объясняет</small>
             </span>
           </div>
-          <p className="bubble bubble-user">Не пойму, откуда взялось 6 в 2x + 5 = 17</p>
+          <p className="bubble bubble-user">Откуда взялось 6 в 2x + 5 = 17?</p>
           <div className="bubble bubble-bot">
             <span className="bubble-step">Шаг 1 · переносим 5</span>
             2x = 17 − 5 = 12
@@ -198,7 +198,7 @@ export default function App() {
           </span>
         </a>
         <nav className="nav-links" aria-label="Разделы">
-          <a href="#tool">Конвертер</a>
+          <a href="#tool">Инструменты</a>
           <a href="#how">Как это работает</a>
           <a href="#faq">Вопросы</a>
         </nav>
