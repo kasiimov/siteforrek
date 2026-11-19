@@ -3,38 +3,80 @@ import { Tool } from './components/Tool'
 const CONGIX_URL = 'https://congix.uz'
 
 function PromoBanner({ slot, size = 'banner' }: { slot: string; size?: 'banner' | 'inline' }) {
-  const compact = size === 'inline'
-  return (
-    <aside className={`promo promo-${size}`} data-ad-slot={slot} aria-label="Реклама проектов автора">
-      <span className="promo-label">Реклама</span>
-      <div className="promo-body">
-        <span className="promo-mark" aria-hidden="true">
-          C
-        </span>
-        <div className="promo-copy">
-          <p className="promo-title">Congix — ИИ-репетитор для школьников</p>
-          <p className="promo-text">
-            {compact
-              ? 'Объяснит тему и решит задачу по шагам — по математике, физике и химии.'
-              : 'Застрял на задаче? Congix объяснит тему по шагам, разберёт домашку и потренирует перед контрольной. Бесплатно, в браузере, на русском и узбекском.'}
-          </p>
-        </div>
-        <a className="promo-cta" href={CONGIX_URL} target="_blank" rel="noopener">
-          {compact ? 'Открыть' : 'Открыть congix.uz'}
-          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path
-              d="M7 17 17 7m0 0H9m8 0v8"
-              stroke="currentColor"
-              strokeWidth="1.8"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
+  if (size === 'inline') {
+    return (
+      <aside className="promo-strip" data-ad-slot={slot} aria-label="Реклама проектов автора">
+        <span className="promo-strip-tag">Реклама</span>
+        <span className="promo-strip-word">Congix</span>
+        <p className="promo-strip-line">
+          Репетитор, который объясняет <em>по шагам</em>, а не выдаёт ответ
+        </p>
+        <a className="promo-strip-cta" href={CONGIX_URL} target="_blank" rel="noopener">
+          30 вопросов бесплатно
+          <Arrow />
         </a>
+      </aside>
+    )
+  }
+
+  return (
+    <aside className="promo" data-ad-slot={slot} aria-label="Реклама проектов автора">
+      <div className="promo-copy">
+        <span className="promo-kicker">
+          <span className="promo-dot" aria-hidden="true" />
+          Реклама · проект автора
+        </span>
+        <h3 className="promo-headline">
+          Домашка не сдаётся.
+          <br />
+          <span>Сдаётся — Congix.</span>
+        </h3>
+        <p className="promo-sub">
+          ИИ-репетитор для школьников Узбекистана: разберёт задачу по шагам, объяснит тему и
+          потренирует перед контрольной.
+        </p>
+        <ul className="promo-chips">
+          <li>математика</li>
+          <li>физика</li>
+          <li>химия</li>
+          <li>RU / UZ</li>
+        </ul>
+        <div className="promo-actions">
+          <a className="promo-btn" href={CONGIX_URL} target="_blank" rel="noopener">
+            Попробовать бесплатно
+            <Arrow />
+          </a>
+          <span className="promo-foot">~30 вопросов каждые 8 часов · без рекламы внутри</span>
+        </div>
       </div>
-      {!compact && (
-        <p className="promo-note">Бесплатно · ~30 вопросов каждые 8 часов · без рекламы внутри</p>
-      )}
+
+      <div className="promo-demo" aria-hidden="true">
+        <div className="promo-chat">
+          <div className="promo-chat-top">
+            <span className="promo-chat-logo">C</span>
+            <span className="promo-chat-name">
+              Congix
+              <small>онлайн · объясняет</small>
+            </span>
+          </div>
+          <p className="bubble bubble-user">Не пойму, откуда взялось 6 в 2x + 5 = 17</p>
+          <div className="bubble bubble-bot">
+            <span className="bubble-step">Шаг 1 · переносим 5</span>
+            2x = 17 − 5 = 12
+            <span className="bubble-step">Шаг 2 · делим на 2</span>
+            x = 6 ✓
+          </div>
+          <div className="promo-typing">
+            <span />
+            <span />
+            <span />
+          </div>
+        </div>
+        <span className="promo-sticker">
+          <strong>30</strong>
+          вопросов бесплатно
+        </span>
+      </div>
     </aside>
   )
 }
