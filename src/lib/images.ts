@@ -14,7 +14,7 @@ export type ExtractedImage = {
 type Progress = (done: number, total: number) => void
 
 /** Достаёт картинку из внутреннего стора pdf.js в любом из поддерживаемых видов. */
-function resolveImage(page: PDFPageProxy, id: string): Promise<unknown> {
+export function resolveImage(page: PDFPageProxy, id: string): Promise<unknown> {
   return new Promise((resolve) => {
     let settled = false
     const finish = (value: unknown) => {
@@ -70,7 +70,7 @@ function imageDataFromRaw(data: ArrayLike<number>, width: number, height: number
 }
 
 /** Превращает объект изображения pdf.js в canvas или возвращает null. */
-function toCanvas(source: unknown): HTMLCanvasElement | null {
+export function toCanvas(source: unknown): HTMLCanvasElement | null {
   if (!source || typeof source !== 'object') return null
 
   if (typeof ImageBitmap !== 'undefined' && source instanceof ImageBitmap) {

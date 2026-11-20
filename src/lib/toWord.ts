@@ -1,97 +1,300 @@
 import {
+  AlignmentType,
+  BorderStyle,
   Document,
+  HorizontalPositionRelativeFrom,
   ImageRun,
+  LineRuleType,
   Packer,
-  PageBreak,
   Paragraph,
+  Table,
+  TableCell,
+  TableLayoutType,
+  TableRow,
   TextRun,
+  TextWrappingType,
+  VerticalPositionRelativeFrom,
+  WidthType,
 } from 'docx'
 import type { PDFDocumentProxy, PDFPageProxy } from 'pdfjs-dist'
-import type { TextItem } from 'pdfjs-dist/types/src/display/api'
+import { buildPageLayout } from './pdfLayout'
+import type { Family, LineSpec, PageLayout, TableSpec } from './pdfLayout'
 
-const BOLD_RE = /bold|black|heavy|semibold|demi/i
+const FONT: Record<Family, string> = {
+  sans: 'Arial',
+  serif: 'Times New Roman',
+  mono: 'Courier New',
+}
+
+const TWIPS = 20
+const EMU = 12700
 const SCAN_SCALE = 1.5
 const SCAN_MAX_WIDTH = 1400
 const SCAN_QUALITY = 0.82
 
 type Progress = (done: number, total: number) => void
+type Block = Paragraph | Table
 
-type Line = {
-  size: number
-  text: string
-  bold: boolean
+const NO_BORDERS = {
+  top: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
+  bottom: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
+  left: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
+  right: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
+  insideHorizontal: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
+  insideVertical: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
 }
 
-function fontLabel(page: PDFPageProxy, fontName?: string): string {
-  if (!fontName) return ''
-  try {
-    const font = page.commonObjs.get(fontName) as { name?: string } | null
-    return font?.name ?? fontName
-  } catch {
-    return fontName
-  }
+const GRID_BORDERS = {
+  top: { style: BorderStyle.SINGLE, size: 4, color: '808080' },
+  bottom: { style: BorderStyle.SINGLE, size: 4, color: '808080' },
+  left: { style: BorderStyle.SINGLE, size: 4, color: '808080' },
+  right: { style: BorderStyle.SINGLE, size: 4, color: '808080' },
+  insideHorizontal: { style: BorderStyle.SINGLE, size: 4, color: '808080' },
+  insideVertical: { style: BorderStyle.SINGLE, size: 4, color: '808080' },
 }
 
-/** Склеивает текстовые фрагменты страницы в строки, сохраняя порядок и пробелы. */
-function buildLines(page: PDFPageProxy, items: TextItem[]): Line[] {
-  const rows: { y: number; glyphs: TextItem[] }[] = []
+const ALIGN = {
+  left: AlignmentType.LEFT,
+  center: AlignmentType.CENTER,
+  right: AlignmentType.RIGHT,
+  justify: AlignmentType.JUSTIFIED,
+} as const
 
-  for (const item of items) {
-    if (!item.str) continue
-    const y = item.transform[5]
-    const size = Math.abs(item.transform[3]) || item.height || 10
-    const tolerance = Math.max(1.5, Math.min(5, size * 0.35))
-    const row = rows.find((r) => Math.abs(r.y - y) <= tolerance)
-    if (row) row.glyphs.push(item)
-    else rows.push({ y, glyphs: [item] })
-  }
+function lineHeight(line: LineSpec): number {
+  return Math.max(line.size * 1.16, 1)
+}
 
-  rows.sort((a, b) => b.y - a.y)
+/** Параграф из строки PDF: шрифт, размер, жирность внутри строки и отступ как в оригинале. */
+function paragraphFrom(line: LineSpec, beforePt: number, leftShift = 0): Paragraph {
+  const runs = line.runs.length
+    ? line.runs
+    : [{ text: line.text, size: line.size, bold: false, italic: false, family: 'sans' as Family, script: null }]
 
-  return rows.map((row) => {
-    const glyphs = [...row.glyphs].sort((a, b) => a.transform[4] - b.transform[4])
-    let text = ''
-    let prevEnd: number | null = null
-    let size = 0
-    const fonts = new Map<string, number>()
-    let dominantFont = ''
-    let dominantWeight = 0
-
-    for (const glyph of glyphs) {
-      const x = glyph.transform[4]
-      const glyphSize = Math.abs(glyph.transform[3]) || glyph.height || 10
-      size = Math.max(size, glyphSize)
-
-      if (prevEnd !== null) {
-        const gap = x - prevEnd
-        if (gap > Math.max(1.2, glyphSize * 0.22) && !/\s$/.test(text) && !/^\s/.test(glyph.str)) {
-          text += ' '
-        }
-      }
-      text += glyph.str
-      prevEnd = x + (glyph.width ?? 0)
-
-      if (glyph.fontName) {
-        const weight = (fonts.get(glyph.fontName) ?? 0) + glyph.str.length
-        fonts.set(glyph.fontName, weight)
-        if (weight > dominantWeight) {
-          dominantWeight = weight
-          dominantFont = glyph.fontName
-        }
-      }
-    }
-
-    return {
-      size,
-      text,
-      bold: BOLD_RE.test(fontLabel(page, dominantFont)),
-    }
+  return new Paragraph({
+    alignment: ALIGN[line.align],
+    indent: line.align === 'left' ? { left: Math.max(0, Math.round((line.left - leftShift) * TWIPS)) } : undefined,
+    spacing: {
+      before: Math.max(0, Math.round(beforePt * TWIPS)),
+      after: 0,
+      line: Math.max(20, Math.round(lineHeight(line) * TWIPS)),
+      lineRule: LineRuleType.EXACT,
+    },
+    children: runs.map(
+      (run) =>
+        new TextRun({
+          text: run.text,
+          bold: run.bold,
+          italics: run.italic,
+          size: Math.max(2, Math.round(run.size * 2)),
+          font: FONT[run.family],
+          superScript: run.script === 'super',
+          subScript: run.script === 'sub',
+        }),
+    ),
   })
 }
 
-async function renderPageToJpeg(
-  page: PDFPageProxy,
-): Promise<{ data: Uint8Array; width: number; height: number }> {
+function spacerParagraph(heightPt: number): Paragraph {
+  return new Paragraph({
+    spacing: {
+      before: 0,
+      after: 0,
+      line: Math.max(20, Math.round(heightPt * TWIPS)),
+      lineRule: LineRuleType.EXACT,
+    },
+    children: [new TextRun({ text: '', size: 2 })],
+  })
+}
+
+/** Картинка ставится на то же место страницы, где она была в PDF. */
+function imageParagraph(image: PageLayout['images'][number]): Paragraph {
+  return new Paragraph({
+    spacing: { before: 0, after: 0, line: 20, lineRule: LineRuleType.EXACT },
+    children: [
+      new ImageRun({
+        type: 'jpg',
+        data: image.data,
+        transformation: {
+          width: Math.max(2, Math.round(image.width * (4 / 3))),
+          height: Math.max(2, Math.round(image.height * (4 / 3))),
+        },
+        floating: {
+          horizontalPosition: {
+            relative: HorizontalPositionRelativeFrom.PAGE,
+            offset: Math.round(image.left * EMU),
+          },
+          verticalPosition: {
+            relative: VerticalPositionRelativeFrom.PAGE,
+            offset: Math.round(image.top * EMU),
+          },
+          wrap: { type: TextWrappingType.NONE },
+          allowOverlap: true,
+          behindDocument: false,
+        },
+      }),
+    ],
+  })
+}
+
+/** Настоящая Word-таблица из найденной в PDF сетки. */
+function gridTable(table: TableSpec): Table {
+  const widths = table.columns.slice(0, -1).map((x, index) => Math.max(240, Math.round((table.columns[index + 1] - x) * TWIPS)))
+
+  return new Table({
+    rows: table.rows.map((row) => {
+      let cursor = row.top
+      return new TableRow({
+        children: row.cells.map((cell, index) => {
+          const children: Paragraph[] = cell.length
+            ? cell.map((line) => {
+                const paragraph = paragraphFrom(line, Math.max(0, line.top - cursor), table.columns[index])
+                cursor = line.top + lineHeight(line)
+                return paragraph
+              })
+            : [spacerParagraph(Math.max(2, row.bottom - row.top))]
+
+          return new TableCell({
+            children,
+            width: { size: widths[index], type: WidthType.DXA },
+            margins: { top: 40, bottom: 40, left: 80, right: 80 },
+          })
+        }),
+      })
+    }),
+    width: { size: Math.round(table.width * TWIPS), type: WidthType.DXA },
+    columnWidths: widths,
+    indent: { size: Math.max(0, Math.round(table.left * TWIPS)), type: WidthType.DXA },
+    layout: TableLayoutType.FIXED,
+    borders: GRID_BORDERS,
+  })
+}
+
+/** Многоколоночная вёрстка: строки-«полосы» из ячеек, чтобы колонки стояли рядом. */
+function columnTable(layout: PageLayout): Table | null {
+  const gutters = layout.columns
+  if (!gutters || !layout.lines.length) return null
+
+  const contentLeft = Math.min(...layout.lines.map((line) => line.left))
+  const contentRight = Math.max(...layout.lines.map((line) => line.right))
+  const zones = [contentLeft, ...gutters, contentRight]
+  const widths = zones.slice(0, -1).map((x, index) => Math.max(240, Math.round((zones[index + 1] - x) * TWIPS)))
+
+  const sorted = [...layout.lines].sort((a, b) => a.top - b.top)
+  const bands: { top: number; bottom: number; lines: LineSpec[]; table?: TableSpec }[] = []
+
+  for (const line of sorted) {
+    const band = bands.find(
+      (candidate) => !candidate.table && line.top < candidate.bottom - 1 && line.bottom > candidate.top + 1,
+    )
+    if (band) {
+      band.lines.push(line)
+      band.top = Math.min(band.top, line.top)
+      band.bottom = Math.max(band.bottom, line.bottom)
+    } else {
+      bands.push({ top: line.top, bottom: line.bottom, lines: [line] })
+    }
+  }
+
+  // Таблицы занимают пустые по тексту полосы — встают отдельной строкой с вложенной таблицей.
+  for (const table of layout.tables) bands.push({ top: table.top, bottom: table.bottom, lines: [], table })
+  bands.sort((a, b) => a.top - b.top)
+
+  const totalWidth = widths.reduce((sum, width) => sum + width, 0)
+
+  const rows = bands.map((band) => {
+    if (band.table) {
+      return new TableRow({
+        children: [
+          new TableCell({
+            children: [gridTable(band.table)],
+            columnSpan: zones.length - 1,
+            width: { size: totalWidth, type: WidthType.DXA },
+            margins: { top: 0, bottom: 0, left: 0, right: 0 },
+          }),
+        ],
+      })
+    }
+
+    if (band.lines.length === 1) {
+      const line = band.lines[0]
+      return new TableRow({
+        children: [
+          new TableCell({
+            children: [paragraphFrom(line, 0, contentLeft)],
+            columnSpan: zones.length - 1,
+            width: { size: totalWidth, type: WidthType.DXA },
+            margins: { top: 0, bottom: 0, left: 0, right: 0 },
+          }),
+        ],
+      })
+    }
+
+    return new TableRow({
+      children: zones.slice(0, -1).map((zoneStart, index) => {
+        const inColumn = band.lines.filter((line) => {
+          const center = (line.left + line.right) / 2
+          return center >= zoneStart && center <= zones[index + 1]
+        })
+
+        return new TableCell({
+          children: inColumn.length
+            ? inColumn.map((line, lineIndex) =>
+                paragraphFrom(line, lineIndex === 0 ? Math.max(0, line.top - band.top) : Math.max(0, line.top - inColumn[lineIndex - 1].top - lineHeight(inColumn[lineIndex - 1])), zoneStart),
+              )
+            : [spacerParagraph(Math.max(2, band.bottom - band.top))],
+          width: { size: widths[index], type: WidthType.DXA },
+          margins: { top: 0, bottom: 0, left: 0, right: 0 },
+        })
+      }),
+    })
+  })
+
+  return new Table({
+    rows,
+    width: { size: widths.reduce((sum, width) => sum + width, 0), type: WidthType.DXA },
+    columnWidths: widths,
+    indent: { size: Math.max(0, Math.round(contentLeft * TWIPS)), type: WidthType.DXA },
+    layout: TableLayoutType.FIXED,
+    borders: NO_BORDERS,
+  })
+}
+
+function pageBlocks(layout: PageLayout): Block[] {
+  const blocks: Block[] = layout.images.map(imageParagraph)
+
+  if (layout.columns && layout.lines.length) {
+    const table = columnTable(layout)
+    if (table) {
+      const top = Math.min(...layout.lines.map((line) => line.top), ...layout.tables.map((item) => item.top))
+      if (top > 6) blocks.push(spacerParagraph(top))
+      blocks.push(table)
+      return blocks
+    }
+  }
+
+  const flow = [
+    ...layout.lines.map((line) => ({ kind: 'line' as const, top: line.top, line })),
+    ...layout.tables.map((table) => ({ kind: 'table' as const, top: table.top, table })),
+  ].sort((a, b) => a.top - b.top)
+
+  let cursor = 0
+
+  for (const item of flow) {
+    if (item.kind === 'line') {
+      blocks.push(paragraphFrom(item.line, Math.max(0, item.line.top - cursor)))
+      cursor = item.line.top + lineHeight(item.line)
+    } else {
+      const gap = item.table.top - cursor
+      if (gap > 4) blocks.push(spacerParagraph(gap))
+      blocks.push(gridTable(item.table))
+      cursor = item.table.bottom
+    }
+  }
+
+  return blocks
+}
+
+async function renderPageToJpeg(page: PDFPageProxy): Promise<{ data: Uint8Array; width: number; height: number }> {
   const base = page.getViewport({ scale: 1 })
   const scale = Math.min(SCAN_SCALE, SCAN_MAX_WIDTH / Math.max(1, base.width))
   const viewport = page.getViewport({ scale })
@@ -107,92 +310,76 @@ async function renderPageToJpeg(
 
   await page.render({ canvas, canvasContext: context, viewport }).promise
 
-  const blob = await new Promise<Blob | null>((resolve) =>
-    canvas.toBlob(resolve, 'image/jpeg', SCAN_QUALITY),
-  )
+  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', SCAN_QUALITY))
   if (!blob) throw new Error('Не удалось сгенерировать изображение страницы')
 
-  return {
-    data: new Uint8Array(await blob.arrayBuffer()),
-    width: canvas.width,
-    height: canvas.height,
-  }
+  return { data: new Uint8Array(await blob.arrayBuffer()), width: canvas.width, height: canvas.height }
 }
 
-function fit(width: number, height: number) {
-  const scale = Math.min(600 / width, 800 / height, 1)
-  return {
-    width: Math.max(1, Math.round(width * scale)),
-    height: Math.max(1, Math.round(height * scale)),
-  }
+function scanBlocks(page: PDFPageProxy, image: { data: Uint8Array; width: number; height: number }): Block[] {
+  const view = page.view as number[]
+  const pageWidth = view[2] - view[0]
+  const pageHeight = view[3] - view[1]
+  const scale = Math.min(pageWidth / image.width, pageHeight / image.height)
+
+  return [
+    new Paragraph({
+      children: [
+        new ImageRun({
+          type: 'jpg',
+          data: image.data,
+          transformation: {
+            width: Math.max(2, Math.round(image.width * scale * (4 / 3))),
+            height: Math.max(2, Math.round(image.height * scale * (4 / 3))),
+          },
+        }),
+      ],
+    }),
+  ]
 }
 
 /**
- * Собирает .docx: если в PDF есть текстовый слой — переносим строки,
- * если это скан без текста — вставляем отрендеренные страницы картинками.
+ * Собирает .docx с сохранением вёрстки: размер страницы как в PDF, отступы строк,
+ * шрифты, картинки на своих местах, таблицы и колонки. Скан без текстового слоя
+ * вставляется картинками страниц.
  */
 export async function pdfToDocx(pdf: PDFDocumentProxy, onProgress?: Progress): Promise<Blob> {
   const total = pdf.numPages
-  // Половина шкалы — разбор текста, вторая половина — рендер страниц скана.
   const steps = total * 2
-  const children: Paragraph[] = []
-  const pageLines: Line[][] = []
-  let characters = 0
+  const sections: { properties: { page: { size: { width: number; height: number }; margin: Record<string, number> } }; children: Block[] }[] = []
 
   for (let pageNumber = 1; pageNumber <= total; pageNumber++) {
     const page = await pdf.getPage(pageNumber)
-    const content = await page.getTextContent()
-    const items = content.items.filter((item): item is TextItem => 'str' in item)
-    const lines = buildLines(page, items)
-    characters += lines.reduce((sum, line) => sum + line.text.length, 0)
-    pageLines.push(lines)
-    page.cleanup()
-    onProgress?.(pageNumber, steps)
-  }
+    const layout = await buildPageLayout(page)
+    const children: Block[] = []
 
-  const scanned = characters < 20
-
-  if (scanned) {
-    for (let pageNumber = 1; pageNumber <= total; pageNumber++) {
-      const page = await pdf.getPage(pageNumber)
+    if (layout.scanned) {
       const image = await renderPageToJpeg(page)
-      const box = fit(image.width, image.height)
-      if (pageNumber > 1) children.push(new Paragraph({ children: [new PageBreak()] }))
-      children.push(
-        new Paragraph({
-          children: [
-            new ImageRun({
-              data: image.data,
-              type: 'jpg',
-              transformation: box,
-            }),
-          ],
-        }),
-      )
-      page.cleanup()
+      children.push(...scanBlocks(page, image))
       onProgress?.(total + pageNumber, steps)
+    } else {
+      children.push(...pageBlocks(layout))
+      onProgress?.(pageNumber, steps)
     }
-  } else {
-    onProgress?.(steps, steps)
-    pageLines.forEach((lines, index) => {
-      if (index > 0) children.push(new Paragraph({ children: [new PageBreak()] }))
-      for (const line of lines) {
-        if (!line.text.trim()) continue
-        children.push(
-          new Paragraph({
-            spacing: { after: 0, line: 260 },
-            children: [
-              new TextRun({
-                text: line.text,
-                bold: line.bold,
-                size: Math.round(Math.min(72, Math.max(8, line.size)) * 2),
-                font: 'Calibri',
-              }),
-            ],
-          }),
-        )
-      }
+
+    if (!children.length) {
+      children.push(new Paragraph({ children: [new TextRun({ text: '' })] }))
+    }
+
+    sections.push({
+      properties: {
+        page: {
+          size: {
+            width: Math.round(layout.width * TWIPS),
+            height: Math.round(layout.height * TWIPS),
+          },
+          margin: { top: 0, bottom: 0, left: 0, right: 0, header: 0, footer: 0, gutter: 0 },
+        },
+      },
+      children,
     })
+
+    page.cleanup()
   }
 
   const doc = new Document({
@@ -201,11 +388,11 @@ export async function pdfToDocx(pdf: PDFDocumentProxy, onProgress?: Progress): P
     styles: {
       default: {
         document: {
-          run: { font: 'Calibri', size: 22 },
+          run: { font: FONT.sans, size: 22 },
         },
       },
     },
-    sections: [{ children }],
+    sections,
   })
 
   return Packer.toBlob(doc)

@@ -18,7 +18,7 @@ export const catalog: ToolSpec[] = [
   {
     id: 'word',
     name: 'PDF → Word',
-    hint: 'Готовый .docx с текстом, который можно править.',
+    hint: 'Готовый .docx с той же вёрсткой: шрифты, отступы, колонки, таблицы и картинки на своих местах.',
     accept: 'application/pdf,.pdf',
     acceptLabel: 'PDF',
     multiple: false,
