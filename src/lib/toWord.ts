@@ -19,8 +19,9 @@ import {
 } from 'docx'
 import type { PDFDocumentProxy, PDFPageProxy } from 'pdfjs-dist'
 import { buildPageLayout } from './pdfLayout'
-import type { Family, LineSpec, PageLayout, TableSpec } from './pdfLayout'
+import type { CellBorder, Family, LineSpec, PageLayout, TableSpec } from './pdfLayout'
 import { throwIfAborted } from './batch'
+import { docxBorderSize } from './tableBorders'
 
 const FONT: Record<Family, string> = {
   sans: 'Arial',
@@ -46,13 +47,10 @@ const NO_BORDERS = {
   insideVertical: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
 }
 
-const GRID_BORDERS = {
-  top: { style: BorderStyle.SINGLE, size: 4, color: '808080' },
-  bottom: { style: BorderStyle.SINGLE, size: 4, color: '808080' },
-  left: { style: BorderStyle.SINGLE, size: 4, color: '808080' },
-  right: { style: BorderStyle.SINGLE, size: 4, color: '808080' },
-  insideHorizontal: { style: BorderStyle.SINGLE, size: 4, color: '808080' },
-  insideVertical: { style: BorderStyle.SINGLE, size: 4, color: '808080' },
+/** Граница ячейки из PDF: тот же цвет и та же толщина, что в исходнике. */
+function cellBorder(border: CellBorder | null) {
+  if (!border) return { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' }
+  return { style: BorderStyle.SINGLE, size: docxBorderSize(border.width), color: border.color }
 }
 
 const ALIGN = {
@@ -178,6 +176,12 @@ function gridTable(table: TableSpec): Table {
             columnSpan: cell.columnSpan > 1 ? cell.columnSpan : undefined,
             rowSpan: cell.rowSpan > 1 ? cell.rowSpan : undefined,
             margins: { top: 40, bottom: 40, left: 80, right: 80 },
+            borders: {
+              top: cellBorder(cell.borders.top),
+              bottom: cellBorder(cell.borders.bottom),
+              left: cellBorder(cell.borders.left),
+              right: cellBorder(cell.borders.right),
+            },
           })
         }),
       })
@@ -186,7 +190,8 @@ function gridTable(table: TableSpec): Table {
     columnWidths: widths,
     indent: { size: Math.max(0, Math.round(table.left * TWIPS)), type: WidthType.DXA },
     layout: TableLayoutType.FIXED,
-    borders: GRID_BORDERS,
+    // Сами линии рисуются на сторонах ячеек — так сохраняются цвет и толщина каждой.
+    borders: NO_BORDERS,
   })
 }
 

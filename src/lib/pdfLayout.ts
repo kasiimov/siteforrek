@@ -2,6 +2,7 @@ import type { PDFPageProxy } from 'pdfjs-dist'
 import type { TextItem } from 'pdfjs-dist/types/src/display/api'
 import { pdfjsLib } from './pdf'
 import { resolveImage, toCanvas } from './images'
+import { cmykToHex, grayToHex, isInvisible, rgbToHex } from './tableBorders'
 
 const { OPS } = pdfjsLib
 
@@ -53,6 +54,18 @@ export type TableCellSpec = {
   top: number
   bottom: number
   lines: LineSpec[]
+  /** Какая линия нарисована на каждой стороне ячейки; null — линии нет. */
+  borders: CellBorders
+}
+
+/** Линия таблицы из PDF: цвет RRGGBB и толщина в пунктах. */
+export type CellBorder = { color: string; width: number }
+
+export type CellBorders = {
+  top: CellBorder | null
+  bottom: CellBorder | null
+  left: CellBorder | null
+  right: CellBorder | null
 }
 
 export type TableSpec = {
@@ -218,8 +231,8 @@ function buildLines(content: Awaited<ReturnType<PDFPageProxy['getTextContent']>>
   return lines
 }
 
-type HorizontalRule = { y: number; x1: number; x2: number }
-type VerticalRule = { x: number; y1: number; y2: number }
+type HorizontalRule = CellBorder & { y: number; x1: number; x2: number }
+type VerticalRule = CellBorder & { x: number; y1: number; y2: number }
 
 function mergeHorizontal(rules: HorizontalRule[]): HorizontalRule[] {
   const sorted = [...rules].sort((a, b) => b.y - a.y || a.x1 - b.x1)
@@ -229,6 +242,11 @@ function mergeHorizontal(rules: HorizontalRule[]): HorizontalRule[] {
     if (target) {
       target.x1 = Math.min(target.x1, rule.x1)
       target.x2 = Math.max(target.x2, rule.x2)
+      // У слитых кусков берём самую заметную линию: она и была видна в PDF.
+      if (rule.width > target.width) {
+        target.color = rule.color
+        target.width = rule.width
+      }
     } else {
       merged.push({ ...rule })
     }
@@ -244,6 +262,10 @@ function mergeVertical(rules: VerticalRule[]): VerticalRule[] {
     if (target) {
       target.y1 = Math.min(target.y1, rule.y1)
       target.y2 = Math.max(target.y2, rule.y2)
+      if (rule.width > target.width) {
+        target.color = rule.color
+        target.width = rule.width
+      }
     } else {
       merged.push({ ...rule })
     }
@@ -387,7 +409,32 @@ function detectTables(
           top: rows[rowIndex].top,
           bottom: rows[rowIndex + rowSpan - 1].bottom,
           lines: [],
+          borders: { top: null, bottom: null, left: null, right: null },
         })
+      }
+    }
+
+    // Цвет и толщину каждой стороны берём у линии, которая реально нарисована
+    // на этом отрезке сетки: у объединённых ячеек внутренних линий нет вовсе.
+    const horizontalAt = (y: number, from: number, to: number) =>
+      group.h
+        .filter((rule) => Math.abs(rule.y - y) <= 2 && rule.x1 <= from + 3 && rule.x2 >= to - 3)
+        .sort((a, b) => b.width - a.width)[0]
+    const verticalAt = (x: number, top: number, bottom: number) =>
+      group.v
+        .filter((rule) => Math.abs(rule.x - x) <= 2 && rule.y1 <= bottom + 2 && rule.y2 >= top - 2)
+        .sort((a, b) => b.width - a.width)[0]
+
+    for (const cell of cells) {
+      const topY = rowBounds[cell.row]
+      const bottomY = rowBounds[cell.row + cell.rowSpan]
+      const leftX = columns[cell.column]
+      const rightX = columns[cell.column + cell.columnSpan]
+      cell.borders = {
+        top: horizontalAt(topY, leftX, rightX) ?? null,
+        bottom: horizontalAt(bottomY, leftX, rightX) ?? null,
+        left: verticalAt(leftX, topY, bottomY) ?? null,
+        right: verticalAt(rightX, topY, bottomY) ?? null,
       }
     }
 
@@ -569,12 +616,22 @@ function readRules(operators: OperatorList) {
   const vertical: VerticalRule[] = []
   let ctm: Matrix = IDENTITY
   const stack: Matrix[] = []
+  // Состояние обводки по умолчанию: чёрная линия в 1 пункт.
+  let color = '000000'
+  let width = 1
+
+  const scaledWidth = () => {
+    const scale = Math.sqrt(Math.abs(ctm[0] * ctm[3] - ctm[1] * ctm[2])) || 1
+    return Math.min(12, Math.max(0.2, width * scale))
+  }
 
   const pushHorizontal = (x1: number, x2: number, y: number) => {
-    if (Math.abs(x2 - x1) >= 10) horizontal.push({ y, x1: Math.min(x1, x2), x2: Math.max(x1, x2) })
+    if (Math.abs(x2 - x1) < 10 || isInvisible(color)) return
+    horizontal.push({ y, x1: Math.min(x1, x2), x2: Math.max(x1, x2), color, width: scaledWidth() })
   }
   const pushVertical = (y1: number, y2: number, x: number) => {
-    if (Math.abs(y2 - y1) >= 10) vertical.push({ x, y1: Math.min(y1, y2), y2: Math.max(y1, y2) })
+    if (Math.abs(y2 - y1) < 10 || isInvisible(color)) return
+    vertical.push({ x, y1: Math.min(y1, y2), y2: Math.max(y1, y2), color, width: scaledWidth() })
   }
 
   for (let index = 0; index < operators.fnArray.length; index++) {
@@ -591,6 +648,22 @@ function readRules(operators: OperatorList) {
     }
     if (fn === OPS.transform) {
       ctm = multiply(ctm, args as Matrix)
+      continue
+    }
+    if (fn === OPS.setStrokeRGBColor) {
+      color = rgbToHex(Number(args[0]), Number(args[1]), Number(args[2]))
+      continue
+    }
+    if (fn === OPS.setStrokeGray) {
+      color = grayToHex(Number(args[0]))
+      continue
+    }
+    if (fn === OPS.setStrokeCMYKColor) {
+      color = cmykToHex(Number(args[0]), Number(args[1]), Number(args[2]), Number(args[3]))
+      continue
+    }
+    if (fn === OPS.setLineWidth) {
+      width = Number(args[0]) || 0
       continue
     }
     if (fn !== OPS.constructPath) continue
