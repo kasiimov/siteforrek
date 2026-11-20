@@ -89,17 +89,20 @@ export function PdfEditor({ spec }: { spec: ToolSpec }) {
     setMessage(null)
 
     try {
-      const outputs = await spec.run(files, values, (done, total) => {
+      const result = await spec.run(files, values, (done, total) => {
         setProgress(done / Math.max(total, 1))
       })
+      const outputs = Array.isArray(result) ? result : result.outputs
+      const note = Array.isArray(result) ? undefined : result.note
       const zipName = `${files[0].name.replace(/\.[^.]+$/, '') || 'rekpdf'}-rekpdf.zip`
       await saveOutputs(outputs, zipName)
       setMessage({
-        tone: 'ok',
+        tone: note ? 'info' : 'ok',
         text:
-          outputs.length === 1
+          note ??
+          (outputs.length === 1
             ? 'Готово — файл уже скачивается.'
-            : `Готово — ${outputs.length} файлов скачиваются одним архивом.`,
+            : `Готово — ${outputs.length} файлов скачиваются одним архивом.`),
       })
     } catch (error) {
       console.error(error)

@@ -283,7 +283,7 @@ export const catalog: ToolSpec[] = [
   {
     id: 'compress',
     name: 'Сжать PDF',
-    hint: 'Уменьшает вес сканов и фото — страницы пересобираются в JPEG. Текстовый PDF может стать больше.',
+    hint: 'Уменьшает вес сканов и фото — страницы пересобираются в JPEG. Если итог выйдет больше исходника, отдадим оригинал без изменений.',
     accept: 'application/pdf,.pdf',
     acceptLabel: 'PDF',
     multiple: false,

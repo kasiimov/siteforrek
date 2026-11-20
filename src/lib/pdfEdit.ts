@@ -1,7 +1,7 @@
 import { PDFDocument, StandardFonts, degrees, rgb } from 'pdf-lib'
 import fontkit from '@pdf-lib/fontkit'
 import { pdfjsLib } from './pdf'
-import { baseName, type Output } from './download'
+import { baseName, formatSize, type Output } from './download'
 
 export type Progress = (done: number, total: number) => void
 
@@ -302,11 +302,13 @@ export type CompressOptions = {
 }
 
 /** Сжимает PDF: страницы пересобираются в JPEG с выбранным качеством. */
+export type CompressResult = { outputs: Output[]; note?: string }
+
 export async function compressPdf(
   file: File,
   options: CompressOptions,
   onProgress?: Progress,
-): Promise<Output[]> {
+): Promise<CompressResult> {
   const doc = await pdfjsLib.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise
   const out = await PDFDocument.create()
 
@@ -325,5 +327,21 @@ export async function compressPdf(
     await doc.destroy()
   }
 
-  return single(await out.save(), `${baseName(file.name)}-compressed.pdf`)
+  const name = baseName(file.name)
+  const bytes = await out.save()
+  const compressed = toBlob(bytes)
+
+  // Текстовый или уже оптимизированный PDF от пересборки в JPEG только растёт:
+  // в таком случае отдаём исходный файл, а не раздутый результат.
+  if (compressed.size >= file.size) {
+    return {
+      outputs: [{ name: `${name}-original.pdf`, blob: file }],
+      note:
+        `Сжатие не дало выигрыша: после пересборки вышло ${formatSize(compressed.size)} ` +
+        `против ${formatSize(file.size)} в исходнике. Так бывает с текстовыми и уже сжатыми PDF — ` +
+        `отдали ваш файл без изменений. Этот инструмент помогает сканам и фото.`,
+    }
+  }
+
+  return { outputs: single(bytes, `${name}-compressed.pdf`) }
 }

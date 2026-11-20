@@ -20,6 +20,9 @@ export type OptionSpec =
 export type Values = Record<string, string>
 export type RunProgress = (done: number, total: number) => void
 
+/** Результат инструмента: файлы и необязательное пояснение к ним. */
+export type RunResult = { outputs: Output[]; note?: string }
+
 export type ToolSpec = {
   id: string
   name: string
@@ -31,5 +34,5 @@ export type ToolSpec = {
   icon: ReactNode
   options: OptionSpec[]
   builtin?: 'word' | 'images'
-  run?: (files: File[], values: Values, onProgress: RunProgress) => Promise<Output[]>
+  run?: (files: File[], values: Values, onProgress: RunProgress) => Promise<Output[] | RunResult>
 }
