@@ -1,39 +1,18 @@
 import { describe, expect, it } from 'vitest'
-import { cmykToHex, docxBorderSize, grayToHex, isInvisible, rgbToHex } from './tableBorders'
+import { docxBorderSize, isInvisible, strokeColorHex } from './tableBorders'
 
-describe('rgbToHex', () => {
-  it('чёрный и белый', () => {
-    expect(rgbToHex(0, 0, 0)).toBe('000000')
-    expect(rgbToHex(1, 1, 1)).toBe('FFFFFF')
+describe('strokeColorHex', () => {
+  it('принимает цвет в том виде, в каком его отдаёт pdf.js', () => {
+    expect(strokeColorHex('#bf1a1a')).toBe('BF1A1A')
+    expect(strokeColorHex('#000000')).toBe('000000')
+    expect(strokeColorHex('1a33cc')).toBe('1A33CC')
   })
 
-  it('серый и произвольный цвет', () => {
-    expect(rgbToHex(0.5, 0.5, 0.5)).toBe('808080')
-    expect(rgbToHex(0.2, 0.4, 0.6)).toBe('336699')
-  })
-
-  it('не выходит за границы диапазона', () => {
-    expect(rgbToHex(-1, 2, 0.999)).toBe('00FFFF')
-  })
-})
-
-describe('grayToHex', () => {
-  it('один канал на все три', () => {
-    expect(grayToHex(0)).toBe('000000')
-    expect(grayToHex(1)).toBe('FFFFFF')
-    expect(grayToHex(0.25)).toBe('404040')
-  })
-})
-
-describe('cmykToHex', () => {
-  it('без краски — белый, полный ключ — чёрный', () => {
-    expect(cmykToHex(0, 0, 0, 0)).toBe('FFFFFF')
-    expect(cmykToHex(0, 0, 0, 1)).toBe('000000')
-  })
-
-  it('чистый циан и сумма с ключом', () => {
-    expect(cmykToHex(1, 0, 0, 0)).toBe('00FFFF')
-    expect(cmykToHex(0, 0, 1, 0.5)).toBe('808000')
+  it('игнорирует то, что цветом не является', () => {
+    expect(strokeColorHex(undefined)).toBeNull()
+    expect(strokeColorHex([0.1, 0.2, 0.3])).toBeNull()
+    expect(strokeColorHex('#fff')).toBeNull()
+    expect(strokeColorHex('#12345g')).toBeNull()
   })
 })
 

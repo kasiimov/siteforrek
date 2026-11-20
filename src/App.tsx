@@ -6,13 +6,35 @@ function PromoBanner({ slot, size = 'banner' }: { slot: string; size?: 'banner' 
   if (size === 'inline') {
     return (
       <aside className="promo-strip" data-ad-slot={slot} aria-label="Реклама проектов автора">
-        <span className="promo-strip-tag">Реклама</span>
-        <span className="promo-strip-word">Congix</span>
-        <p className="promo-strip-line">
-          Репетитор, который объясняет <em>по шагам</em>, а не выдаёт ответ
-        </p>
+        <span className="promo-strip-tag">Реклама · проект автора</span>
+
+        <div className="promo-strip-badge" aria-hidden="true">
+          <strong>30</strong>
+          <small>
+            вопросов
+            <br />
+            бесплатно
+          </small>
+        </div>
+
+        <div className="promo-strip-body">
+          <p className="promo-strip-title">
+            Домашка не сдаётся. <em>Сдаётся — Congix.</em>
+          </p>
+          <p className="promo-strip-line">
+            ИИ-репетитор для школьников Узбекистана: разберёт задачу по шагам и объяснит тему.
+          </p>
+          <div className="promo-strip-solve" aria-hidden="true">
+            <span>2x + 5 = 17</span>
+            <i />
+            <span className="is-answer">x = 6 ✓</span>
+          </div>
+        </div>
+
+        <span className="promo-strip-cut" aria-hidden="true" />
+
         <a className="promo-strip-cta" href={CONGIX_URL} target="_blank" rel="noopener">
-          30 вопросов бесплатно
+          Попробовать бесплатно
           <Arrow />
         </a>
       </aside>
@@ -366,14 +388,31 @@ export default function App() {
       </main>
 
       <footer className="footer">
-        <div className="footer-brand">
-          <span className="brand-mark small">R</span>
-          <span>RekPDF</span>
+        <div className="footer-main">
+          <div className="footer-brand">
+            <span className="brand-mark small">R</span>
+            <span>RekPDF</span>
+          </div>
+          <p className="footer-note">
+            PDF в Word и все картинки из PDF — прямо в браузере. Файлы не покидают устройство.
+          </p>
+          <span className="footer-badge">
+            <span className="footer-dot" aria-hidden="true" />
+            Ноль загрузок
+          </span>
         </div>
-        <p className="footer-note">
-          PDF в Word и извлечение изображений в браузере. Работает на pdf.js и docx.
-        </p>
-        <p className="footer-copy">© {new Date().getFullYear()} RekPDF</p>
+
+        <nav className="footer-links" aria-label="Разделы сайта">
+          <a href="#features">Почему RekPDF</a>
+          <a href="#how">Как это работает</a>
+          <a href="#faq">Вопросы</a>
+          <a href="#top">Наверх ↑</a>
+        </nav>
+
+        <div className="footer-bottom">
+          <p className="footer-copy">© {new Date().getFullYear()} RekPDF</p>
+          <p className="footer-stack">pdf.js · docx · pdf-lib — всё считается на вашем устройстве</p>
+        </div>
       </footer>
     </div>
   )

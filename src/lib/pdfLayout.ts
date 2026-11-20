@@ -2,7 +2,7 @@ import type { PDFPageProxy } from 'pdfjs-dist'
 import type { TextItem } from 'pdfjs-dist/types/src/display/api'
 import { pdfjsLib } from './pdf'
 import { resolveImage, toCanvas } from './images'
-import { cmykToHex, grayToHex, isInvisible, rgbToHex } from './tableBorders'
+import { isInvisible, strokeColorHex } from './tableBorders'
 
 const { OPS } = pdfjsLib
 
@@ -651,19 +651,14 @@ function readRules(operators: OperatorList) {
       continue
     }
     if (fn === OPS.setStrokeRGBColor) {
-      color = rgbToHex(Number(args[0]), Number(args[1]), Number(args[2]))
-      continue
-    }
-    if (fn === OPS.setStrokeGray) {
-      color = grayToHex(Number(args[0]))
-      continue
-    }
-    if (fn === OPS.setStrokeCMYKColor) {
-      color = cmykToHex(Number(args[0]), Number(args[1]), Number(args[2]), Number(args[3]))
+      // pdf.js сводит RG/G/CMYK к этому оператору и даёт готовый «#rrggbb».
+      const next = strokeColorHex(args[0])
+      if (next) color = next
       continue
     }
     if (fn === OPS.setLineWidth) {
-      width = Number(args[0]) || 0
+      const next = Number(args[0])
+      if (Number.isFinite(next) && next >= 0) width = next
       continue
     }
     if (fn !== OPS.constructPath) continue
