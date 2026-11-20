@@ -24,6 +24,7 @@ export function WordImagesTool({ mode }: { mode: 'word' | 'images' }) {
   const [pdf, setPdf] = useState<PDFDocumentProxy | null>(null)
   const [pages, setPages] = useState<number | null>(null)
   const [loadingFile, setLoadingFile] = useState(false)
+  const [demoLoading, setDemoLoading] = useState(false)
   const [job, setJob] = useState<Job>(null)
   const [progress, setProgress] = useState(0)
   const [message, setMessage] = useState<Message | null>(null)
@@ -95,6 +96,22 @@ export function WordImagesTool({ mode }: { mode: 'word' | 'images' }) {
     }
   }, [])
 
+  const loadDemo = useCallback(async () => {
+    setDemoLoading(true)
+    setMessage(null)
+    try {
+      const response = await fetch(`${import.meta.env.BASE_URL}demo.pdf`)
+      if (!response.ok) throw new Error(`demo.pdf: ${response.status}`)
+      const blob = await response.blob()
+      await acceptFile(new File([blob], 'demo-schet.pdf', { type: 'application/pdf' }))
+    } catch (error) {
+      console.error(error)
+      setMessage({ tone: 'error', text: 'Не удалось открыть демо-документ. Выберите свой PDF.' })
+    } finally {
+      setDemoLoading(false)
+    }
+  }, [acceptFile])
+
   const handleDrop = useCallback(
     (event: ReactDragEvent<HTMLDivElement>) => {
       event.preventDefault()
@@ -116,10 +133,18 @@ export function WordImagesTool({ mode }: { mode: 'word' | 'images' }) {
     setProgress(0)
     setMessage(null)
     try {
-      const blob = await pdfToDocx(pdf, (done, total) => setProgress(done / total))
+      const { blob, stats } = await pdfToDocx(pdf, (done, total) => setProgress(done / total))
       const name = file.name.replace(/\.pdf$/i, '') || 'document'
       download(blob, `${name}.docx`)
-      setMessage({ tone: 'ok', text: 'Готово — Word-файл уже скачивается.' })
+      const summary = [pagesLabel(stats.pages)]
+      if (stats.tables) summary.push(`таблиц: ${stats.tables}`)
+      if (stats.images) summary.push(`картинок: ${stats.images}`)
+      const scannedNote = stats.scanned
+        ? stats.scanned === 1
+          ? ' 1 страница без текста вставлена картинкой.'
+          : ` ${stats.scanned} страниц без текста вставлены картинкой.`
+        : ''
+      setMessage({ tone: 'ok', text: `Готово — Word скачивается: ${summary.join(' · ')}.${scannedNote}` })
     } catch (error) {
       console.error(error)
       setMessage({ tone: 'error', text: 'Не получилось собрать .docx. Попробуйте другой файл.' })
@@ -287,6 +312,19 @@ export function WordImagesTool({ mode }: { mode: 'word' | 'images' }) {
               {message.text}
             </p>
           )}
+        </div>
+      )}
+
+      {!file && (
+        <div className="actions">
+          <button
+            className="btn btn-soft"
+            type="button"
+            onClick={loadDemo}
+            disabled={demoLoading || loadingFile}
+          >
+            {demoLoading ? 'Готовим пример…' : 'Открыть демо-документ'}
+          </button>
         </div>
       )}
 

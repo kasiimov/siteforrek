@@ -13,6 +13,7 @@ import {
   TableRow,
   TextRun,
   TextWrappingType,
+  VerticalAlign,
   VerticalPositionRelativeFrom,
   WidthType,
 } from 'docx'
@@ -144,8 +145,15 @@ function gridTable(table: TableSpec): Table {
   return new Table({
     rows: table.rows.map((row, rowIndex) => {
       const cells = table.cells.filter((cell) => cell.row === rowIndex).sort((a, b) => a.column - b.column)
+      const rowHeight = row.bottom - row.top
+      // Шапку повторяем на новой странице, если она целиком набрана жирным.
+      const header =
+        rowIndex === 0 &&
+        cells.length > 0 &&
+        cells.every((cell) => cell.lines.length > 0 && cell.lines.every((line) => line.runs.every((run) => run.bold)))
 
       return new TableRow({
+        tableHeader: header,
         children: cells.map((cell) => {
           const width = widths.slice(cell.column, cell.column + cell.columnSpan).reduce((sum, value) => sum + value, 0)
           let cursor = cell.top
@@ -157,8 +165,14 @@ function gridTable(table: TableSpec): Table {
               })
             : [spacerParagraph(Math.max(2, row.bottom - row.top))]
 
+          // Если текста в ячейке заметно меньше её высоты — центрируем по вертикали,
+          // как это выглядело в исходном PDF.
+          const contentHeight = cell.lines.reduce((sum, line) => sum + lineHeight(line), 0)
+          const centered = cell.lines.length > 0 && rowHeight - contentHeight > lineHeight(cell.lines[0]) * 0.8
+
           return new TableCell({
             children,
+            verticalAlign: centered ? VerticalAlign.CENTER : undefined,
             width: { size: width, type: WidthType.DXA },
             columnSpan: cell.columnSpan > 1 ? cell.columnSpan : undefined,
             rowSpan: cell.rowSpan > 1 ? cell.rowSpan : undefined,
@@ -349,9 +363,15 @@ function scanBlocks(page: PDFPageProxy, image: { data: Uint8Array; width: number
  * шрифты, картинки на своих местах, таблицы и колонки. Скан без текстового слоя
  * вставляется картинками страниц.
  */
-export async function pdfToDocx(pdf: PDFDocumentProxy, onProgress?: Progress): Promise<Blob> {
+export type DocxStats = { pages: number; scanned: number; tables: number; images: number }
+
+export async function pdfToDocx(
+  pdf: PDFDocumentProxy,
+  onProgress?: Progress,
+): Promise<{ blob: Blob; stats: DocxStats }> {
   const total = pdf.numPages
   const steps = total * 2
+  const stats: DocxStats = { pages: total, scanned: 0, tables: 0, images: 0 }
   const sections: { properties: { page: { size: { width: number; height: number }; margin: Record<string, number> } }; children: Block[] }[] = []
 
   for (let pageNumber = 1; pageNumber <= total; pageNumber++) {
@@ -369,9 +389,12 @@ export async function pdfToDocx(pdf: PDFDocumentProxy, onProgress?: Progress): P
     }
 
     if (layout && !layout.scanned) {
+      stats.tables += layout.tables.length
+      stats.images += layout.images.length
       children.push(...pageBlocks(layout))
       onProgress?.(pageNumber, steps)
     } else {
+      stats.scanned += 1
       // Скан или страница, которую не удалось разобрать, — вставляем картинкой.
       try {
         const image = await renderPageToJpeg(page)
@@ -415,5 +438,5 @@ export async function pdfToDocx(pdf: PDFDocumentProxy, onProgress?: Progress): P
     sections,
   })
 
-  return Packer.toBlob(doc)
+  return { blob: await Packer.toBlob(doc), stats }
 }
