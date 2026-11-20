@@ -1791,6 +1791,7 @@ select.field-input option {
   z-index: 1;
   flex: 1 1 320px;
   min-width: 0;
+  max-width: 680px;
 }
 
 .promo-strip-title {
@@ -2003,6 +2004,10 @@ select.field-input option {
 
   .promo-strip-badge strong {
     font-size: 1.32rem;
+  }
+
+  .promo-strip-badge small {
+    font-size: 0.44rem;
   }
 
   .promo-strip-body {
@@ -2228,6 +2233,15 @@ select.field-input option {
 
   .footer-links a:last-child {
     margin-left: 0;
+  }
+
+  .footer-bottom {
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .footer-stack {
+    text-align: left;
   }
 }
 
