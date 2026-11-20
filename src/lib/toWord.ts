@@ -108,11 +108,12 @@ function spacerParagraph(heightPt: number): Paragraph {
 
 /** Картинка ставится на то же место страницы, где она была в PDF. */
 function imageParagraph(image: PageLayout['images'][number]): Paragraph {
+  // Абзац-якорь занимает минимум места: сама картинка висит на абсолютных координатах.
   return new Paragraph({
-    spacing: { before: 0, after: 0, line: 20, lineRule: LineRuleType.EXACT },
+    spacing: { before: 0, after: 0, line: 1, lineRule: LineRuleType.EXACT },
     children: [
       new ImageRun({
-        type: 'jpg',
+        type: image.type,
         data: image.data,
         transformation: {
           width: Math.max(2, Math.round(image.width * (4 / 3))),
@@ -136,18 +137,21 @@ function imageParagraph(image: PageLayout['images'][number]): Paragraph {
   })
 }
 
-/** Настоящая Word-таблица из найденной в PDF сетки. */
+/** Настоящая Word-таблица из найденной в PDF сетки, с объединёнными ячейками. */
 function gridTable(table: TableSpec): Table {
   const widths = table.columns.slice(0, -1).map((x, index) => Math.max(240, Math.round((table.columns[index + 1] - x) * TWIPS)))
 
   return new Table({
-    rows: table.rows.map((row) => {
-      let cursor = row.top
+    rows: table.rows.map((row, rowIndex) => {
+      const cells = table.cells.filter((cell) => cell.row === rowIndex).sort((a, b) => a.column - b.column)
+
       return new TableRow({
-        children: row.cells.map((cell, index) => {
-          const children: Paragraph[] = cell.length
-            ? cell.map((line) => {
-                const paragraph = paragraphFrom(line, Math.max(0, line.top - cursor), table.columns[index])
+        children: cells.map((cell) => {
+          const width = widths.slice(cell.column, cell.column + cell.columnSpan).reduce((sum, value) => sum + value, 0)
+          let cursor = cell.top
+          const children: Paragraph[] = cell.lines.length
+            ? cell.lines.map((line) => {
+                const paragraph = paragraphFrom(line, Math.max(0, line.top - cursor), cell.left)
                 cursor = line.top + lineHeight(line)
                 return paragraph
               })
@@ -155,7 +159,9 @@ function gridTable(table: TableSpec): Table {
 
           return new TableCell({
             children,
-            width: { size: widths[index], type: WidthType.DXA },
+            width: { size: width, type: WidthType.DXA },
+            columnSpan: cell.columnSpan > 1 ? cell.columnSpan : undefined,
+            rowSpan: cell.rowSpan > 1 ? cell.rowSpan : undefined,
             margins: { top: 40, bottom: 40, left: 80, right: 80 },
           })
         }),
@@ -174,8 +180,8 @@ function columnTable(layout: PageLayout): Table | null {
   const gutters = layout.columns
   if (!gutters || !layout.lines.length) return null
 
-  const contentLeft = Math.min(...layout.lines.map((line) => line.left))
-  const contentRight = Math.max(...layout.lines.map((line) => line.right))
+  const contentLeft = layout.lines.reduce((min, line) => Math.min(min, line.left), Number.POSITIVE_INFINITY)
+  const contentRight = layout.lines.reduce((max, line) => Math.max(max, line.right), 0)
   const zones = [contentLeft, ...gutters, contentRight]
   const widths = zones.slice(0, -1).map((x, index) => Math.max(240, Math.round((zones[index + 1] - x) * TWIPS)))
 
@@ -350,16 +356,30 @@ export async function pdfToDocx(pdf: PDFDocumentProxy, onProgress?: Progress): P
 
   for (let pageNumber = 1; pageNumber <= total; pageNumber++) {
     const page = await pdf.getPage(pageNumber)
-    const layout = await buildPageLayout(page)
+    const view = page.view as number[]
+    const width = view[2] - view[0]
+    const height = view[3] - view[1]
     const children: Block[] = []
 
-    if (layout.scanned) {
-      const image = await renderPageToJpeg(page)
-      children.push(...scanBlocks(page, image))
-      onProgress?.(total + pageNumber, steps)
-    } else {
+    let layout: PageLayout | null = null
+    try {
+      layout = await buildPageLayout(page)
+    } catch {
+      layout = null
+    }
+
+    if (layout && !layout.scanned) {
       children.push(...pageBlocks(layout))
       onProgress?.(pageNumber, steps)
+    } else {
+      // Скан или страница, которую не удалось разобрать, — вставляем картинкой.
+      try {
+        const image = await renderPageToJpeg(page)
+        children.push(...scanBlocks(page, image))
+      } catch {
+        children.push(new Paragraph({ children: [new TextRun({ text: '' })] }))
+      }
+      onProgress?.(total + pageNumber, steps)
     }
 
     if (!children.length) {
@@ -370,8 +390,8 @@ export async function pdfToDocx(pdf: PDFDocumentProxy, onProgress?: Progress): P
       properties: {
         page: {
           size: {
-            width: Math.round(layout.width * TWIPS),
-            height: Math.round(layout.height * TWIPS),
+            width: Math.round((layout?.width ?? width) * TWIPS),
+            height: Math.round((layout?.height ?? height) * TWIPS),
           },
           margin: { top: 0, bottom: 0, left: 0, right: 0, header: 0, footer: 0, gutter: 0 },
         },

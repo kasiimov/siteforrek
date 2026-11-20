@@ -34,13 +34,25 @@ export type ImageSpec = {
   width: number
   height: number
   data: Uint8Array
+  type: 'png' | 'jpg'
 }
 
 export type TableRowSpec = {
   top: number
   bottom: number
-  /** по ячейке на колонку, внутри — строки текста */
-  cells: LineSpec[][]
+}
+
+/** Ячейка сетки: может быть объединена по горизонтали и вертикали. */
+export type TableCellSpec = {
+  row: number
+  column: number
+  rowSpan: number
+  columnSpan: number
+  left: number
+  width: number
+  top: number
+  bottom: number
+  lines: LineSpec[]
 }
 
 export type TableSpec = {
@@ -50,6 +62,7 @@ export type TableSpec = {
   bottom: number
   columns: number[]
   rows: TableRowSpec[]
+  cells: TableCellSpec[]
 }
 
 export type PageLayout = {
@@ -102,7 +115,7 @@ function buildLines(content: Awaited<ReturnType<PDFPageProxy['getTextContent']>>
   const styles = content.styles as Record<string, { fontFamily?: string }>
   const items = content.items.filter((item): item is TextItem => 'str' in item && item.str.trim().length > 0)
 
-  const rows: { y: number; size: number; items: TextItem[] }[] = []
+  const rows: { y: number; size: number; count: number; items: TextItem[] }[] = []
 
   for (const item of items) {
     const size = Math.abs(item.transform[3]) || item.height || 10
@@ -112,9 +125,10 @@ function buildLines(content: Awaited<ReturnType<PDFPageProxy['getTextContent']>>
     if (row) {
       row.items.push(item)
       row.size = Math.max(row.size, size)
-      row.y = (row.y * (row.items.length - 1) + y) / row.items.length
+      row.count += 1
+      row.y += (y - row.y) / row.count
     } else {
-      rows.push({ y, size, items: [item] })
+      rows.push({ y, size, count: 1, items: [item] })
     }
   }
 
@@ -234,7 +248,7 @@ function mergeVertical(rules: VerticalRule[]): VerticalRule[] {
       merged.push({ ...rule })
     }
   }
-  return merged.filter((rule) => rule.y2 - rule.y1 >= 16)
+  return merged.filter((rule) => rule.y2 - rule.y1 >= 10)
 }
 
 function uniqueSorted(values: number[], tolerance = 1.5): number[] {
@@ -298,34 +312,120 @@ function detectTables(
     const rowBounds = uniqueSorted(group.h.map((rule) => rule.y)).sort((a, b) => b - a)
 
     if (columns.length < 2 || rowBounds.length < 2) continue
-    if ((columns.length - 1) * (rowBounds.length - 1) > 600) continue
+
+    const columnCount = columns.length - 1
+    const rowCount = rowBounds.length - 1
+    if (columnCount * rowCount > 600) continue
 
     const rows: TableRowSpec[] = rowBounds.slice(0, -1).map((y, index) => ({
       top: height - y,
       bottom: height - rowBounds[index + 1],
-      cells: columns.slice(0, -1).map(() => [] as LineSpec[]),
     }))
 
-    let placed = 0
+    // Объединённая ячейка — это отсутствующая линия внутри сетки:
+    // нет вертикальной — ячейка тянется вправо, нет горизонтальной — вниз.
+    const verticalSeparator = (rowIndex: number, boundary: number) => {
+      const x = columns[boundary]
+      const topY = rowBounds[rowIndex]
+      const bottomY = rowBounds[rowIndex + 1]
+      return group.v.some((rule) => Math.abs(rule.x - x) <= 2 && rule.y1 <= bottomY + 2 && rule.y2 >= topY - 2)
+    }
+
+    const horizontalSeparator = (boundary: number, columnIndex: number) => {
+      const y = rowBounds[boundary]
+      const from = columns[columnIndex]
+      const to = columns[columnIndex + 1]
+      return group.h.some((rule) => Math.abs(rule.y - y) <= 2 && rule.x1 <= from + 2 && rule.x2 >= to - 2)
+    }
+
+    const occupied = Array.from({ length: rowCount }, () => new Array<boolean>(columnCount).fill(false))
+    const cells: TableCellSpec[] = []
+
+    for (let rowIndex = 0; rowIndex < rowCount; rowIndex++) {
+      for (let columnIndex = 0; columnIndex < columnCount; columnIndex++) {
+        if (occupied[rowIndex][columnIndex]) continue
+
+        let columnSpan = 1
+        while (columnIndex + columnSpan < columnCount && !verticalSeparator(rowIndex, columnIndex + columnSpan)) {
+          columnSpan++
+        }
+
+        let rowSpan = 1
+        while (rowIndex + rowSpan < rowCount) {
+          const boundary = rowIndex + rowSpan
+          let joined = true
+          for (let column = columnIndex; column < columnIndex + columnSpan; column++) {
+            if (horizontalSeparator(boundary, column)) {
+              joined = false
+              break
+            }
+          }
+          if (!joined) break
+
+          let free = true
+          for (let column = columnIndex; column < columnIndex + columnSpan; column++) {
+            if (occupied[rowIndex + rowSpan][column]) {
+              free = false
+              break
+            }
+          }
+          if (!free) break
+          rowSpan++
+        }
+
+        for (let row = rowIndex; row < rowIndex + rowSpan; row++) {
+          for (let column = columnIndex; column < columnIndex + columnSpan; column++) occupied[row][column] = true
+        }
+
+        cells.push({
+          row: rowIndex,
+          column: columnIndex,
+          rowSpan,
+          columnSpan,
+          left: columns[columnIndex],
+          width: columns[columnIndex + columnSpan] - columns[columnIndex],
+          top: rows[rowIndex].top,
+          bottom: rows[rowIndex + rowSpan - 1].bottom,
+          lines: [],
+        })
+      }
+    }
+
+    const grabbed: LineSpec[] = []
 
     for (const line of lines) {
       if (used.has(line)) continue
       const centerX = (line.left + line.right) / 2
       const centerY = height - (line.top + line.bottom) / 2
-      if (centerX < columns[0] || centerX > columns[columns.length - 1]) continue
-
-      const columnIndex = columns.findIndex((x, index) => index < columns.length - 1 && centerX >= x && centerX <= columns[index + 1])
-      const rowIndex = rowBounds.findIndex((y, index) => index < rowBounds.length - 1 && centerY <= y && centerY >= rowBounds[index + 1])
-      if (columnIndex < 0 || rowIndex < 0) continue
-
-      rows[rowIndex].cells[columnIndex].push(line)
-      used.add(line)
-      placed++
+      const cell = cells.find(
+        (candidate) =>
+          centerX >= candidate.left - 2 &&
+          centerX <= candidate.left + candidate.width + 2 &&
+          centerY <= height - candidate.top + 2 &&
+          centerY >= height - candidate.bottom - 2,
+      )
+      if (!cell) continue
+      cell.lines.push(line)
+      grabbed.push(line)
     }
 
-    if (placed < 3) {
-      used.clear()
-      continue
+    if (grabbed.length < 3) continue
+
+    for (const line of grabbed) used.add(line)
+
+    for (const cell of cells) {
+      cell.lines.sort((a, b) => a.top - b.top)
+      for (const line of cell.lines) {
+        const leftGap = line.left - cell.left
+        const rightGap = cell.left + cell.width - line.right
+        const lineWidth = line.right - line.left
+        const wide = lineWidth > cell.width * 0.6
+
+        if (wide && leftGap < 3 && rightGap < 3) line.align = 'justify'
+        else if (Math.abs(leftGap - rightGap) <= Math.max(3, line.size) && leftGap > 2) line.align = 'center'
+        else if (rightGap < 3 && leftGap > line.size) line.align = 'right'
+        else line.align = 'left'
+      }
     }
 
     tables.push({
@@ -335,6 +435,7 @@ function detectTables(
       bottom: height - rowBounds[rowBounds.length - 1],
       columns,
       rows,
+      cells,
     })
   }
 
@@ -351,7 +452,10 @@ function detectColumns(lines: LineSpec[], contentLeft: number, contentRight: num
   for (const line of lines) {
     const from = Math.max(contentLeft, line.left)
     const to = Math.min(contentRight, line.right)
-    for (let x = from; x < to; x += 1) counts[Math.round(x - contentLeft)]++
+    for (let x = from; x < to; x += 1) {
+      const index = Math.min(width - 1, Math.round(x - contentLeft))
+      counts[index]++
+    }
   }
 
   const limit = Math.max(1, Math.floor(lines.length * 0.15))
@@ -422,7 +526,10 @@ async function readImages(page: PDFPageProxy, operators: OperatorList, height: n
     }
   }
 
-  for (const entry of pending.slice(0, 40)) {
+  let totalBytes = 0
+
+  for (const entry of pending) {
+    if (totalBytes > 24 * 1024 * 1024) break
     const corners = [apply(entry.matrix, 0, 0), apply(entry.matrix, 1, 0), apply(entry.matrix, 0, 1), apply(entry.matrix, 1, 1)]
     const left = Math.min(...corners.map((corner) => corner[0])) - offsetX
     const top = height - (Math.max(...corners.map((corner) => corner[1])) - offsetY)
@@ -436,17 +543,17 @@ async function readImages(page: PDFPageProxy, operators: OperatorList, height: n
       const canvas = toCanvas(source)
       if (!canvas || canvas.width < 8 || canvas.height < 8) continue
 
-      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.9))
+      // Небольшие картинки (логотипы, схемы, подписи) могут быть с прозрачностью —
+      // их в JPEG нельзя, фон станет чёрным. Крупные фото держим в JPEG ради размера.
+      const type = canvas.width * canvas.height <= 400_000 ? 'png' : 'jpg'
+      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, `image/${type}`, 0.9))
       if (!blob) continue
       if (blob.size > 8 * 1024 * 1024) continue
 
-      images.push({
-        left,
-        top,
-        width: drawWidth,
-        height: drawHeight,
-        data: new Uint8Array(await blob.arrayBuffer()),
-      })
+      const data = new Uint8Array(await blob.arrayBuffer())
+      totalBytes += data.byteLength
+
+      images.push({ left, top, width: drawWidth, height: drawHeight, data, type })
       canvas.width = 0
       canvas.height = 0
     } catch {
@@ -556,8 +663,8 @@ export async function buildPageLayout(page: PDFPageProxy): Promise<PageLayout> {
     images = []
   }
 
-  const contentLeft = Math.min(...free.map((line) => line.left), width)
-  const contentRight = Math.max(...free.map((line) => line.right), 0)
+  const contentLeft = free.reduce((min, line) => Math.min(min, line.left), width)
+  const contentRight = free.reduce((max, line) => Math.max(max, line.right), 0)
 
   // Выравнивание: центр и правый край вычисляем по содержимому страницы.
   for (const line of free) {
