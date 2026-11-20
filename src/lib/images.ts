@@ -1,6 +1,7 @@
 import JSZip from 'jszip'
 import { pdfjsLib } from './pdf'
 import type { PDFDocumentProxy, PDFPageProxy } from 'pdfjs-dist'
+import { throwIfAborted } from './batch'
 
 const { OPS } = pdfjsLib
 
@@ -120,16 +121,19 @@ function toBlob(canvas: HTMLCanvasElement): Promise<Blob | null> {
 export async function extractImages(
   pdf: PDFDocumentProxy,
   onProgress?: Progress,
+  signal?: AbortSignal,
 ): Promise<ExtractedImage[]> {
   const images: ExtractedImage[] = []
   const seen = new Set<string>()
   const total = pdf.numPages
 
   for (let pageNumber = 1; pageNumber <= total; pageNumber++) {
+    throwIfAborted(signal)
     const page = await pdf.getPage(pageNumber)
     const operators = await page.getOperatorList()
 
     for (let index = 0; index < operators.fnArray.length; index++) {
+      throwIfAborted(signal)
       const fn = operators.fnArray[index]
       const args = operators.argsArray[index] as unknown[]
 

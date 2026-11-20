@@ -20,6 +20,7 @@ import {
 import type { PDFDocumentProxy, PDFPageProxy } from 'pdfjs-dist'
 import { buildPageLayout } from './pdfLayout'
 import type { Family, LineSpec, PageLayout, TableSpec } from './pdfLayout'
+import { throwIfAborted } from './batch'
 
 const FONT: Record<Family, string> = {
   sans: 'Arial',
@@ -368,6 +369,7 @@ export type DocxStats = { pages: number; scanned: number; tables: number; images
 export async function pdfToDocx(
   pdf: PDFDocumentProxy,
   onProgress?: Progress,
+  signal?: AbortSignal,
 ): Promise<{ blob: Blob; stats: DocxStats }> {
   const total = pdf.numPages
   const steps = total * 2
@@ -375,6 +377,7 @@ export async function pdfToDocx(
   const sections: { properties: { page: { size: { width: number; height: number }; margin: Record<string, number> } }; children: Block[] }[] = []
 
   for (let pageNumber = 1; pageNumber <= total; pageNumber++) {
+    throwIfAborted(signal)
     const page = await pdf.getPage(pageNumber)
     const view = page.view as number[]
     const width = view[2] - view[0]
@@ -438,5 +441,6 @@ export async function pdfToDocx(
     sections,
   })
 
+  throwIfAborted(signal)
   return { blob: await Packer.toBlob(doc), stats }
 }
