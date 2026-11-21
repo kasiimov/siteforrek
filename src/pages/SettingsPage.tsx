@@ -49,6 +49,23 @@ export function SettingsPage() {
             />
           </label>
 
+          <label className="pref-row" style={{ marginTop: 12 }}>
+            <div>
+              <b>Анонимная статистика</b>
+              <span>
+                Отправляем только название инструмента, действие и время — без файлов, имён и почты.
+                Помогает понять, какие инструменты нужнее.
+              </span>
+            </div>
+            <input
+              type="checkbox"
+              className="pref-switch"
+              checked={prefs.analytics !== false}
+              onChange={(event) => update({ ...prefs, analytics: event.target.checked })}
+              aria-label="Анонимная статистика"
+            />
+          </label>
+
           <div className="pref-row" style={{ marginTop: 12 }}>
             <div>
               <b>Очистить историю</b>
@@ -121,6 +138,7 @@ export function SettingsPage() {
             <li>RekPDF 1.0 — конвертер и редактор PDF в браузере</li>
             <li>pdf.js · pdf-lib · docx — всё считается на вашем устройстве</li>
             <li>Файлы не загружаются на сервер и не хранятся</li>
+            <li>Статистика анонимная: инструмент, действие и время, без содержимого документов</li>
             <li>Без регистрации, подписки и водяных знаков</li>
           </ul>
         </div>

@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { HomePage } from './pages/HomePage'
 import { ToolsPage } from './pages/ToolsPage'
 import { ServicesPage } from './pages/ServicesPage'
@@ -5,6 +6,7 @@ import { ProfilePage } from './pages/ProfilePage'
 import { SettingsPage } from './pages/SettingsPage'
 import { Link, ROUTES, isKnownRoute, usePath } from './lib/router'
 import { initials, useUser } from './lib/profile'
+import { track } from './lib/analytics'
 
 const NAV = [
   { to: ROUTES.home, label: 'Главная' },
@@ -44,6 +46,10 @@ export default function App() {
   const path = usePath()
   const user = useUser()
   const known = isKnownRoute(path)
+
+  useEffect(() => {
+    track('страница', 'view')
+  }, [path])
 
   return (
     <div className="page">

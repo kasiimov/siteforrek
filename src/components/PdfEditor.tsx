@@ -2,6 +2,7 @@ import { useCallback, useRef, useState } from 'react'
 import type { DragEvent as ReactDragEvent } from 'react'
 import { formatSize, saveOutputs } from '../lib/download'
 import { addHistory } from '../lib/profile'
+import { track } from '../lib/analytics'
 import type { ToolSpec } from './toolTypes'
 
 type Message = { tone: 'ok' | 'error' | 'info'; text: string }
@@ -97,6 +98,7 @@ export function PdfEditor({ spec }: { spec: ToolSpec }) {
       const note = Array.isArray(result) ? undefined : result.note
       const zipName = `${files[0].name.replace(/\.[^.]+$/, '') || 'rekpdf'}-rekpdf.zip`
       await saveOutputs(outputs, zipName)
+      track(spec.name, 'done')
       addHistory({
         tool: spec.name,
         fileName: files.map((file) => file.name).join(', '),

@@ -21,6 +21,8 @@ export type HistoryEntry = {
 
 export type Prefs = {
   keepHistory: boolean
+  /** анонимные счётчики использования — можно выключить */
+  analytics: boolean
 }
 
 const USER_KEY = 'rekpdf.user'
@@ -29,7 +31,7 @@ const PREFS_KEY = 'rekpdf.prefs'
 const USER_EVENT = 'rekpdf:user'
 export const HISTORY_LIMIT = 30
 
-export const DEFAULT_PREFS: Prefs = { keepHistory: true }
+export const DEFAULT_PREFS: Prefs = { keepHistory: true, analytics: true }
 
 function read<T>(key: string): T | null {
   try {

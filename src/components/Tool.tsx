@@ -5,6 +5,7 @@ import { PdfEditor } from './PdfEditor'
 import { catalog } from './toolCatalog'
 import { GROUP_LABELS } from './toolTypes'
 import type { ToolGroup } from './toolTypes'
+import { track } from '../lib/analytics'
 
 const BUILTIN_HINTS: Record<string, string> = {
   word: 'Готовый .docx с текстом, который можно править.',
@@ -51,6 +52,7 @@ export function Tool({ compact = false }: { compact?: boolean }) {
                   className={`tool-tile${tool.id === active.id ? ' is-active' : ''}`}
                   onClick={() => {
                     setActiveId(tool.id)
+                    track(tool.name, 'open')
                     document.getElementById('tool-card')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
                   }}
                 >

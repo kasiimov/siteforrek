@@ -4,6 +4,7 @@ import type { PDFDocumentProxy, PDFPageProxy } from 'pdfjs-dist'
 import { openPdf } from '../lib/pdf'
 import { baseName, download, formatSize } from '../lib/download'
 import { addHistory } from '../lib/profile'
+import { track } from '../lib/analytics'
 import {
   TEXT_COLORS,
   clampPosition,
@@ -334,6 +335,7 @@ export function PdfRedactor() {
       })
 
       download(result.blob, `${baseName(file.name)}-edited.pdf`)
+      track('Редактор PDF', 'done')
       addHistory({ tool: 'Редактор PDF', fileName: file.name, result: `объектов: ${result.objects}` })
       const parts = [`${result.pages} страниц(ы)`]
       if (result.objects) parts.push(`добавлено объектов: ${result.objects}`)
