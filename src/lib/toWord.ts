@@ -2,6 +2,7 @@ import {
   AlignmentType,
   BorderStyle,
   Document,
+  ExternalHyperlink,
   HorizontalPositionRelativeFrom,
   ImageRun,
   LineRuleType,
@@ -79,18 +80,22 @@ function paragraphFrom(line: LineSpec, beforePt: number, leftShift = 0): Paragra
       line: Math.max(20, Math.round(lineHeight(line) * TWIPS)),
       lineRule: LineRuleType.EXACT,
     },
-    children: runs.map(
-      (run) =>
-        new TextRun({
-          text: run.text,
-          bold: run.bold,
-          italics: run.italic,
-          size: Math.max(2, Math.round(run.size * 2)),
-          font: FONT[run.family],
-          superScript: run.script === 'super',
-          subScript: run.script === 'sub',
-        }),
-    ),
+    children: runs.map((run) => {
+      const text = new TextRun({
+        text: run.text,
+        bold: run.bold,
+        italics: run.italic,
+        size: Math.max(2, Math.round(run.size * 2)),
+        font: FONT[run.family],
+        superScript: run.script === 'super',
+        subScript: run.script === 'sub',
+        // В PDF ссылка могла быть чёрной, но в Word она должна выглядеть ссылкой.
+        color: run.link ? '0563C1' : undefined,
+        underline: run.link ? {} : undefined,
+      })
+
+      return run.link ? new ExternalHyperlink({ link: run.link, children: [text] }) : text
+    }),
   })
 }
 
@@ -369,7 +374,7 @@ function scanBlocks(page: PDFPageProxy, image: { data: Uint8Array; width: number
  * шрифты, картинки на своих местах, таблицы и колонки. Скан без текстового слоя
  * вставляется картинками страниц.
  */
-export type DocxStats = { pages: number; scanned: number; tables: number; images: number }
+export type DocxStats = { pages: number; scanned: number; tables: number; images: number; links: number }
 
 export async function pdfToDocx(
   pdf: PDFDocumentProxy,
@@ -378,7 +383,7 @@ export async function pdfToDocx(
 ): Promise<{ blob: Blob; stats: DocxStats }> {
   const total = pdf.numPages
   const steps = total * 2
-  const stats: DocxStats = { pages: total, scanned: 0, tables: 0, images: 0 }
+  const stats: DocxStats = { pages: total, scanned: 0, tables: 0, images: 0, links: 0 }
   const sections: { properties: { page: { size: { width: number; height: number }; margin: Record<string, number> } }; children: Block[] }[] = []
 
   for (let pageNumber = 1; pageNumber <= total; pageNumber++) {
@@ -399,6 +404,7 @@ export async function pdfToDocx(
     if (layout && !layout.scanned) {
       stats.tables += layout.tables.length
       stats.images += layout.images.length
+      stats.links += layout.links
       children.push(...pageBlocks(layout))
       onProgress?.(pageNumber, steps)
     } else {

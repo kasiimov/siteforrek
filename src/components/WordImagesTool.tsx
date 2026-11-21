@@ -33,6 +33,7 @@ function wordSummary(items: Item[], stats: DocxStats): string {
   const parts = [pagesLabel(stats.pages)]
   if (stats.tables) parts.push(`таблиц: ${stats.tables}`)
   if (stats.images) parts.push(`картинок: ${stats.images}`)
+  if (stats.links) parts.push(`ссылок: ${stats.links}`)
 
   const scanned = stats.scanned
     ? stats.scanned === 1
@@ -218,7 +219,7 @@ export function WordImagesTool({ mode }: { mode: 'word' | 'images' }) {
         if (nextJob === 'word') {
           const outputs: { name: string; blob: Blob }[] = []
           const taken = new Set<string>()
-          const stats: DocxStats = { pages: 0, scanned: 0, tables: 0, images: 0 }
+          const stats: DocxStats = { pages: 0, scanned: 0, tables: 0, images: 0, links: 0 }
 
           for (let index = 0; index < items.length; index++) {
             const { file } = items[index]
@@ -235,6 +236,7 @@ export function WordImagesTool({ mode }: { mode: 'word' | 'images' }) {
               stats.scanned += result.stats.scanned
               stats.tables += result.stats.tables
               stats.images += result.stats.images
+              stats.links += result.stats.links
 
               const name = uniqueName(outputName(file.name, 'docx'), taken)
               taken.add(name)

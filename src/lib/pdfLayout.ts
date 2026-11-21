@@ -3,6 +3,8 @@ import type { TextItem } from 'pdfjs-dist/types/src/display/api'
 import { pdfjsLib } from './pdf'
 import { resolveImage, toCanvas } from './images'
 import { isInvisible, strokeColorHex } from './tableBorders'
+import { linksFromAnnotations, splitRunsByLinks } from './links'
+import type { LinkAnnotation } from './links'
 
 const { OPS } = pdfjsLib
 
@@ -15,6 +17,11 @@ export type RunSpec = {
   italic: boolean
   family: Family
   script: 'super' | 'sub' | null
+  /** координаты рана на странице — по ним ран режется под гиперссылку */
+  left?: number
+  right?: number
+  /** адрес ссылки, если текст был ссылкой в PDF */
+  link?: string | null
 }
 
 export type LineSpec = {
@@ -86,6 +93,8 @@ export type PageLayout = {
   images: ImageSpec[]
   /** центры «коридоров» между колонками; null — обычная одноколоночная страница */
   columns: number[] | null
+  /** сколько внешних ссылок было на странице */
+  links: number
   scanned: boolean
 }
 
@@ -201,8 +210,16 @@ function buildLines(content: Awaited<ReturnType<PDFPageProxy['getTextContent']>>
           Math.abs(previous.size - itemSize) < 0.7
         ) {
           previous.text += needSpace ? ` ${item.str}` : item.str
+          previous.right = left + (item.width ?? 0)
         } else {
-          runs.push({ text: (needSpace ? ' ' : '') + item.str, size: itemSize, ...style, script })
+          runs.push({
+            text: (needSpace ? ' ' : '') + item.str,
+            size: itemSize,
+            ...style,
+            script,
+            left,
+            right: left + (item.width ?? 0),
+          })
         }
 
         text += item.str
@@ -701,6 +718,17 @@ function readRules(operators: OperatorList) {
   return { horizontal: mergeHorizontal(horizontal), vertical: mergeVertical(vertical) }
 }
 
+/** Внешние ссылки страницы: аннотации Link с адресом. */
+async function readLinks(page: PDFPageProxy, view: number[]) {
+  try {
+    const annotations = (await page.getAnnotations({ intent: 'display' })) as LinkAnnotation[]
+    return linksFromAnnotations(annotations, view)
+  } catch {
+    // Страницы без аннотаций и битые аннотации — не повод падать.
+    return []
+  }
+}
+
 /** Разбирает страницу: строки, картинки, таблицы и колонки. */
 export async function buildPageLayout(page: PDFPageProxy): Promise<PageLayout> {
   const view = page.view as number[]
@@ -711,8 +739,10 @@ export async function buildPageLayout(page: PDFPageProxy): Promise<PageLayout> {
   const lines = buildLines(content, height, view[0])
 
   if (characters < 20) {
-    return { width, height, lines: [], tables: [], images: [], columns: null, scanned: true }
+    return { width, height, lines: [], tables: [], images: [], columns: null, links: 0, scanned: true }
   }
+
+  const links = await readLinks(page, view)
 
   let tables: TableSpec[] = []
   let free = lines
@@ -729,6 +759,12 @@ export async function buildPageLayout(page: PDFPageProxy): Promise<PageLayout> {
     tables = []
     free = lines
     images = []
+  }
+
+  // Ссылки надеваем на уже разложенный текст: ячейки таблиц держат те же объекты строк,
+  // поэтому подписи-ссылки внутри таблиц тоже станут ссылками.
+  if (links.length) {
+    for (const line of lines) line.runs = splitRunsByLinks(line.runs, links, line)
   }
 
   const contentLeft = free.reduce((min, line) => Math.min(min, line.left), width)
@@ -750,5 +786,5 @@ export async function buildPageLayout(page: PDFPageProxy): Promise<PageLayout> {
 
   const columns = detectColumns(free, contentLeft, contentRight)
 
-  return { width, height, lines: free, tables, images, columns, scanned: false }
+  return { width, height, lines: free, tables, images, columns, links: links.length, scanned: false }
 }
