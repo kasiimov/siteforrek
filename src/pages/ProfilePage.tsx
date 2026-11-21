@@ -59,46 +59,48 @@ export function ProfilePage() {
           </p>
         </section>
 
-        <form className="page-card form-card" onSubmit={submit}>
-          <label className="form-row">
-            <span className="field-label">Имя</span>
-            <input
-              className="field-input"
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              placeholder="Как к вам обращаться"
-              autoComplete="name"
-            />
-          </label>
-          <label className="form-row">
-            <span className="field-label">Почта</span>
-            <input
-              className="field-input"
-              type="email"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              placeholder="you@example.com"
-              autoComplete="email"
-            />
-          </label>
+        <div className="stack">
+          <form className="page-card form-card" onSubmit={submit}>
+            <label className="form-row">
+              <span className="field-label">Имя</span>
+              <input
+                className="field-input"
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                placeholder="Как к вам обращаться"
+                autoComplete="name"
+              />
+            </label>
+            <label className="form-row">
+              <span className="field-label">Почта</span>
+              <input
+                className="field-input"
+                type="email"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                placeholder="you@example.com"
+                autoComplete="email"
+              />
+            </label>
 
-          <div className="form-actions">
-            <button className="btn btn-primary" type="submit">
-              Создать профиль
-              <Arrow />
-            </button>
-            <Link className="btn btn-quiet" to="/tools">
-              Продолжить без профиля
-            </Link>
-          </div>
+            <div className="form-actions">
+              <button className="btn btn-primary" type="submit">
+                Создать профиль
+                <Arrow />
+              </button>
+              <Link className="btn btn-quiet" to="/tools">
+                Продолжить без профиля
+              </Link>
+            </div>
 
-          <p className="panel-note">
-            Мы не храним пароль и не отправляем ваши данные никуда. Профиль можно удалить в любой
-            момент — в настройках.
-          </p>
+            <p className="panel-note">
+              Мы не храним пароль и не отправляем ваши данные никуда. Профиль можно удалить в любой
+              момент — в настройках.
+            </p>
 
-          {note && <p className={`message message-${note.tone}`}>{note.text}</p>}
-        </form>
+            {note && <p className={`message message-${note.tone}`}>{note.text}</p>}
+          </form>
+        </div>
       </>
     )
   }
