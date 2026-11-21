@@ -113,14 +113,24 @@ function csvCell(value) {
   return /[";\n\r]/.test(text) ? '"' + text.replace(/"/g, '""') + '"' : text
 }
 
-/** Выгрузка всех событий в CSV: только владелец, файл собирается на сервере. */
+const CSV_PERIOD_DAYS = { '7': 7, '30': 30, all: 0 }
+
+/** Выгрузка событий в CSV за период: только владелец, файл собирается на сервере. */
 async function exportCsv(request, env) {
   if (!env.ADMIN_TOKEN) return json({ error: 'ADMIN_TOKEN не настроен на сервере.' }, 503)
   if (!authorized(request, env)) return json({ error: 'Неверный ключ доступа.' }, 401)
 
+  const period = new URL(request.url).searchParams.get('period') ?? 'all'
+  if (!(period in CSV_PERIOD_DAYS)) return json({ error: 'Неизвестный период выгрузки.' }, 400)
+
   await ensureSchema(env)
 
-  const rows = await env.DB.prepare('SELECT ts, name, action, path, visitor FROM events ORDER BY id ASC').all()
+  const query = 'SELECT ts, name, action, path, visitor FROM events'
+  const rows = period === 'all'
+    ? await env.DB.prepare(query + ' ORDER BY id ASC').all()
+    : await env.DB.prepare(query + ' WHERE ts >= ? ORDER BY id ASC')
+        .bind(Date.now() - CSV_PERIOD_DAYS[period] * 86400000)
+        .all()
   const labels = { open: 'открыл инструмент', done: 'получил файл', view: 'открыл страницу' }
   const head = ['Дата (UTC)', 'Время (UTC)', 'Инструмент', 'Действие', 'Страница', 'Посетитель']
   const lines = [head.join(';')]
@@ -137,7 +147,7 @@ async function exportCsv(request, env) {
   return new Response(body, {
     headers: {
       'content-type': 'text/csv; charset=utf-8',
-      'content-disposition': `attachment; filename="rekpdf-stats-${new Date().toISOString().slice(0, 10)}.csv"`,
+      'content-disposition': `attachment; filename="rekpdf-stats${period === 'all' ? '' : '-' + period + 'd'}-${new Date().toISOString().slice(0, 10)}.csv"`,
       'cache-control': 'no-store',
     },
   })
@@ -220,7 +230,6 @@ const PAGE = `<!doctype html>
     --muted: #8a8477;
     --line: #ddd7c9;
     --accent: #d4452a;
-    --blue: #3a44c4;
     --mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
   }
   * { box-sizing: border-box; }
@@ -371,22 +380,15 @@ const PAGE = `<!doctype html>
   .action b { display: block; margin-top: 6px; font: 500 22px/1 var(--mono); font-variant-numeric: tabular-nums; }
   .action small { display: block; margin-top: 4px; font-size: 10.5px; color: var(--muted); }
 
-  .feed { display: flex; flex-direction: column; }
-  .event {
-    display: grid; grid-template-columns: 62px minmax(0,1fr) auto;
-    gap: 12px; align-items: center; padding: 9px 0; border-bottom: 1px solid rgba(221,215,201,.7);
+  /* ── выгрузка ───────────────────────────────── */
+  .period { display: grid; gap: 5px; padding-top: 9px; border-top: 1px solid var(--line); }
+  .period span { font: 9px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+  .period select {
+    width: 100%; padding: 6px 8px; background: var(--panel); border: 1px solid var(--line);
+    border-radius: 2px; font: 10px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase;
+    color: var(--ink-soft); cursor: pointer; transition: border-color .15s;
   }
-  .event:last-child { border-bottom: 0; }
-  .chip {
-    display: inline-block; padding: 3px 6px; border: 1px solid var(--line);
-    font: 8.5px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); text-align: center;
-  }
-  .chip.open { border-color: rgba(58,68,196,.35); color: var(--blue); }
-  .chip.done { border-color: rgba(212,69,42,.35); color: var(--accent); }
-  .event .what { min-width: 0; display: flex; align-items: baseline; gap: 9px; }
-  .event .what b { font-weight: 500; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .event .what span { font: 10.5px/1 var(--mono); color: var(--muted); white-space: nowrap; }
-  .event time { font: 10px/1 var(--mono); color: var(--muted); white-space: nowrap; }
+  .period select:hover { border-color: var(--ink); }
 
   /* ── вход ───────────────────────────────────── */
   .gate { max-width: 390px; margin: 7vh 0 0; }
@@ -423,6 +425,9 @@ const PAGE = `<!doctype html>
     .rail-foot { margin: 0; display: flex; gap: 14px; }
     .stamp { display: none; }
     .ghost { border-top: 0; padding: 0; white-space: nowrap; }
+    .period { display: flex; align-items: center; gap: 8px; padding: 0; border: 0; }
+    .period span { display: none; }
+    .period select { width: auto; padding: 5px 7px; }
     main { padding: 30px 22px 70px; }
     h1 { font-size: 34px; }
     .strip { grid-template-columns: 1fr 1fr; }
@@ -472,6 +477,14 @@ const PAGE = `<!doctype html>
     <div class="rail-foot">
       <p class="stamp" id="stamp" hidden>—</p>
       <button class="ghost" id="refresh" hidden>Обновить</button>
+      <label class="period" id="csvPeriodWrap" hidden>
+        <span>Период CSV</span>
+        <select id="csvPeriod" aria-label="Период выгрузки статистики">
+          <option value="7">7 дней</option>
+          <option value="30">30 дней</option>
+          <option value="all" selected>Всё время</option>
+        </select>
+      </label>
       <button class="ghost" id="csv" title="Скачать статистику в CSV" hidden>CSV ↓</button>
       <button class="ghost" id="logout" hidden>Выйти</button>
     </div>
@@ -563,15 +576,6 @@ const PAGE = `<!doctype html>
     return pad(d.getDate()) + '.' + pad(d.getMonth() + 1) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes())
   }
 
-  function ago(ts) {
-    if (!ts) return '—'
-    var diff = Math.round((Date.now() - ts) / 1000)
-    if (diff < 60) return 'только что'
-    if (diff < 3600) return Math.round(diff / 60) + ' мин'
-    if (diff < 86400) return Math.round(diff / 3600) + ' ч'
-    return Math.round(diff / 86400) + ' дн'
-  }
-
   var ACTION_LABEL = { view: 'визит', open: 'открыл', done: 'файл' }
 
   var token = sessionStorage.getItem('rekpdf.admin') || ''
@@ -582,6 +586,7 @@ const PAGE = `<!doctype html>
     $('dashboard').hidden = !visible
     $('nav').hidden = !visible
     $('refresh').hidden = !visible
+    $('csvPeriodWrap').hidden = !visible
     $('csv').hidden = !visible
     $('logout').hidden = !visible
     $('stamp').hidden = !visible
@@ -731,19 +736,22 @@ const PAGE = `<!doctype html>
   async function downloadCsv() {
     var button = $('csv')
     var label = button.textContent
+    var period = $('csvPeriod').value
     button.disabled = true
     button.textContent = 'Готовим…'
     try {
-      var response = await fetch('/api/export.csv', { headers: { Authorization: 'Bearer ' + token } })
+      var response = await fetch('/api/export.csv?period=' + encodeURIComponent(period), { headers: { Authorization: 'Bearer ' + token } })
       if (!response.ok) {
         var data = await response.json().catch(function () { return {} })
         throw new Error(data.error || 'Не удалось выгрузить CSV')
       }
+      var disposition = response.headers.get('content-disposition') || ''
+      var match = disposition.match(/filename="([^"]+)"/)
       var blob = await response.blob()
       var url = URL.createObjectURL(blob)
       var link = document.createElement('a')
       link.href = url
-      link.download = 'rekpdf-stats-' + new Date().toISOString().slice(0, 10) + '.csv'
+      link.download = match ? match[1] : 'rekpdf-stats.csv'
       document.body.appendChild(link)
       link.click()
       link.remove()
