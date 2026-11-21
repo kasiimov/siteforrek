@@ -57,6 +57,27 @@ describe('splitRunsByLinks', () => {
     expect(result.every((run) => run.link !== undefined)).toBe(true)
   })
 
+  it('режет по кускам строки, когда их координаты известны', () => {
+    const runs: LinkableRun[] = [
+      {
+        text: 'Read more on congix.uz - prices',
+        left: 0,
+        right: 240,
+        pieces: [
+          { text: 'Read more on', left: 0, right: 80 },
+          { text: ' congix.uz', left: 80, right: 134 },
+          { text: ' - prices', left: 134, right: 240 },
+        ],
+      },
+    ]
+    const links = [{ left: 83, top: 100, width: 51, height: 12, url: 'https://congix.uz' }]
+    const result = splitRunsByLinks(runs, links, line)
+
+    // Соседние куски не попадают в ссылку: адрес нужно подсветить ровно целиком.
+    expect(result.find((run) => run.link)?.text).toBe('congix.uz')
+    expect(result.map((run) => run.text).join('')).toBe('Read more on congix.uz - prices')
+  })
+
   it('не трогает строки, которые ссылка не задевает по вертикали', () => {
     const runs: LinkableRun[] = [{ text: 'Сноска', left: 0, right: 60 }]
     const links = [{ left: 0, top: 40, width: 60, height: 12, url: 'https://congix.uz' }]

@@ -4,7 +4,7 @@ import { pdfjsLib } from './pdf'
 import { resolveImage, toCanvas } from './images'
 import { isInvisible, strokeColorHex } from './tableBorders'
 import { linksFromAnnotations, splitRunsByLinks } from './links'
-import type { LinkAnnotation } from './links'
+import type { LinkAnnotation, RunPiece } from './links'
 
 const { OPS } = pdfjsLib
 
@@ -22,6 +22,8 @@ export type RunSpec = {
   right?: number
   /** адрес ссылки, если текст был ссылкой в PDF */
   link?: string | null
+  /** куски рана (по фрагментам текста) с точными координатами */
+  pieces?: RunPiece[]
 }
 
 export type LineSpec = {
@@ -209,16 +211,20 @@ function buildLines(content: Awaited<ReturnType<PDFPageProxy['getTextContent']>>
           previous.family === style.family &&
           Math.abs(previous.size - itemSize) < 0.7
         ) {
-          previous.text += needSpace ? ` ${item.str}` : item.str
+          const piece = (needSpace ? ' ' : '') + item.str
+          previous.text += piece
           previous.right = left + (item.width ?? 0)
+          previous.pieces?.push({ text: piece, left, right: previous.right })
         } else {
+          const right = left + (item.width ?? 0)
           runs.push({
             text: (needSpace ? ' ' : '') + item.str,
             size: itemSize,
             ...style,
             script,
             left,
-            right: left + (item.width ?? 0),
+            right,
+            pieces: [{ text: (needSpace ? ' ' : '') + item.str, left, right }],
           })
         }
 

@@ -57,11 +57,15 @@ export function linksFromAnnotations(annotations: readonly LinkAnnotation[], vie
   return links
 }
 
+export type RunPiece = { text: string; left: number; right: number }
+
 export type LinkableRun = {
   text: string
   left?: number
   right?: number
   link?: string | null
+  /** куски строки с их точными координатами — по ним режем текст без съезда на символ */
+  pieces?: RunPiece[]
 }
 
 /**
@@ -87,7 +91,6 @@ export function splitRunsByLinks<R extends LinkableRun>(
       continue
     }
 
-    const span = right - left
     const cuts = new Set<number>([left, right])
 
     for (const link of inside) {
@@ -107,24 +110,51 @@ export function splitRunsByLinks<R extends LinkableRun>(
       const to = points[index]
       if (to - from < 0.5) continue
 
-      let text = sliceText(run.text, (from - left) / span, (to - left) / span)
+      let text = sliceRun(run, from, to)
       if (!text) continue
+
+      const link = inside.find((candidate) => from >= candidate.left - 0.75 && to <= candidate.left + candidate.width + 0.75)
+      const url = link?.url ?? null
 
       // Пробел на стыке кусков оставляем вне ссылки: иначе он подчеркнётся и посинеет.
       const lead = /^\s+/.exec(text)?.[0] ?? ''
       if (lead) {
-        text = text.slice(lead.length)
         const previous = result[result.length - 1]
-        if (previous && previous.text.length) previous.text += lead
-        if (!text) continue
+        const unlinked = previous !== undefined && previous.text.length > 0 && !previous.link
+        const sameLink = previous !== undefined && (previous.link ?? null) === url
+        if (unlinked || sameLink) {
+          previous.text += lead
+          text = text.slice(lead.length)
+          if (!text) continue
+        }
       }
 
-      const link = inside.find((candidate) => from >= candidate.left - 0.75 && to <= candidate.left + candidate.width + 0.75)
-      result.push(link ? { ...run, text, link: link.url } : { ...run, text, link: null })
+      result.push(link ? { ...run, text, link: url } : { ...run, text, link: null })
     }
   }
 
   return result
+}
+
+/** Режет ран по координатам: если известны куски, границы ссылки попадают точно на слово. */
+function sliceRun(run: LinkableRun, from: number, to: number): string {
+  const pieces = run.pieces
+  if (!pieces?.length || run.left === undefined || run.right === undefined) {
+    const span = Math.max(0.001, (run.right ?? 0) - (run.left ?? 0))
+    return sliceText(run.text, (from - (run.left ?? 0)) / span, (to - (run.left ?? 0)) / span)
+  }
+
+  let text = ''
+
+  for (const piece of pieces) {
+    const start = Math.max(from, piece.left)
+    const end = Math.min(to, piece.right)
+    const width = piece.right - piece.left
+    if (end - start < 0.2 || width <= 0.2) continue
+    text += sliceText(piece.text, (start - piece.left) / width, (end - piece.left) / width)
+  }
+
+  return text
 }
 
 /** Ширины букв в шрифте неизвестны — режем текст пропорционально его ширине. */
