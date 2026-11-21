@@ -107,7 +107,16 @@ export function insertBlankPage(pages: EditorPage[], index: number, box: PageBox
 export function fitImage(box: PageBox, width: number, height: number, share = 0.5): { width: number; height: number } {
   const targetWidth = Math.max(24, box.width * share)
   const ratio = targetWidth / Math.max(1, width)
-  return { width: Math.round(targetWidth), height: Math.round(height * ratio) }
+  let drawWidth = targetWidth
+  let drawHeight = height * ratio
+  // Высокое фото не должно свисать за нижний край страницы.
+  const maxHeight = box.height * 0.6
+  if (drawHeight > maxHeight) {
+    const shrink = maxHeight / drawHeight
+    drawWidth *= shrink
+    drawHeight = maxHeight
+  }
+  return { width: Math.round(drawWidth), height: Math.round(drawHeight) }
 }
 
 async function loadEditorFontBytes(): Promise<ArrayBuffer> {

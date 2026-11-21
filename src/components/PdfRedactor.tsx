@@ -15,7 +15,7 @@ import {
 } from '../lib/docEditor'
 import type { EditorObject, EditorPage, TextObject, ToPdfPoint } from '../lib/docEditor'
 
-type Tool = 'select' | 'text' | 'image'
+type Tool = 'select' | 'text'
 type Message = { tone: 'ok' | 'error' | 'info'; text: string }
 
 const MAX_FILE_MB = 100
@@ -24,8 +24,9 @@ const MAX_FILE_BYTES = MAX_FILE_MB * 1024 * 1024
 const HINTS: Record<Tool, string> = {
   select: 'Нажмите на объект, чтобы выбрать. Тащите мышкой, чтобы двигать. Delete — удалить.',
   text: 'Нажмите на странице в том месте, где нужен текст, — он появится и его можно будет напечатать справа.',
-  image: 'Выберите фото или картинку — она встанет на текущую страницу. Дальше её можно тащить и менять ширину.',
 }
+
+const IMAGE_HINT = 'Фото встанет на страницу. Тащите его мышкой, а за уголок справа снизу меняйте размер.'
 
 const uid = () => Math.random().toString(36).slice(2, 10)
 
@@ -50,11 +51,14 @@ export function PdfRedactor() {
   const inputRef = useRef<HTMLInputElement>(null)
   const imageInputRef = useRef<HTMLInputElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
-  const dragRef = useRef<{ id: string; startX: number; startY: number; originX: number; originY: number } | null>(null)
+  const stageWrapRef = useRef<HTMLDivElement>(null)
+  const dragRef = useRef<{ id: string; startX: number; startY: number; originX: number; originY: number; moved: boolean } | null>(null)
+  const resizeRef = useRef<{ id: string; startX: number; originWidth: number; ratio: number; moved: boolean } | null>(null)
 
   pagesRef.current = pages
 
   const page = pages[index] ?? null
+  const boxWidth = page?.box.width ?? 0
   const selectedObject = page?.objects.find((object) => object.id === selected) ?? null
 
   useEffect(() => {
@@ -105,6 +109,25 @@ export function PdfRedactor() {
       setLoading(false)
     }
   }, [])
+
+  // Держим страницу ровно по ширине колонки: иначе canvas сжимается, а объекты остаются в пикселях.
+  useEffect(() => {
+    const wrap = stageWrapRef.current
+    if (!wrap || !boxWidth) return
+
+    const fit = () => {
+      const styles = getComputedStyle(wrap)
+      const padding = parseFloat(styles.paddingLeft) + parseFloat(styles.paddingRight)
+      const available = wrap.clientWidth - padding - 2
+      if (available < 40) return
+      setScale(Math.min(1.5, Math.max(0.2, available / boxWidth)))
+    }
+
+    fit()
+    const observer = new ResizeObserver(fit)
+    observer.observe(wrap)
+    return () => observer.disconnect()
+  }, [boxWidth])
 
   // Рисуем текущую страницу. Зависимости намеренные: объекты не должны перерисовывать canvas.
   useEffect(() => {
@@ -194,13 +217,20 @@ export function PdfRedactor() {
     try {
       const bytes = new Uint8Array(await next.arrayBuffer())
       const type = /png/i.test(next.type) || /\.png$/i.test(next.name) ? 'png' : 'jpg'
-      const bitmap = await createImageBitmap(new Blob([bytes], { type: `image/${type}` }))
+      const mime = type === 'png' ? 'image/png' : 'image/jpeg'
+      const bitmap = await createImageBitmap(new Blob([bytes], { type: mime }))
       const size = fitImage(page.box, bitmap.width, bitmap.height)
+      const position = clampPosition(
+        page.box,
+        Math.round((page.box.width - size.width) / 2),
+        Math.round(page.box.height * 0.18),
+        size.width,
+        size.height,
+      )
       const object: EditorObject = {
         kind: 'image',
         id: uid(),
-        x: Math.round((page.box.width - size.width) / 2),
-        y: Math.round(Math.max(24, page.box.height * 0.18)),
+        ...position,
         width: size.width,
         height: size.height,
         data: bytes,
@@ -209,7 +239,9 @@ export function PdfRedactor() {
       bitmap.close()
       mutate((current) => current.map((item, itemIndex) => (itemIndex === index ? { ...item, objects: [...item.objects, object] } : item)))
       setSelected(object.id)
-      setMessage({ tone: 'ok', text: 'Картинка добавлена. Тащите её по странице и меняйте ширину справа.' })
+      // Возвращаем «Выбор», иначе объект не потянешь: таскать умеет только этот режим.
+      setTool('select')
+      setMessage({ tone: 'ok', text: 'Фото добавлено и уже выделено — тащите его по странице или за уголок меняйте размер.' })
     } catch (error) {
       console.error(error)
       setMessage({ tone: 'error', text: 'Не получилось прочитать картинку. Подойдут PNG и JPG.' })
@@ -262,13 +294,38 @@ export function PdfRedactor() {
     return () => window.removeEventListener('keydown', onKey)
   }, [removeSelected, selected])
 
+  // Один снимок на жест: Ctrl+Z должен возвращать объект на место, а не удалять его.
+  const snapshot = () => {
+    setHistory((previous) => [...previous.slice(-40), pagesRef.current])
+  }
+
   useEffect(() => {
     const move = (event: PointerEvent) => {
-      const drag = dragRef.current
       const model = pagesRef.current[index]
-      if (!drag || !model) return
+      if (!model) return
+
+      const resize = resizeRef.current
+      if (resize) {
+        const object = model.objects.find((item) => item.id === resize.id)
+        if (!object || object.kind !== 'image' || !resize.ratio) return
+        if (!resize.moved) {
+          resize.moved = true
+          snapshot()
+        }
+        const maxWidth = Math.min(model.box.width - object.x, (model.box.height - object.y) / resize.ratio)
+        const width = Math.min(maxWidth, Math.max(24, resize.originWidth + (event.clientX - resize.startX) / scale))
+        updateObject(object.id, { width: Math.round(width), height: Math.round(width * resize.ratio) })
+        return
+      }
+
+      const drag = dragRef.current
+      if (!drag) return
       const object = model.objects.find((item) => item.id === drag.id)
       if (!object) return
+      if (!drag.moved) {
+        drag.moved = true
+        snapshot()
+      }
       const size = objectSize(object)
       const next = clampPosition(
         model.box,
@@ -281,6 +338,7 @@ export function PdfRedactor() {
     }
     const up = () => {
       dragRef.current = null
+      resizeRef.current = null
     }
     window.addEventListener('pointermove', move)
     window.addEventListener('pointerup', up)
@@ -430,8 +488,8 @@ export function PdfRedactor() {
   }
 
   const objects = page?.objects ?? []
-  const stageWidth = Math.round((page?.box.width ?? 0) * scale)
-  const stageHeight = Math.round((page?.box.height ?? 0) * scale)
+  const stageWidth = Math.floor((page?.box.width ?? 0) * scale)
+  const stageHeight = Math.floor((page?.box.height ?? 0) * scale)
 
   return (
     <div className="redactor">
@@ -472,7 +530,7 @@ export function PdfRedactor() {
           <button
             type="button"
             className={`segment${tool === 'text' ? ' is-active' : ''}`}
-            aria-pressed={tool === 'text'}
+                                aria-pressed={tool === 'text'}
             onClick={() => setTool('text')}
           >
             <span className="segment-icon" aria-hidden="true">
@@ -484,7 +542,7 @@ export function PdfRedactor() {
             type="button"
             className="segment"
             onClick={() => {
-              setTool('image')
+              setTool('select')
               imageInputRef.current?.click()
             }}
           >
@@ -511,10 +569,10 @@ export function PdfRedactor() {
         </div>
       </div>
 
-      <p className="redactor-hint">{HINTS[tool]}</p>
+      <p className="redactor-hint">{selectedObject?.kind === 'image' ? IMAGE_HINT : HINTS[tool]}</p>
 
       <div className="redactor-body">
-        <div className="redactor-stage-wrap">
+        <div className="redactor-stage-wrap" ref={stageWrapRef}>
           <div
             className={`redactor-stage${tool === 'text' ? ' is-placing' : ''}`}
             style={{ width: stageWidth, height: stageHeight }}
@@ -540,13 +598,16 @@ export function PdfRedactor() {
                   onPointerDown={(event) => {
                     event.stopPropagation()
                     if (tool !== 'select') return
+                    event.preventDefault()
                     setSelected(object.id)
+                    resizeRef.current = null
                     dragRef.current = {
                       id: object.id,
                       startX: event.clientX,
                       startY: event.clientY,
                       originX: object.x,
                       originY: object.y,
+                      moved: false,
                     }
                   }}
                 >
@@ -562,7 +623,28 @@ export function PdfRedactor() {
                       {object.text || 'Введите текст'}
                     </span>
                   ) : (
-                    <img className="redactor-image" src={imageUrl(object)} alt="" draggable={false} />
+                    <>
+                      <img className="redactor-image" src={imageUrl(object)} alt="" draggable={false} />
+                      {isSelected && (
+                        <span
+                          className="redactor-handle"
+                          title="Потяните, чтобы изменить размер"
+                          onPointerDown={(event) => {
+                            event.stopPropagation()
+                            event.preventDefault()
+                            setSelected(object.id)
+                            dragRef.current = null
+                            resizeRef.current = {
+                              id: object.id,
+                              startX: event.clientX,
+                              originWidth: size.width,
+                              ratio: size.width ? size.height / size.width : 1,
+                              moved: false,
+                            }
+                          }}
+                        />
+                      )}
+                    </>
                   )}
                 </div>
               )
@@ -659,7 +741,10 @@ export function PdfRedactor() {
                     className="field-input"
                     type="range"
                     min={40}
-                    max={Math.round((page?.box.width ?? 500) - selectedObject.x)}
+                    max={Math.max(40, Math.floor(Math.min(
+                      (page?.box.width ?? 500) - selectedObject.x,
+                      ((page?.box.height ?? 700) - selectedObject.y) / (selectedObject.height / selectedObject.width || 1),
+                    )))}
                     value={Math.round(selectedObject.width)}
                     onChange={(event) => {
                       const width = Number(event.target.value)
@@ -740,7 +825,8 @@ function imageUrl(object: EditorObject): string {
   if (object.kind !== 'image') return ''
   const cached = imageUrls.get(object.id)
   if (cached) return cached
-  const blob = new Blob([object.data as BlobPart], { type: `image/${object.type}` })
+  // image/jpg браузеры понимают не все — правильный MIME для JPEG это image/jpeg.
+  const blob = new Blob([object.data as BlobPart], { type: object.type === 'png' ? 'image/png' : 'image/jpeg' })
   const url = URL.createObjectURL(blob)
   imageUrls.set(object.id, url)
   return url
