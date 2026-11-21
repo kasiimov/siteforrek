@@ -153,155 +153,541 @@ const PAGE = `<!doctype html>
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>RekPDF · админка</title>
+<title>RekPDF · панель наблюдения</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23171512'/%3E%3Ctext x='16' y='23' font-family='monospace' font-size='19' fill='%23efece4' text-anchor='middle'%3ER%3C/text%3E%3C/svg%3E" />
 <style>
-  :root { color-scheme: dark; --ink:#07070b; --card:rgba(255,255,255,.04); --line:rgba(255,255,255,.1); --muted:#9a9bb0; --violet:#8b5cf6; --red:#ff4f5e; }
+  :root {
+    color-scheme: light;
+    --paper: #efece4;
+    --panel: #faf8f3;
+    --ink: #171512;
+    --ink-soft: #3b3833;
+    --muted: #8a8477;
+    --line: #ddd7c9;
+    --accent: #d4452a;
+    --blue: #3a44c4;
+    --mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+  }
   * { box-sizing: border-box; }
-  body { margin:0; min-height:100vh; background:#07070b; color:#f4f4f8; font: 15px/1.5 'Golos Text', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; }
-  .wrap { width:min(1100px, calc(100% - 40px)); margin: 0 auto; padding: 28px 0 60px; }
-  header { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom: 26px; }
-  .logo { display:grid; place-items:center; width:36px; height:36px; border-radius:12px; background:linear-gradient(140deg,#ff4f5e,#8b5cf6); font-weight:800; color:#0a0a12; }
-  h1 { margin:0; font-size:1.15rem; font-weight:600; letter-spacing:-.01em; }
-  .spacer { margin-left:auto; }
-  .btn { padding:9px 16px; border-radius:11px; border:1px solid var(--line); background:rgba(255,255,255,.05); color:#f4f4f8; font:inherit; font-size:.86rem; cursor:pointer; }
-  .btn.primary { background:linear-gradient(120deg,#8b5cf6,#5a8bff); border-color:transparent; color:#fff; font-weight:600; }
-  .card { border:1px solid var(--line); border-radius:18px; background:var(--card); padding:18px; }
-  .login { max-width: 420px; display:flex; flex-direction:column; gap:12px; }
-  label { display:grid; gap:6px; font-size:.8rem; color:var(--muted); }
-  input { padding:11px 13px; border-radius:11px; border:1px solid var(--line); background:#101018; color:#f4f4f8; font:inherit; }
-  .kpis { display:grid; grid-template-columns:repeat(5, minmax(0,1fr)); gap:12px; margin-bottom:16px; }
-  .kpi { border:1px solid var(--line); border-radius:16px; padding:16px; background:var(--card); }
-  .kpi b { display:block; font-size:1.6rem; font-weight:600; letter-spacing:-.02em; }
-  .kpi span { font-size:.76rem; color:var(--muted); }
-  .grid { display:grid; grid-template-columns: 1.2fr 1fr; gap:16px; align-items:start; }
-  h2 { margin:0 0 12px; font-size:.92rem; font-weight:600; }
-  .bars { display:flex; align-items:flex-end; gap:8px; height:140px; }
-  .bar { flex:1; display:flex; flex-direction:column; align-items:center; gap:6px; justify-content:flex-end; height:100%; }
-  .bar i { display:block; width:100%; border-radius:8px 8px 3px 3px; background:linear-gradient(180deg,#8b5cf6,rgba(90,139,255,.35)); min-height:3px; }
-  .bar small { font-size:.62rem; color:#6f7085; transform:rotate(-45deg); white-space:nowrap; }
-  table { width:100%; border-collapse:collapse; font-size:.83rem; }
-  th, td { text-align:left; padding:8px 6px; border-bottom:1px solid rgba(255,255,255,.06); }
-  th { color:#7f8096; font-weight:500; font-size:.74rem; text-transform:uppercase; letter-spacing:.06em; }
-  td.num, th.num { text-align:right; }
-  .muted { color:var(--muted); }
-  .error { color:#ffb3b8; font-size:.85rem; }
-  .recent { display:grid; gap:6px; font-size:.82rem; }
-  .recent div { display:flex; gap:10px; padding:8px 10px; border-radius:10px; background:rgba(255,255,255,.03); }
-  .recent time { margin-left:auto; color:#6f7085; white-space:nowrap; }
-  @media (max-width: 900px) { .kpis { grid-template-columns:repeat(2, minmax(0,1fr)); } .grid { grid-template-columns:1fr; } }
+  [hidden] { display: none !important; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    color: var(--ink);
+    background: var(--paper);
+    background-image: linear-gradient(to right, rgba(23,21,18,.035) 1px, transparent 1px);
+    background-size: 76px 100%;
+    font: 14px/1.55 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: inherit; }
+  button, input { font: inherit; color: inherit; }
+  ::selection { background: rgba(212,69,42,.18); }
+
+  .shell { display: grid; grid-template-columns: 216px minmax(0, 1fr); min-height: 100vh; }
+
+  /* ── левая рейка ─────────────────────────────── */
+  .rail {
+    position: sticky; top: 0; align-self: start; height: 100vh;
+    display: flex; flex-direction: column; gap: 32px;
+    padding: 30px 22px 26px;
+    border-right: 1px solid var(--line);
+    background: rgba(239,236,228,.72);
+    backdrop-filter: blur(6px);
+  }
+  .brand { display: flex; align-items: center; gap: 11px; text-decoration: none; }
+  .brand-mark {
+    display: grid; place-items: center; width: 30px; height: 30px;
+    background: var(--ink); color: var(--paper);
+    font: 600 15px/1 var(--mono); border-radius: 3px;
+  }
+  .brand-text b { display: block; font-size: 14px; letter-spacing: -.01em; }
+  .brand-text small {
+    display: block; font: 9px/1.4 var(--mono); letter-spacing: .2em;
+    text-transform: uppercase; color: var(--muted); margin-top: 2px;
+  }
+  .nav { display: flex; flex-direction: column; }
+  .nav a {
+    display: flex; align-items: baseline; gap: 10px;
+    padding: 8px 0; text-decoration: none; font-size: 13px; color: var(--ink-soft);
+    border-bottom: 1px solid transparent; transition: color .15s;
+  }
+  .nav a i {
+    font: 9px/1 var(--mono); letter-spacing: .1em; color: var(--muted);
+    min-width: 16px; transition: color .15s;
+  }
+  .nav a:hover { color: var(--accent); }
+  .nav a:hover i { color: var(--accent); }
+  .rail-foot { margin-top: auto; display: grid; gap: 8px; }
+  .stamp {
+    margin: 0 0 4px; font: 9.5px/1.6 var(--mono); letter-spacing: .1em;
+    text-transform: uppercase; color: var(--muted);
+  }
+  .ghost {
+    text-align: left; padding: 9px 0; background: none; border: 0;
+    border-top: 1px solid var(--line); cursor: pointer;
+    font: 10px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--ink-soft);
+    transition: color .15s;
+  }
+  .ghost:hover { color: var(--accent); }
+
+  /* ── основная колонка ───────────────────────── */
+  main { padding: 42px 46px 90px; min-width: 0; }
+  .inner { max-width: 1120px; }
+
+  .eyebrow {
+    display: flex; align-items: center; gap: 9px; margin: 0 0 14px;
+    font: 10px/1 var(--mono); letter-spacing: .22em; text-transform: uppercase; color: var(--muted);
+  }
+  .eyebrow::before { content: ''; width: 6px; height: 6px; background: var(--accent); border-radius: 50%; }
+  h1 { margin: 0; font-size: 46px; font-weight: 500; letter-spacing: -.045em; line-height: 1.02; }
+  h1 em { font-family: Georgia, 'Times New Roman', serif; font-style: italic; font-weight: 400; letter-spacing: -.02em; }
+  .sub { margin: 14px 0 0; font-size: 12.5px; color: var(--muted); }
+  .sub span { color: var(--ink-soft); }
+
+  /* ── полоса KPI ──────────────────────────────── */
+  .strip {
+    display: grid; grid-template-columns: 1.25fr 1fr 1fr 1fr;
+    margin: 34px 0 22px; border-top: 1px solid var(--ink); border-bottom: 1px solid var(--line);
+  }
+  .cell { padding: 18px 20px 16px; border-right: 1px solid var(--line); min-width: 0; }
+  .cell:first-child { padding-left: 0; }
+  .cell:last-child { border-right: 0; }
+  .cell .label {
+    display: block; margin-bottom: 6px;
+    font: 9.5px/1 var(--mono); letter-spacing: .16em; text-transform: uppercase; color: var(--muted);
+  }
+  .cell b {
+    display: block; font: 500 34px/1.1 var(--mono); letter-spacing: -.05em;
+    font-variant-numeric: tabular-nums;
+  }
+  .cell.hero b { font-size: 54px; letter-spacing: -.06em; }
+  .cell .note, .cell .delta { display: block; margin-top: 6px; font-size: 11px; color: var(--muted); }
+  .delta.up { color: var(--accent); }
+  .delta.flat { color: var(--muted); }
+
+  /* ── панели ─────────────────────────────────── */
+  .panel {
+    background: var(--panel); border: 1px solid var(--line);
+    padding: 20px 22px 18px; margin-bottom: 18px;
+  }
+  .panel-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 16px; }
+  .panel-head h2 {
+    margin: 0; font: 10px/1 var(--mono); letter-spacing: .18em; text-transform: uppercase; color: var(--ink);
+  }
+  .panel-head .hint { margin-left: auto; font-size: 10.5px; color: var(--muted); }
+  .empty { margin: 0; padding: 18px 0; font-size: 12px; color: var(--muted); }
+  .chart-body svg { display: block; width: 100%; height: auto; overflow: visible; }
+  .chart-body .grid { stroke: rgba(23,21,18,.09); stroke-dasharray: 3 5; }
+  .chart-body .line { fill: none; stroke: var(--ink); stroke-width: 1.6; stroke-linejoin: round; }
+  .chart-body .area { fill: var(--accent); fill-opacity: .1; }
+  .chart-body .dot { fill: var(--panel); stroke: var(--accent); stroke-width: 1.5; }
+  .chart-body .tick { fill: var(--muted); font: 9px var(--mono); }
+
+  .duo { display: grid; grid-template-columns: minmax(0,1.35fr) minmax(0,1fr); gap: 18px; align-items: start; }
+  .duo .panel { margin-bottom: 18px; }
+
+  .ranks { display: flex; flex-direction: column; }
+  .row {
+    display: grid; grid-template-columns: 22px minmax(0,1fr) 46px 46px;
+    align-items: center; gap: 12px; padding: 9px 0;
+    border-bottom: 1px dashed var(--line);
+  }
+  .row.two { grid-template-columns: 22px minmax(0,1fr) 46px; }
+  .row:last-child { border-bottom: 0; }
+  .row .idx { font: 9.5px/1 var(--mono); color: var(--muted); }
+  .row .name { display: block; font-size: 13px; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .row .meter {
+    position: relative; display: block; height: 4px; margin-top: 7px;
+    background: rgba(23,21,18,.07); overflow: hidden;
+  }
+  .row .meter u, .row .meter i { position: absolute; left: 0; top: 0; bottom: 0; }
+  .row .meter u { background: rgba(23,21,18,.3); }
+  .row .meter i { background: var(--accent); }
+  .row .meter u, .row .meter i { transition: width .3s ease; }
+  .row .n { text-align: right; }
+  .row .n b { display: block; font: 500 14px/1.2 var(--mono); font-variant-numeric: tabular-nums; }
+  .row .n small { font: 8.5px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+
+  .actions { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 0; margin-top: 16px; border-top: 1px solid var(--ink); }
+  .action { padding: 12px 12px 2px 0; }
+  .action span { display: block; font: 9px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+  .action b { display: block; margin-top: 6px; font: 500 22px/1 var(--mono); font-variant-numeric: tabular-nums; }
+  .action small { display: block; margin-top: 4px; font-size: 10.5px; color: var(--muted); }
+
+  .feed { display: flex; flex-direction: column; }
+  .event {
+    display: grid; grid-template-columns: 62px minmax(0,1fr) auto;
+    gap: 12px; align-items: center; padding: 9px 0; border-bottom: 1px solid rgba(221,215,201,.7);
+  }
+  .event:last-child { border-bottom: 0; }
+  .chip {
+    display: inline-block; padding: 3px 6px; border: 1px solid var(--line);
+    font: 8.5px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); text-align: center;
+  }
+  .chip.open { border-color: rgba(58,68,196,.35); color: var(--blue); }
+  .chip.done { border-color: rgba(212,69,42,.35); color: var(--accent); }
+  .event .what { min-width: 0; display: flex; align-items: baseline; gap: 9px; }
+  .event .what b { font-weight: 500; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .event .what span { font: 10.5px/1 var(--mono); color: var(--muted); white-space: nowrap; }
+  .event time { font: 10px/1 var(--mono); color: var(--muted); white-space: nowrap; }
+
+  /* ── вход ───────────────────────────────────── */
+  .gate { max-width: 390px; margin: 7vh 0 0; }
+  .gate h1 { font-size: 34px; }
+  .gate .panel { padding: 22px; margin-top: 24px; }
+  .field { display: grid; gap: 7px; margin-bottom: 14px; }
+  .field span { font: 9.5px/1 var(--mono); letter-spacing: .16em; text-transform: uppercase; color: var(--muted); }
+  .field input {
+    width: 100%; padding: 12px 13px; background: var(--paper);
+    border: 1px solid var(--line); border-radius: 2px; font-family: var(--mono); font-size: 13px;
+    outline: none; transition: border-color .15s;
+  }
+  .field input:focus { border-color: var(--ink); }
+  .solid {
+    width: 100%; padding: 13px 16px; border: 0; border-radius: 2px; cursor: pointer;
+    background: var(--ink); color: var(--paper);
+    font: 10px/1 var(--mono); letter-spacing: .18em; text-transform: uppercase;
+    transition: background .15s;
+  }
+  .solid:hover { background: var(--accent); }
+  .fine { margin: 14px 0 0; font-size: 11px; line-height: 1.6; color: var(--muted); }
+  .error { margin: 12px 0 0; font-size: 12px; color: var(--accent); }
+
+  @media (max-width: 1024px) {
+    .shell { grid-template-columns: 1fr; }
+    .rail {
+      position: static; height: auto; flex-direction: row; align-items: center; gap: 18px;
+      padding: 16px 18px; border-right: 0; border-bottom: 1px solid var(--line);
+    }
+    .brand-text small { display: none; }
+    .nav { flex-direction: row; gap: 16px; margin-left: auto; overflow-x: auto; }
+    .nav a { border-bottom: 0; padding: 0; white-space: nowrap; }
+    .nav a i { display: none; }
+    .rail-foot { margin: 0; display: flex; gap: 14px; }
+    .stamp { display: none; }
+    .ghost { border-top: 0; padding: 0; white-space: nowrap; }
+    main { padding: 30px 22px 70px; }
+    h1 { font-size: 34px; }
+    .strip { grid-template-columns: 1fr 1fr; }
+    .cell { padding: 16px 16px 14px; }
+    .cell:nth-child(2n) { border-right: 0; }
+    .cell:first-child { padding-left: 16px; }
+    .cell.hero b { font-size: 40px; }
+    .duo { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 620px) {
+    .nav { display: none; }
+    .rail { justify-content: space-between; }
+    .event { grid-template-columns: 58px minmax(0,1fr); }
+    .event time { grid-column: 2; }
+    .row { grid-template-columns: 18px minmax(0,1fr) 40px 40px; gap: 9px; }
+    .row.two { grid-template-columns: 18px minmax(0,1fr) 40px; }
+  }
 </style>
 </head>
 <body>
-<div class="wrap">
-  <header>
-    <span class="logo">R</span>
-    <h1>RekPDF · админка</h1>
-    <span class="spacer"></span>
-    <button class="btn" id="refresh" hidden>Обновить</button>
-    <button class="btn" id="logout" hidden>Выйти</button>
-  </header>
+<div class="shell">
+  <aside class="rail">
+    <a class="brand" href="/">
+      <span class="brand-mark">R</span>
+      <span class="brand-text"><b>RekPDF</b><small>панель наблюдения</small></span>
+    </a>
 
-  <div class="card login" id="login">
-    <label>Ключ доступа
-      <input id="token" type="password" placeholder="ADMIN_TOKEN" autocomplete="current-password" />
-    </label>
-    <button class="btn primary" id="enter">Показать статистику</button>
-    <p class="muted" style="margin:0;font-size:.8rem">Ключ выдаётся в настройках сайта (секрет ADMIN_TOKEN). Он хранится только в этой вкладке.</p>
-    <p class="error" id="loginError" hidden></p>
-  </div>
+    <nav class="nav" id="nav" hidden>
+      <a href="#tools"><i>01</i>Инструменты</a>
+      <a href="#audience"><i>02</i>Аудитория</a>
+      <a href="#feed"><i>03</i>Лента</a>
+    </nav>
 
-  <div id="dashboard" hidden>
-    <div class="kpis" id="kpis"></div>
-    <div class="grid">
-      <section class="card">
-        <h2>Активность по дням</h2>
-        <div class="bars" id="bars"></div>
-      </section>
-      <section class="card">
-        <h2>Страницы</h2>
-        <table><thead><tr><th>Путь</th><th class="num">Событий</th></tr></thead><tbody id="pages"></tbody></table>
-        <h2 style="margin-top:18px">Действия</h2>
-        <table><thead><tr><th>Действие</th><th class="num">Раз</th></tr></thead><tbody id="actions"></tbody></table>
-      </section>
+    <div class="rail-foot">
+      <p class="stamp" id="stamp" hidden>—</p>
+      <button class="ghost" id="refresh" hidden>Обновить</button>
+      <button class="ghost" id="logout" hidden>Выйти</button>
     </div>
-    <section class="card" style="margin-top:16px">
-      <h2>Инструменты</h2>
-      <table>
-        <thead><tr><th>Инструмент</th><th class="num">Открытий</th><th class="num">Дошли до файла</th><th class="num">Людей</th><th>Последний раз</th></tr></thead>
-        <tbody id="tools"></tbody>
-      </table>
-    </section>
-    <section class="card" style="margin-top:16px">
-      <h2>Последние события</h2>
-      <div class="recent" id="recent"></div>
-    </section>
-  </div>
+  </aside>
+
+  <main>
+    <div class="inner">
+      <section class="gate" id="login">
+        <p class="eyebrow">вход · только для владельца</p>
+        <h1>Служебный<br /><em>доступ</em></h1>
+        <div class="panel">
+          <label class="field">
+            <span>Ключ доступа</span>
+            <input id="token" type="password" placeholder="ADMIN_TOKEN" autocomplete="current-password" />
+          </label>
+          <button class="solid" id="enter">Открыть панель</button>
+          <p class="error" id="loginError" hidden></p>
+          <p class="fine">Ключ хранится в секрете <span style="font-family:var(--mono)">ADMIN_TOKEN</span> и запоминается только в этой вкладке.</p>
+        </div>
+      </section>
+
+      <div id="dashboard" hidden>
+        <header>
+          <p class="eyebrow" id="eyebrow">обзор · сегодня</p>
+          <h1>Пульт <em>RekPDF</em></h1>
+          <p class="sub" id="range">—</p>
+        </header>
+
+        <section class="strip">
+          <div class="cell hero">
+            <span class="label">Событий сегодня</span>
+            <b id="kToday">0</b>
+            <span class="delta flat" id="kDelta">—</span>
+          </div>
+          <div class="cell">
+            <span class="label">Людей всего</span>
+            <b id="kPeople">0</b>
+            <span class="note">по уникальным посетителям</span>
+          </div>
+          <div class="cell">
+            <span class="label">За 7 дней</span>
+            <b id="kWeek">0</b>
+            <span class="note" id="kAvg">—</span>
+          </div>
+          <div class="cell">
+            <span class="label">Дошли до файла</span>
+            <b id="kConv">—</b>
+            <span class="note">открыл инструмент → сохранил</span>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head"><h2>Активность</h2><span class="hint">события по дням · 14 суток</span></div>
+          <div class="chart-body" id="chart"></div>
+        </section>
+
+        <div class="duo">
+          <section class="panel" id="tools">
+            <div class="panel-head"><h2>Инструменты</h2><span class="hint">кто чем пользуется</span></div>
+            <div class="ranks" id="toolList"></div>
+          </section>
+
+          <div>
+            <section class="panel" id="audience">
+              <div class="panel-head"><h2>Страницы</h2><span class="hint">просмотры</span></div>
+              <div class="ranks" id="pageList"></div>
+              <div class="actions" id="actionList"></div>
+            </section>
+          </div>
+        </div>
+
+        <section class="panel" id="feed">
+          <div class="panel-head"><h2>Последние события</h2><span class="hint">live · 40 записей</span></div>
+          <div class="feed" id="feedList"></div>
+        </section>
+      </div>
+    </div>
+  </main>
 </div>
 
 <script>
-  const $ = (id) => document.getElementById(id)
-  const fmt = (ts) => ts ? new Date(ts).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—'
-  const esc = (value) => String(value ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
+  var $ = function (id) { return document.getElementById(id) }
+  var esc = function (value) {
+    return String(value == null ? '' : value).replace(/[&<>"]/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]
+    })
+  }
+  var num = function (value) { return Number(value || 0).toLocaleString('ru-RU') }
+  var pad = function (value) { return value < 10 ? '0' + value : String(value) }
 
-  let token = sessionStorage.getItem('rekpdf.admin') || ''
+  function fmt(ts) {
+    if (!ts) return '—'
+    var d = new Date(ts)
+    return pad(d.getDate()) + '.' + pad(d.getMonth() + 1) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes())
+  }
 
-  async function load() {
+  function ago(ts) {
+    if (!ts) return '—'
+    var diff = Math.round((Date.now() - ts) / 1000)
+    if (diff < 60) return 'только что'
+    if (diff < 3600) return Math.round(diff / 60) + ' мин'
+    if (diff < 86400) return Math.round(diff / 3600) + ' ч'
+    return Math.round(diff / 86400) + ' дн'
+  }
+
+  function hoursAgo(ts) {
+    if (!ts) return ''
+    return new Date(ts).toLocaleString('ru-RU')
+  }
+
+  var ACTION_LABEL = { view: 'визит', open: 'открыл', done: 'файл' }
+
+  var token = sessionStorage.getItem('rekpdf.admin') || ''
+  var timer = null
+
+  function setChrome(visible) {
+    $('login').hidden = visible
+    $('dashboard').hidden = !visible
+    $('nav').hidden = !visible
+    $('refresh').hidden = !visible
+    $('logout').hidden = !visible
+    $('stamp').hidden = !visible
+    if (timer) { clearInterval(timer); timer = null }
+    if (visible) timer = setInterval(function () { if (!document.hidden) load(true) }, 60000)
+  }
+
+  async function load(silent) {
     $('loginError').hidden = true
+    if (!silent) {
+      $('enter').textContent = 'Проверяем…'
+      $('enter').disabled = true
+    }
     try {
-      const response = await fetch('/api/stats', { headers: { Authorization: 'Bearer ' + token } })
-      const data = await response.json()
+      var response = await fetch('/api/stats', { headers: { Authorization: 'Bearer ' + token } })
+      var data = await response.json()
       if (!response.ok) throw new Error(data.error || 'Не удалось загрузить статистику')
       sessionStorage.setItem('rekpdf.admin', token)
-      $('login').hidden = true
-      $('dashboard').hidden = false
-      $('refresh').hidden = false
-      $('logout').hidden = false
+      setChrome(true)
       render(data)
     } catch (error) {
-      $('login').hidden = false
-      $('dashboard').hidden = true
-      $('refresh').hidden = true
-      $('logout').hidden = true
+      setChrome(false)
       $('loginError').hidden = false
       $('loginError').textContent = error.message
+    } finally {
+      $('enter').textContent = 'Открыть панель'
+      $('enter').disabled = false
     }
   }
 
-  function render(data) {
-    const t = data.totals
-    $('kpis').innerHTML = [
-      ['Всего событий', t.events],
-      ['Уникальных посетителей', t.people],
-      ['Сегодня', t.today],
-      ['За 7 дней', t.week],
-      ['За 30 дней', t.month],
-    ].map(([label, value]) => '<div class="kpi"><b>' + Number(value).toLocaleString('ru-RU') + '</b><span>' + label + '</span></div>').join('')
-
-    const max = Math.max(1, ...data.days.map((day) => day.total))
-    $('bars').innerHTML = data.days.length
-      ? data.days.map((day) => {
-          const height = Math.max(3, Math.round((day.total / max) * 110))
-          return '<div class="bar" title="' + day.day + ': ' + day.total + '"><i style="height:' + height + 'px"></i><small>' + day.day.slice(5) + '</small></div>'
-        }).join('')
-      : '<p class="muted">Пока нет данных.</p>'
-
-    $('tools').innerHTML = data.tools.length
-      ? data.tools.map((tool) => '<tr><td>' + esc(tool.name) + '</td><td class="num">' + tool.total + '</td><td class="num">' + tool.done + '</td><td class="num">' + tool.people + '</td><td class="muted">' + fmt(tool.last) + '</td></tr>').join('')
-      : '<tr><td colspan="5" class="muted">Пока пусто.</td></tr>'
-
-    $('pages').innerHTML = data.pages.map((page) => '<tr><td>' + esc(page.path) + '</td><td class="num">' + page.total + '</td></tr>').join('')
-    $('actions').innerHTML = data.actions.map((action) => '<tr><td>' + esc(action.action) + '</td><td class="num">' + action.total + '</td></tr>').join('')
-    $('recent').innerHTML = data.recent.length
-      ? data.recent.map((event) => '<div><b>' + esc(event.name) + '</b><span class="muted">' + esc(event.action) + '</span><span class="muted">' + esc(event.path) + '</span><time>' + fmt(event.ts) + '</time></div>').join('')
-      : '<p class="muted">Пока нет событий.</p>'
+  function chart(days) {
+    if (!days.length) return '<p class="empty">Данных пока нет — открой сайт, и здесь появятся точки.</p>'
+    var w = 720, h = 190, pl = 26, pr = 10, pt = 18, pb = 26
+    var max = Math.max.apply(null, days.map(function (d) { return d.total }).concat([1]))
+    var step = days.length > 1 ? (w - pl - pr) / (days.length - 1) : 0
+    var x = function (i) { return pl + step * i }
+    var y = function (v) { return pt + (h - pt - pb) * (1 - v / max) }
+    var pts = days.map(function (d, i) { return [x(i), y(d.total), d] })
+    var line = pts.map(function (p, i) { return (i ? 'L' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1) }).join(' ')
+    var area = line + ' L ' + x(days.length - 1).toFixed(1) + ' ' + (h - pb) + ' L ' + pl + ' ' + (h - pb) + ' Z'
+    var grid = [0, 0.5, 1].map(function (f) {
+      var gy = y(max * f).toFixed(1)
+      return '<line class="grid" x1="' + pl + '" x2="' + (w - pr) + '" y1="' + gy + '" y2="' + gy + '" />'
+    }).join('')
+    var dots = pts.map(function (p) {
+      return '<circle class="dot" cx="' + p[0].toFixed(1) + '" cy="' + p[1].toFixed(1) + '" r="2.8"><title>' +
+        esc(p[2].day) + ' · ' + p[2].total + ' событий · ' + p[2].people + ' людей</title></circle>'
+    }).join('')
+    var labels = pts.map(function (p, i) {
+      if (i % 2 !== 0 && i !== pts.length - 1) return ''
+      return '<text class="tick" x="' + p[0].toFixed(1) + '" y="' + (h - 6) + '" text-anchor="middle">' + p[2].day.slice(5) + '</text>'
+    }).join('')
+    var top = '<text class="tick" x="0" y="' + (pt + 3) + '">' + max + '</text>'
+    return '<svg viewBox="0 0 ' + w + ' ' + h + '" role="img" aria-label="Активность по дням">' +
+      grid + '<path class="area" d="' + area + '" /><path class="line" d="' + line + '" />' + dots + labels + top + '</svg>'
   }
 
-  $('enter').addEventListener('click', () => { token = $('token').value.trim(); if (token) load() })
-  $('token').addEventListener('keydown', (event) => { if (event.key === 'Enter') $('enter').click() })
-  $('refresh').addEventListener('click', load)
-  $('logout').addEventListener('click', () => { sessionStorage.removeItem('rekpdf.admin'); token = ''; $('dashboard').hidden = true; $('login').hidden = false; $('refresh').hidden = true; $('logout').hidden = true })
+  function toolRows(tools) {
+    if (!tools.length) return '<p class="empty">Пока никто не открывал инструменты.</p>'
+    var max = Math.max.apply(null, tools.map(function (t) { return t.total }).concat([1]))
+    return tools.map(function (tool, i) {
+      var opens = Number(tool.total) || 0
+      var done = Number(tool.done) || 0
+      var opensShare = Math.max(2, Math.round((opens / max) * 100))
+      var doneShare = Math.max(opensShare ? (done ? 2 : 0) : 0, Math.round((done / max) * 100))
+      return '<div class="row" title="' + esc(tool.name) + ': открытий ' + opens + ', до файла ' + done + ', людей ' + tool.people + '">' +
+        '<span class="idx">' + pad(i + 1) + '</span>' +
+        '<span><span class="name">' + esc(tool.name) + '</span>' +
+        '<span class="meter"><u style="width:' + opensShare + '%"></u><i style="width:' + doneShare + '%"></i></span></span>' +
+        '<span class="n"><b>' + opens + '</b><small>откр.</small></span>' +
+        '<span class="n"><b>' + done + '</b><small>файл</small></span>' +
+        '</div>'
+    }).join('')
+  }
 
-  if (token) load()
+  function pageRows(pages) {
+    if (!pages.length) return '<p class="empty">Нет просмотров страниц.</p>'
+    var max = Math.max.apply(null, pages.map(function (p) { return p.total }).concat([1]))
+    return pages.map(function (page, i) {
+      var width = Math.max(3, Math.round((page.total / max) * 100))
+      return '<div class="row two">' +
+        '<span class="idx">' + pad(i + 1) + '</span>' +
+        '<span><span class="name">' + esc(page.path) + '</span>' +
+        '<span class="meter"><u style="width:' + width + '%"></u></span></span>' +
+        '<span class="n"><b>' + page.total + '</b><small>раз</small></span>' +
+        '</div>'
+    }).join('')
+  }
+
+  function actionTiles(actions, totalEvents) {
+    var names = ['view', 'open', 'done']
+    return names.map(function (name) {
+      var found = actions.filter(function (a) { return a.action === name })[0]
+      var value = found ? found.total : 0
+      var share = totalEvents ? Math.round((value / totalEvents) * 100) : 0
+      return '<div class="action"><span>' + (ACTION_LABEL[name] || name) + '</span><b>' + num(value) + '</b><small>' + share + '% от всех</small></div>'
+    }).join('')
+  }
+
+  function render(data) {
+    var t = data.totals
+    var utcToday = new Date().toISOString().slice(0, 10)
+    var todayIndex = -1
+    data.days.forEach(function (day, i) { if (day.day === utcToday) todayIndex = i })
+    var previous = todayIndex > 0 ? data.days[todayIndex - 1].total : 0
+    var today = todayIndex >= 0 ? data.days[todayIndex].total : 0
+
+    $('kToday').textContent = num(t.today)
+    $('kPeople').textContent = num(t.people)
+    $('kWeek').textContent = num(t.week)
+
+    var delta = $('kDelta')
+    if (todayIndex === 0) {
+      delta.className = 'delta flat'
+      delta.textContent = 'первый день наблюдений'
+    } else if (previous > 0) {
+      var change = today - previous
+      delta.className = 'delta ' + (change >= 0 ? 'up' : 'flat')
+      delta.textContent = (change > 0 ? '▲ +' : change < 0 ? '▼ ' : '= ') + Math.abs(change) + ' к вчера'
+    } else {
+      delta.className = 'delta flat'
+      delta.textContent = 'вчера было 0'
+    }
+
+    $('kAvg').textContent = 'в среднем ' + (t.week / 7).toFixed(1).replace('.', ',') + ' в день'
+
+    var opens = 0, done = 0
+    data.tools.forEach(function (tool) { opens += Number(tool.total) || 0; done += Number(tool.done) || 0 })
+    $('kConv').textContent = opens ? Math.round((done / opens) * 100) + '%' : '—'
+
+    $('eyebrow').textContent = 'обзор · ' + new Date().toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })
+    $('range').innerHTML = '<span>' + num(t.events) + '</span> событий за всё время · <span>' + num(t.month) + '</span> за 30 дней · наблюдение с ' +
+      (data.days.length ? esc(new Date(data.days[0].day + 'T00:00:00Z').toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })) : 'сегодня')
+    $('stamp').textContent = 'обновлено ' + fmt(Date.now())
+
+    $('chart').innerHTML = chart(data.days)
+    $('toolList').innerHTML = toolRows(data.tools)
+    $('pageList').innerHTML = pageRows(data.pages)
+    $('actionList').innerHTML = actionTiles(data.actions, t.events)
+
+    $('feedList').innerHTML = data.recent.length
+      ? data.recent.map(function (event) {
+          var action = esc(event.action)
+          return '<div class="event">' +
+            '<span class="chip ' + action + '">' + esc(ACTION_LABEL[event.action] || event.action) + '</span>' +
+            '<span class="what"><b>' + esc(event.name) + '</b><span>' + esc(event.path || '/') + '</span></span>' +
+            '<time title="' + esc(hoursAgo(event.ts)) + '">' + ago(event.ts) + '</time>' +
+            '</div>'
+        }).join('')
+      : '<p class="empty">Событий пока нет.</p>'
+  }
+
+  $('enter').addEventListener('click', function () {
+    token = $('token').value.trim()
+    if (token) load(false)
+  })
+  $('token').addEventListener('keydown', function (event) { if (event.key === 'Enter') $('enter').click() })
+  $('refresh').addEventListener('click', function () { load(false) })
+  $('logout').addEventListener('click', function () {
+    sessionStorage.removeItem('rekpdf.admin')
+    token = ''
+    $('token').value = ''
+    setChrome(false)
+  })
+
+  if (token) load(true)
 </script>
 </body>
 </html>`
