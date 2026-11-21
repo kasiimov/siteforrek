@@ -78,6 +78,17 @@ describe('splitRunsByLinks', () => {
     expect(result.map((run) => run.text).join('')).toBe('Read more on congix.uz - prices')
   })
 
+  it('с измеренной шириной букв ссылка ложится ровно на слово', () => {
+    const runs: LinkableRun[] = [{ text: 'Read more on congix.uz - prices', left: 0, right: 165 }]
+    const links = [{ left: 69, top: 100, width: 51, height: 12, url: 'https://congix.uz' }]
+    // «i» и пробелы в шрифте уже остальных букв — пропорциональный расчёт тут бы ошибся.
+    const narrow = (_run: LinkableRun, text: string) => (text === 'i' || text === 'l' || text === ' ' ? 3 : 6)
+    const result = splitRunsByLinks(runs, links, line, narrow)
+
+    expect(result.find((run) => run.link)?.text).toBe('congix.uz')
+    expect(result.map((run) => run.text).join('')).toBe('Read more on congix.uz - prices')
+  })
+
   it('не трогает строки, которые ссылка не задевает по вертикали', () => {
     const runs: LinkableRun[] = [{ text: 'Сноска', left: 0, right: 60 }]
     const links = [{ left: 0, top: 40, width: 60, height: 12, url: 'https://congix.uz' }]

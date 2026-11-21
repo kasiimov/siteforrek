@@ -4,7 +4,7 @@ import { pdfjsLib } from './pdf'
 import { resolveImage, toCanvas } from './images'
 import { isInvisible, strokeColorHex } from './tableBorders'
 import { linksFromAnnotations, splitRunsByLinks } from './links'
-import type { LinkAnnotation, RunPiece } from './links'
+import type { LinkableRun, LinkAnnotation, RunPiece } from './links'
 
 const { OPS } = pdfjsLib
 
@@ -724,6 +724,39 @@ function readRules(operators: OperatorList) {
   return { horizontal: mergeHorizontal(horizontal), vertical: mergeVertical(vertical) }
 }
 
+const CSS_FAMILY: Record<Family, string> = {
+  sans: 'Arial, Helvetica, sans-serif',
+  serif: '"Times New Roman", Times, serif',
+  mono: '"Courier New", monospace',
+}
+
+let measureContext: CanvasRenderingContext2D | null | undefined
+const widthCache = new Map<string, number>()
+
+/** Ширина буквы в том же шрифте и кегле: по ней ссылка попадает ровно на слово. */
+function measureText(run: LinkableRun, text: string): number | null {
+  if (measureContext === undefined) {
+    try {
+      measureContext = document.createElement('canvas').getContext('2d')
+    } catch {
+      measureContext = null
+    }
+  }
+  if (!measureContext) return null
+
+  const spec = run as Partial<RunSpec>
+  const size = Math.max(1, spec.size ?? 10)
+  const key = `${spec.italic ? 'i' : ''}${spec.bold ? 'b' : ''}${spec.family ?? 'sans'}|${size}|${text}`
+  const cached = widthCache.get(key)
+  if (cached !== undefined) return cached
+
+  measureContext.font = `${spec.italic ? 'italic ' : ''}${spec.bold ? 'bold ' : ''}${size}px ${CSS_FAMILY[spec.family ?? 'sans']}`
+  const width = measureContext.measureText(text).width
+  if (widthCache.size > 20000) widthCache.clear()
+  widthCache.set(key, width)
+  return width
+}
+
 /** Внешние ссылки страницы: аннотации Link с адресом. */
 async function readLinks(page: PDFPageProxy, view: number[]) {
   try {
@@ -770,7 +803,7 @@ export async function buildPageLayout(page: PDFPageProxy): Promise<PageLayout> {
   // Ссылки надеваем на уже разложенный текст: ячейки таблиц держат те же объекты строк,
   // поэтому подписи-ссылки внутри таблиц тоже станут ссылками.
   if (links.length) {
-    for (const line of lines) line.runs = splitRunsByLinks(line.runs, links, line)
+    for (const line of lines) line.runs = splitRunsByLinks(line.runs, links, line, measureText)
   }
 
   const contentLeft = free.reduce((min, line) => Math.min(min, line.left), width)

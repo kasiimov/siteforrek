@@ -59,6 +59,9 @@ export function linksFromAnnotations(annotations: readonly LinkAnnotation[], vie
 
 export type RunPiece = { text: string; left: number; right: number }
 
+/** Ширина текста в шрифте рана; null — измерить нельзя (нет canvas). */
+export type MeasureText = (run: LinkableRun, text: string) => number | null
+
 export type LinkableRun = {
   text: string
   left?: number
@@ -76,6 +79,7 @@ export function splitRunsByLinks<R extends LinkableRun>(
   runs: readonly R[],
   links: readonly LinkSpec[],
   line: { top: number; bottom: number },
+  measure?: MeasureText,
 ): R[] {
   if (!links.length || !runs.length) return [...runs]
 
@@ -110,7 +114,7 @@ export function splitRunsByLinks<R extends LinkableRun>(
       const to = points[index]
       if (to - from < 0.5) continue
 
-      let text = sliceRun(run, from, to)
+      let text = (measure ? sliceByMeasure(run, from, to, measure) : null) ?? sliceRun(run, from, to)
       if (!text) continue
 
       const link = inside.find((candidate) => from >= candidate.left - 0.75 && to <= candidate.left + candidate.width + 0.75)
@@ -134,6 +138,44 @@ export function splitRunsByLinks<R extends LinkableRun>(
   }
 
   return result
+}
+
+/**
+ * Режет по измеренной ширине букв: рисуем ту же строку тем же кеглем в canvas и берём
+ * ближайшую границу символа. Так ссылка ложится ровно на слово, а не «плюс-минус буква».
+ */
+function sliceByMeasure(run: LinkableRun, from: number, to: number, measure: MeasureText): string | null {
+  if (run.left === undefined) return null
+
+  const widths: number[] = []
+  let total = 0
+
+  for (let index = 0; index < run.text.length; index++) {
+    const width = measure(run, run.text[index])
+    if (width === null || !Number.isFinite(width)) return null
+    widths.push(width)
+    total += width
+  }
+
+  // Ширины в canvas и в PDF могут расходиться на доли процента — выравниваем по ширине рана.
+  const span = (run.right ?? run.left + total) - run.left
+  if (total <= 0 || span <= 0) return null
+  const scale = span / total
+
+  const bounds = [run.left]
+  for (const width of widths) bounds.push(bounds[bounds.length - 1] + width * scale)
+
+  const nearest = (x: number) => {
+    let best = 0
+    for (let index = 1; index < bounds.length; index++) {
+      if (Math.abs(bounds[index] - x) < Math.abs(bounds[best] - x)) best = index
+    }
+    return best
+  }
+
+  const start = nearest(from)
+  const end = nearest(to)
+  return end > start ? run.text.slice(start, end) : ''
 }
 
 /** Режет ран по координатам: если известны куски, границы ссылки попадают точно на слово. */
