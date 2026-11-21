@@ -8,6 +8,7 @@ export const ROUTES = {
   services: '/services',
   profile: '/profile',
   settings: '/settings',
+  editor: '/editor',
 } as const
 
 export type Route = (typeof ROUTES)[keyof typeof ROUTES]

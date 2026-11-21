@@ -1,11 +1,11 @@
 import { useState } from 'react'
 import { WordImagesTool } from './WordImagesTool'
-import { PdfRedactor } from './PdfRedactor'
 import { PdfEditor } from './PdfEditor'
 import { catalog } from './toolCatalog'
 import { GROUP_LABELS } from './toolTypes'
 import type { ToolGroup } from './toolTypes'
 import { track } from '../lib/analytics'
+import { Link, ROUTES } from '../lib/router'
 
 const BUILTIN_HINTS: Record<string, string> = {
   word: 'Готовый .docx с текстом, который можно править.',
@@ -83,7 +83,18 @@ export function Tool({ compact = false }: { compact?: boolean }) {
         </div>
 
         {active.builtin === 'redactor' ? (
-          <PdfRedactor key={active.id} />
+          <div className="editor-launch">
+            <div className="editor-launch-copy">
+              <p className="editor-launch-title">Редактор открывается отдельным окном</p>
+              <p className="editor-launch-text">
+                Слева страницы-миниатюры, сверху лента инструментов, справа свойства, снизу масштаб —
+                как в обычном редакторе документов. Документ остаётся в браузере.
+              </p>
+            </div>
+            <Link className="btn btn-primary" to={ROUTES.editor}>
+              Открыть редактор PDF
+            </Link>
+          </div>
         ) : active.builtin ? (
           <WordImagesTool key={active.id} mode={active.builtin} />
         ) : (

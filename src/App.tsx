@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { HomePage } from './pages/HomePage'
+import { EditorPage } from './pages/EditorPage'
 import { ToolsPage } from './pages/ToolsPage'
 import { ServicesPage } from './pages/ServicesPage'
 import { ProfilePage } from './pages/ProfilePage'
@@ -61,6 +62,9 @@ export default function App() {
       alive = false
     }
   }, [])
+
+  // Редактор — самостоятельное приложение: без шапки, футера и фонов сайта.
+  if (known && path === ROUTES.editor) return <EditorPage />
 
   return (
     <div className="page">
