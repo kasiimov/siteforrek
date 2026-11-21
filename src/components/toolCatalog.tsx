@@ -1,4 +1,5 @@
 import { parsePageList, parseRangeGroups } from '../lib/pages'
+import { parsePageOrder } from '../lib/docEditor'
 import type { ToolSpec, Values } from './toolTypes'
 
 /** pdf-lib и fontkit грузятся только когда пользователь запустил инструмент. */
@@ -16,7 +17,42 @@ const pdfFile = async (file: File) => (await loadPdfEdit()).countPages(file)
 
 export const catalog: ToolSpec[] = [
   {
+    id: 'redactor',
+    group: 'edit',
+    name: 'Редактор PDF',
+    hint: 'Откройте документ и правьте его на месте: текст, фото, пустой лист и стирание пометок. Всё в браузере — страницы видны сразу.',
+    accept: 'application/pdf,.pdf',
+    acceptLabel: 'PDF',
+    multiple: false,
+    cta: '',
+    builtin: 'redactor',
+    icon: (
+      <>
+        <path {...stroke} d="M4 5h16v14H4zM8 9h8M8 12.5h8M8 16h4" />
+        <path {...stroke} d="m15.5 17 3-3 1 1-3 3h-1z" />
+      </>
+    ),
+    options: [],
+  },
+  {
+    id: 'erase',
+    group: 'edit',
+    name: 'Стереть пометки',
+    hint: 'Убирает комментарии, штампы и подписи-аннотации, не трогая содержимое страниц.',
+    accept: 'application/pdf,.pdf',
+    acceptLabel: 'PDF',
+    multiple: false,
+    cta: 'Стереть пометки',
+    icon: <path {...stroke} d="m9 20-3-3 8-8 3 3zM15 7l2-2 3 3-2 2M4 20h5" />,
+    options: [],
+    run: async (files, _values, onProgress) => {
+      onProgress?.(1, 1)
+      return (await loadPdfEdit()).eraseAnnotations(files[0])
+    },
+  },
+  {
     id: 'word',
+    group: 'convert',
     name: 'PDF → Word',
     hint: 'Готовый .docx с той же вёрсткой: шрифты, отступы, колонки, таблицы и картинки на своих местах.',
     accept: 'application/pdf,.pdf',
@@ -34,6 +70,7 @@ export const catalog: ToolSpec[] = [
   },
   {
     id: 'images',
+    group: 'convert',
     name: 'Картинки из PDF',
     hint: 'Все растровые изображения одним ZIP-архивом.',
     accept: 'application/pdf,.pdf',
@@ -46,6 +83,7 @@ export const catalog: ToolSpec[] = [
   },
   {
     id: 'merge',
+    group: 'pages',
     name: 'Объединить PDF',
     hint: 'Склейте несколько документов в один — порядок как в списке.',
     accept: 'application/pdf,.pdf',
@@ -58,6 +96,7 @@ export const catalog: ToolSpec[] = [
   },
   {
     id: 'split',
+    group: 'pages',
     name: 'Разделить PDF',
     hint: 'Каждый диапазон — отдельный файл, всё скачается архивом.',
     accept: 'application/pdf,.pdf',
@@ -82,6 +121,7 @@ export const catalog: ToolSpec[] = [
   },
   {
     id: 'extract',
+    group: 'pages',
     name: 'Извлечь страницы',
     hint: 'Оставьте нужные страницы и скачайте новый PDF.',
     accept: 'application/pdf,.pdf',
@@ -100,6 +140,7 @@ export const catalog: ToolSpec[] = [
   },
   {
     id: 'remove',
+    group: 'pages',
     name: 'Удалить страницы',
     hint: 'Выбросьте лишние страницы, остальные останутся на месте.',
     accept: 'application/pdf,.pdf',
@@ -117,7 +158,33 @@ export const catalog: ToolSpec[] = [
     },
   },
   {
+    id: 'reorder',
+    group: 'pages',
+    name: 'Порядок страниц',
+    hint: 'Переставьте страницы в нужном порядке: напишите номера через запятую — как они пойдут в файле.',
+    accept: 'application/pdf,.pdf',
+    acceptLabel: 'PDF',
+    multiple: false,
+    cta: 'Переставить страницы',
+    icon: <path {...stroke} d="M7 4h3v16H7zM14 4h3v16h-3zM5 8l-2 2 2 2M19 16l2-2-2-2" />,
+    options: [
+      {
+        kind: 'text',
+        key: 'order',
+        label: 'Новый порядок (все страницы)',
+        initial: '',
+        placeholder: 'например: 3, 1, 2',
+      },
+    ],
+    run: async (files, values, onProgress) => {
+      const total = await pdfFile(files[0])
+      const order = parsePageOrder(values.order, total)
+      return (await loadPdfEdit()).reorderPages(files[0], order, onProgress)
+    },
+  },
+  {
     id: 'rotate',
+    group: 'pages',
     name: 'Повернуть PDF',
     hint: 'Разверните все страницы или только выбранные.',
     accept: 'application/pdf,.pdf',
@@ -154,6 +221,7 @@ export const catalog: ToolSpec[] = [
   },
   {
     id: 'numbers',
+    group: 'pages',
     name: 'Номера страниц',
     hint: 'Аккуратная нумерация внизу или сверху документа.',
     accept: 'application/pdf,.pdf',
@@ -185,6 +253,7 @@ export const catalog: ToolSpec[] = [
   },
   {
     id: 'watermark',
+    group: 'edit',
     name: 'Водяной знак',
     hint: 'Диагональная подпись поверх каждой страницы.',
     accept: 'application/pdf,.pdf',
@@ -227,7 +296,61 @@ export const catalog: ToolSpec[] = [
     },
   },
   {
+    id: 'to-text',
+    group: 'convert',
+    name: 'PDF → текст',
+    hint: 'Достаёт текстовый слой в один .txt — удобно для поиска, переводчиков и заметок.',
+    accept: 'application/pdf,.pdf',
+    acceptLabel: 'PDF',
+    multiple: false,
+    cta: 'Скачать текст',
+    icon: <path {...stroke} d="M6 4h12v16H6zM9 8h6M9 12h6M9 16h3" />,
+    options: [],
+    run: async (files, _values, onProgress) => (await loadPdfEdit()).pdfToText(files[0], onProgress),
+  },
+  {
+    id: 'long-image',
+    group: 'convert',
+    name: 'PDF → длинное изображение',
+    hint: 'Все страницы одной длинной картинкой: удобно пересылать в мессенджере и читать с телефона.',
+    accept: 'application/pdf,.pdf',
+    acceptLabel: 'PDF',
+    multiple: false,
+    cta: 'Собрать изображение',
+    icon: <path {...stroke} d="M7 3h10v18H7zM9.5 7h5M9.5 11h5M9.5 15h3" />,
+    options: [
+      {
+        kind: 'select',
+        key: 'format',
+        label: 'Формат',
+        initial: 'jpg',
+        choices: [
+          { value: 'jpg', label: 'JPG — компактнее' },
+          { value: 'png', label: 'PNG — без потерь' },
+        ],
+      },
+      {
+        kind: 'select',
+        key: 'scale',
+        label: 'Качество',
+        initial: '1.6',
+        choices: [
+          { value: '1.2', label: 'Компактно' },
+          { value: '1.6', label: 'Обычное' },
+          { value: '2.2', label: 'Максимум' },
+        ],
+      },
+    ],
+    run: async (files, values, onProgress) =>
+      (await loadPdfEdit()).pdfToLongImage(
+        files[0],
+        { format: values.format as 'png' | 'jpg', scale: Number(values.scale) },
+        onProgress,
+      ),
+  },
+  {
     id: 'images-to-pdf',
+    group: 'convert',
     name: 'JPG → PDF',
     hint: 'Фотографии и сканы в один аккуратный PDF.',
     accept: 'image/jpeg,image/png,.jpg,.jpeg,.png',
@@ -257,6 +380,7 @@ export const catalog: ToolSpec[] = [
   },
   {
     id: 'pdf-to-jpg',
+    group: 'convert',
     name: 'PDF → JPG',
     hint: 'Каждая страница отдельной картинкой, всё в ZIP.',
     accept: 'application/pdf,.pdf',
@@ -282,6 +406,7 @@ export const catalog: ToolSpec[] = [
   },
   {
     id: 'compress',
+    group: 'utility',
     name: 'Сжать PDF',
     hint: 'Уменьшает вес сканов и фото — страницы пересобираются в JPEG. Если итог выйдет больше исходника, отдадим оригинал без изменений.',
     accept: 'application/pdf,.pdf',

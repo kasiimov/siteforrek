@@ -1,4 +1,4 @@
-import { PDFDocument, StandardFonts, degrees, rgb } from 'pdf-lib'
+import { PDFArray, PDFDocument, PDFName, StandardFonts, degrees, rgb } from 'pdf-lib'
 import fontkit from '@pdf-lib/fontkit'
 import { pdfjsLib } from './pdf'
 import { baseName, formatSize, type Output } from './download'
@@ -213,6 +213,158 @@ export async function addWatermark(file: File, options: WatermarkOptions): Promi
   }
 
   return single(await doc.save(), `${baseName(file.name)}-watermark.pdf`)
+}
+
+/** Убирает пометки, комментарии и подписи-аннотации — само содержимое страниц не трогаем. */
+export async function eraseAnnotations(file: File): Promise<{ outputs: Output[]; note?: string }> {
+  const doc = await load(await file.arrayBuffer())
+  let removed = 0
+
+  for (const page of doc.getPages()) {
+    const annotations = page.node.lookupMaybe(PDFName.of('Annots'), PDFArray)
+    if (annotations) removed += annotations.size()
+    page.node.delete(PDFName.of('Annots'))
+  }
+
+  return {
+    outputs: single(await doc.save(), `${baseName(file.name)}-clean.pdf`),
+    note: removed
+      ? `Убрали пометок и подписей-аннотаций: ${removed}. Содержимое страниц осталось как было.`
+      : 'Пометок и подписей-аннотаций в файле не нашлось. Если подпись врисована в саму страницу, это обычная графика — её так не убрать.',
+  }
+}
+
+/** Новый порядок страниц: 1-based список из всех страниц файла. */
+export async function reorderPages(file: File, order: number[], onProgress?: Progress): Promise<Output[]> {
+  const source = await load(await file.arrayBuffer())
+  const out = await PDFDocument.create()
+  const copied = await out.copyPages(
+    source,
+    order.map((page) => page - 1),
+  )
+  for (const page of copied) out.addPage(page)
+  onProgress?.(1, 1)
+  return single(await out.save(), `${baseName(file.name)}-reordered.pdf`)
+}
+
+/** Текстовый слой PDF → .txt. Для сканов текста нет — об этом честно скажем. */
+export async function pdfToText(file: File, onProgress?: Progress): Promise<{ outputs: Output[]; note?: string }> {
+  const doc = await pdfjsLib.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise
+  const pages: string[] = []
+
+  try {
+    for (let pageNumber = 1; pageNumber <= doc.numPages; pageNumber++) {
+      const page = await doc.getPage(pageNumber)
+      const content = await page.getTextContent()
+      let text = ''
+
+      for (const item of content.items) {
+        if (!('str' in item)) continue
+        text += item.str
+        text += item.hasEOL ? '\n' : ' '
+      }
+
+      pages.push(text.replace(/[ \t]+/g, ' ').replace(/ ?\n ?/g, '\n').trim())
+      page.cleanup()
+      onProgress?.(pageNumber, doc.numPages)
+    }
+  } finally {
+    await doc.destroy()
+  }
+
+  const body = pages.filter(Boolean).join('\n\n')
+  if (!body) {
+    return {
+      outputs: [],
+      note: 'В этом PDF нет текстового слоя — перед нами скан или фотография. Текст из такого файла без распознавания не достать.',
+    }
+  }
+
+  return {
+    outputs: [
+      {
+        name: `${baseName(file.name)}-text.txt`,
+        blob: new Blob([body], { type: 'text/plain;charset=utf-8' }),
+      },
+    ],
+    note: `Готово: ${pages.length} страниц(ы) текста в .txt.`,
+  }
+}
+
+export type LongImageOptions = {
+  scale: number
+  format: 'png' | 'jpg'
+}
+
+/** Все страницы одной длинной картинкой — удобно для пересылки и чтения с телефона. */
+export async function pdfToLongImage(
+  file: File,
+  options: LongImageOptions,
+  onProgress?: Progress,
+): Promise<Output[]> {
+  const doc = await pdfjsLib.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise
+
+  try {
+    const sizes: { width: number; height: number }[] = []
+    for (let pageNumber = 1; pageNumber <= doc.numPages; pageNumber++) {
+      const page = await doc.getPage(pageNumber)
+      const viewport = page.getViewport({ scale: 1 })
+      sizes.push({ width: viewport.width, height: viewport.height })
+      page.cleanup()
+    }
+
+    const widest = Math.max(...sizes.map((size) => size.width))
+    const stacked = sizes.reduce((sum, size) => sum + size.height, 0)
+    // Браузер не любит гигантские canvas: держим и площадь, и высоту в разумных пределах.
+    const byArea = Math.sqrt(36_000_000 / Math.max(1, widest * stacked))
+    const byHeight = 32_000 / Math.max(1, stacked)
+    const scale = Math.max(0.5, Math.min(options.scale, byArea, byHeight))
+
+    const width = Math.max(1, Math.round(widest * scale))
+    const height = Math.max(1, Math.round(stacked * scale))
+    const canvas = document.createElement('canvas')
+    canvas.width = width
+    canvas.height = height
+    const context = canvas.getContext('2d')
+    if (!context) throw new Error('Canvas недоступен')
+    context.fillStyle = '#ffffff'
+    context.fillRect(0, 0, width, height)
+
+    let offset = 0
+    for (let pageNumber = 1; pageNumber <= doc.numPages; pageNumber++) {
+      const page = await doc.getPage(pageNumber)
+      const viewport = page.getViewport({ scale })
+      const pageCanvas = document.createElement('canvas')
+      pageCanvas.width = Math.max(1, Math.round(viewport.width))
+      pageCanvas.height = Math.max(1, Math.round(viewport.height))
+      const pageContext = pageCanvas.getContext('2d')
+      if (!pageContext) throw new Error('Canvas недоступен')
+      pageContext.fillStyle = '#ffffff'
+      pageContext.fillRect(0, 0, pageCanvas.width, pageCanvas.height)
+      await page.render({ canvas: pageCanvas, canvasContext: pageContext, viewport }).promise
+      context.drawImage(pageCanvas, Math.round((width - pageCanvas.width) / 2), offset)
+      offset += pageCanvas.height
+      pageCanvas.width = 0
+      pageCanvas.height = 0
+      page.cleanup()
+      onProgress?.(pageNumber, doc.numPages)
+    }
+
+    const type = options.format === 'png' ? 'image/png' : 'image/jpeg'
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, type, 0.92))
+    canvas.width = 0
+    canvas.height = 0
+    if (!blob) throw new Error('Не удалось собрать изображение')
+
+    return [
+      {
+        name: `${baseName(file.name)}-long.${options.format}`,
+        blob,
+      },
+    ]
+  } finally {
+    await doc.destroy()
+  }
 }
 
 export type ImagesToPdfOptions = {

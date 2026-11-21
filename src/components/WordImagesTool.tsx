@@ -6,6 +6,7 @@ import { pdfToDocx } from '../lib/toWord'
 import type { DocxStats } from '../lib/toWord'
 import { extractImages, imagesToZip } from '../lib/images'
 import { baseName, download, formatSize, saveOutputs } from '../lib/download'
+import { addHistory } from '../lib/profile'
 import { pagesLabel } from '../lib/pages'
 import {
   MAX_BATCH_FILES,
@@ -249,6 +250,11 @@ export function WordImagesTool({ mode }: { mode: 'word' | 'images' }) {
           if (outputs.length === 1) download(outputs[0].blob, outputs[0].name)
           else await saveOutputs(outputs, zipName(items[0].file.name, 'word'))
 
+          addHistory({
+            tool: nextJob === 'word' ? 'PDF → Word' : 'Картинки из PDF',
+            fileName: items[0].file.name,
+            result: pagesLabel(stats.pages),
+          })
           setMessage({ tone: 'ok', text: wordSummary(items, stats) })
         } else if (total === 1) {
           const pdf = await openPdf(items[0].file)
@@ -262,6 +268,11 @@ export function WordImagesTool({ mode }: { mode: 'word' | 'images' }) {
               return
             }
             download(await imagesToZip(images), `${baseName(items[0].file.name)}-images.zip`)
+            addHistory({
+              tool: 'Картинки из PDF',
+              fileName: items[0].file.name,
+              result: `${images.length} изображений`,
+            })
             setMessage({ tone: 'ok', text: imagesSummary(images.length, 1) })
           } finally {
             await pdf.destroy()

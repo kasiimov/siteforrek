@@ -1,50 +1,73 @@
 import { useState } from 'react'
 import { WordImagesTool } from './WordImagesTool'
+import { PdfRedactor } from './PdfRedactor'
 import { PdfEditor } from './PdfEditor'
 import { catalog } from './toolCatalog'
+import { GROUP_LABELS } from './toolTypes'
+import type { ToolGroup } from './toolTypes'
 
 const BUILTIN_HINTS: Record<string, string> = {
   word: 'Готовый .docx с текстом, который можно править.',
   images: 'Все растровые изображения одним ZIP-архивом.',
 }
 
-export function Tool() {
+const GROUPS = Object.keys(GROUP_LABELS) as ToolGroup[]
+
+export function Tool({ compact = false }: { compact?: boolean }) {
   const [activeId, setActiveId] = useState(catalog[0].id)
   const active = catalog.find((tool) => tool.id === activeId) ?? catalog[0]
   const hint = BUILTIN_HINTS[active.id] ?? active.hint
 
   return (
     <section className="tool" id="tool">
-      <div className="section-head">
-        <span className="eyebrow">Все инструменты</span>
-        <h2>PDF-мастерская прямо в браузере</h2>
-        <p className="section-sub">
-          Двенадцать инструментов: конвертация, склейка, разделение, поворот, нумерация, водяной знак
-          и сжатие. Файлы открываются у вас на устройстве — загрузок на сервер нет.
-        </p>
-      </div>
+      {!compact && (
+        <div className="section-head">
+          <span className="eyebrow">Инструменты</span>
+          <h2>Выберите, что сделать с файлом</h2>
+          <p className="section-sub">
+            {catalog.length} инструментов, разложенных по задачам: править, собирать страницы,
+            конвертировать. Всё считается в браузере — файлы не уходят на сервер.
+          </p>
+        </div>
+      )}
 
-      <div className="tool-grid" role="tablist" aria-label="Инструменты">
-        {catalog.map((tool) => (
-          <button
-            key={tool.id}
-            type="button"
-            role="tab"
-            aria-selected={tool.id === active.id}
-            className={`tool-tile${tool.id === active.id ? ' is-active' : ''}`}
-            onClick={() => setActiveId(tool.id)}
-          >
-            <span className="tool-tile-icon">
-              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                {tool.icon}
-              </svg>
-            </span>
-            <span className="tool-tile-name">{tool.name}</span>
-          </button>
-        ))}
-      </div>
+      {GROUPS.map((group) => {
+        const tools = catalog.filter((tool) => tool.group === group)
+        if (!tools.length) return null
 
-      <div className="tool-card">
+        return (
+          <div className="tool-group" key={group}>
+            <div className="tool-group-head">
+              <h3>{GROUP_LABELS[group].title}</h3>
+              <p>{GROUP_LABELS[group].note}</p>
+            </div>
+
+            <div className="tool-grid" role="group" aria-label={GROUP_LABELS[group].title}>
+              {tools.map((tool) => (
+                <button
+                  key={tool.id}
+                  type="button"
+                  aria-pressed={tool.id === active.id}
+                  className={`tool-tile${tool.id === active.id ? ' is-active' : ''}`}
+                  onClick={() => {
+                    setActiveId(tool.id)
+                    document.getElementById('tool-card')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+                  }}
+                >
+                  <span className="tool-tile-icon">
+                    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                      {tool.icon}
+                    </svg>
+                  </span>
+                  <span className="tool-tile-name">{tool.name}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )
+      })}
+
+      <div className="tool-card" id="tool-card">
         <div className="tool-active-head">
           <span className="tool-active-icon">
             <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -57,7 +80,9 @@ export function Tool() {
           </div>
         </div>
 
-        {active.builtin ? (
+        {active.builtin === 'redactor' ? (
+          <PdfRedactor key={active.id} />
+        ) : active.builtin ? (
           <WordImagesTool key={active.id} mode={active.builtin} />
         ) : (
           <PdfEditor key={active.id} spec={active} />
