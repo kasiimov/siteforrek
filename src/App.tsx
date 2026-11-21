@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { HomePage } from './pages/HomePage'
 import { ToolsPage } from './pages/ToolsPage'
 import { ServicesPage } from './pages/ServicesPage'
@@ -6,7 +6,7 @@ import { ProfilePage } from './pages/ProfilePage'
 import { SettingsPage } from './pages/SettingsPage'
 import { Link, ROUTES, isKnownRoute, usePath } from './lib/router'
 import { initials, useUser } from './lib/profile'
-import { track } from './lib/analytics'
+import { fetchOverview, track, type Overview } from './lib/analytics'
 
 const NAV = [
   { to: ROUTES.home, label: 'Главная' },
@@ -46,10 +46,21 @@ export default function App() {
   const path = usePath()
   const user = useUser()
   const known = isKnownRoute(path)
+  const [live, setLive] = useState<Overview | null>(null)
 
   useEffect(() => {
     track('страница', 'view')
   }, [path])
+
+  useEffect(() => {
+    let alive = true
+    void fetchOverview().then((data) => {
+      if (alive) setLive(data)
+    })
+    return () => {
+      alive = false
+    }
+  }, [])
 
   return (
     <div className="page">
@@ -111,9 +122,9 @@ export default function App() {
             PDF в Word, редактор PDF и все картинки из PDF — прямо в браузере. Файлы не покидают
             устройство.
           </p>
-          <span className="footer-badge">
+          <span className="footer-badge" title="Анонимная статистика RekPDF">
             <span className="footer-dot" aria-hidden="true" />
-            Ноль загрузок
+            {live ? `Пользователей: ${live.people} · сегодня ${live.today}` : 'Ноль загрузок'}
           </span>
         </div>
 

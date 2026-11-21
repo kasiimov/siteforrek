@@ -29,7 +29,7 @@ function cors(request, headers = new Headers(), status = 200) {
   const origin = request.headers.get('Origin') ?? ''
   const response = new Response(null, { status, headers })
   response.headers.set('Access-Control-Allow-Origin', ALLOWED_ORIGINS.has(origin) ? origin : SITE_ORIGIN)
-  response.headers.set('Access-Control-Allow-Methods', 'POST, OPTIONS')
+  response.headers.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
   response.headers.set('Access-Control-Allow-Headers', 'content-type, authorization')
   response.headers.set('Vary', 'Origin')
   return response
@@ -83,6 +83,66 @@ async function collect(request, env) {
   return cors(request, new Headers(), 204)
 }
 
+/** Публичный мини-свод для основного сайта: без ключа, только обезличенные числа. */
+async function overview(request, env) {
+  if (request.method !== 'GET') return cors(request, new Headers(), 405)
+
+  await ensureSchema(env)
+
+  const [people, today, week, tools] = await Promise.all([
+    env.DB.prepare('SELECT COUNT(DISTINCT visitor) AS value FROM events').first(),
+    env.DB.prepare("SELECT COUNT(*) AS value FROM events WHERE strftime('%Y-%m-%d', ts/1000, 'unixepoch') = strftime('%Y-%m-%d', 'now')").first(),
+    env.DB.prepare('SELECT COUNT(*) AS value FROM events WHERE ts >= ?').bind(Date.now() - 7 * 86400000).first(),
+    env.DB.prepare("SELECT name, COUNT(*) AS total FROM events WHERE action = 'open' GROUP BY name ORDER BY total DESC LIMIT 3").all(),
+  ])
+
+  const response = json({
+    people: people?.value ?? 0,
+    today: today?.value ?? 0,
+    week: week?.value ?? 0,
+    tools: tools.results ?? [],
+    updated: Date.now(),
+  })
+  response.headers.set('cache-control', 'public, max-age=60')
+  response.headers.set('access-control-allow-origin', '*')
+  return response
+}
+
+function csvCell(value) {
+  const text = String(value == null ? '' : value)
+  return /[";\n\r]/.test(text) ? '"' + text.replace(/"/g, '""') + '"' : text
+}
+
+/** Выгрузка всех событий в CSV: только владелец, файл собирается на сервере. */
+async function exportCsv(request, env) {
+  if (!env.ADMIN_TOKEN) return json({ error: 'ADMIN_TOKEN не настроен на сервере.' }, 503)
+  if (!authorized(request, env)) return json({ error: 'Неверный ключ доступа.' }, 401)
+
+  await ensureSchema(env)
+
+  const rows = await env.DB.prepare('SELECT ts, name, action, path, visitor FROM events ORDER BY id ASC').all()
+  const labels = { open: 'открыл инструмент', done: 'получил файл', view: 'открыл страницу' }
+  const head = ['Дата (UTC)', 'Время (UTC)', 'Инструмент', 'Действие', 'Страница', 'Посетитель']
+  const lines = [head.join(';')]
+  for (const row of rows.results ?? []) {
+    const iso = new Date(row.ts).toISOString()
+    lines.push(
+      [iso.slice(0, 10), iso.slice(11, 19), row.name, labels[row.action] ?? row.action, row.path || '/', row.visitor]
+        .map(csvCell)
+        .join(';'),
+    )
+  }
+
+  const body = '\ufeff' + lines.join('\r\n') + '\r\n'
+  return new Response(body, {
+    headers: {
+      'content-type': 'text/csv; charset=utf-8',
+      'content-disposition': `attachment; filename="rekpdf-stats-${new Date().toISOString().slice(0, 10)}.csv"`,
+      'cache-control': 'no-store',
+    },
+  })
+}
+
 async function stats(request, env) {
   if (!env.ADMIN_TOKEN) return json({ error: 'ADMIN_TOKEN не настроен на сервере.' }, 503)
   if (!authorized(request, env)) return json({ error: 'Неверный ключ доступа.' }, 401)
@@ -128,10 +188,6 @@ async function stats(request, env) {
     `SELECT path, COUNT(*) AS total FROM events WHERE action = 'view' GROUP BY path ORDER BY total DESC LIMIT 20`,
   ).all()
 
-  const recent = await env.DB.prepare(
-    `SELECT name, action, path, visitor, ts FROM events ORDER BY id DESC LIMIT 40`,
-  ).all()
-
   return json({
     totals: {
       events: total?.value ?? 0,
@@ -144,7 +200,6 @@ async function stats(request, env) {
     tools: tools.results ?? [],
     actions: actions.results ?? [],
     pages: pages.results ?? [],
-    recent: recent.results ?? [],
   })
 }
 
@@ -379,11 +434,25 @@ const PAGE = `<!doctype html>
   }
   @media (max-width: 620px) {
     .nav { display: none; }
-    .rail { justify-content: space-between; }
-    .event { grid-template-columns: 58px minmax(0,1fr); }
-    .event time { grid-column: 2; }
+    .rail { justify-content: space-between; flex-wrap: wrap; gap: 10px 14px; padding: 14px 16px; }
+    .rail-foot { gap: 14px; flex-wrap: wrap; }
+    .ghost { font-size: 9px; letter-spacing: .1em; }
+    main { padding: 26px 18px 60px; }
+    h1 { font-size: 30px; }
+    .sub { font-size: 12px; }
+    .strip { margin: 26px 0 18px; }
+    .cell { padding: 14px 12px 12px; }
+    .cell:first-child { padding-left: 12px; }
+    .cell b { font-size: 27px; }
+    .cell.hero b { font-size: 36px; }
+    .cell:nth-child(n + 3) { border-top: 1px solid var(--line); }
+    .panel { padding: 16px 14px 12px; }
+    .panel-head { flex-wrap: wrap; gap: 4px 10px; }
+    .panel-head .hint { margin-left: 0; }
     .row { grid-template-columns: 18px minmax(0,1fr) 40px 40px; gap: 9px; }
     .row.two { grid-template-columns: 18px minmax(0,1fr) 40px; }
+    .action { padding-right: 8px; }
+    .action b { font-size: 19px; }
   }
 </style>
 </head>
@@ -398,12 +467,12 @@ const PAGE = `<!doctype html>
     <nav class="nav" id="nav" hidden>
       <a href="#tools"><i>01</i>Инструменты</a>
       <a href="#audience"><i>02</i>Аудитория</a>
-      <a href="#feed"><i>03</i>Лента</a>
     </nav>
 
     <div class="rail-foot">
       <p class="stamp" id="stamp" hidden>—</p>
       <button class="ghost" id="refresh" hidden>Обновить</button>
+      <button class="ghost" id="csv" title="Скачать статистику в CSV" hidden>CSV ↓</button>
       <button class="ghost" id="logout" hidden>Выйти</button>
     </div>
   </aside>
@@ -473,11 +542,6 @@ const PAGE = `<!doctype html>
             </section>
           </div>
         </div>
-
-        <section class="panel" id="feed">
-          <div class="panel-head"><h2>Последние события</h2><span class="hint">live · 40 записей</span></div>
-          <div class="feed" id="feedList"></div>
-        </section>
       </div>
     </div>
   </main>
@@ -508,11 +572,6 @@ const PAGE = `<!doctype html>
     return Math.round(diff / 86400) + ' дн'
   }
 
-  function hoursAgo(ts) {
-    if (!ts) return ''
-    return new Date(ts).toLocaleString('ru-RU')
-  }
-
   var ACTION_LABEL = { view: 'визит', open: 'открыл', done: 'файл' }
 
   var token = sessionStorage.getItem('rekpdf.admin') || ''
@@ -523,6 +582,7 @@ const PAGE = `<!doctype html>
     $('dashboard').hidden = !visible
     $('nav').hidden = !visible
     $('refresh').hidden = !visible
+    $('csv').hidden = !visible
     $('logout').hidden = !visible
     $('stamp').hidden = !visible
     if (timer) { clearInterval(timer); timer = null }
@@ -554,7 +614,9 @@ const PAGE = `<!doctype html>
 
   function chart(days) {
     if (!days.length) return '<p class="empty">Данных пока нет — открой сайт, и здесь появятся точки.</p>'
-    var w = 720, h = 190, pl = 26, pr = 10, pt = 18, pb = 26
+    var narrow = window.matchMedia('(max-width: 620px)').matches
+    var w = narrow ? 340 : 720, h = narrow ? 200 : 190
+    var pl = narrow ? 16 : 26, pr = narrow ? 8 : 10, pt = 16, pb = 24
     var max = Math.max.apply(null, days.map(function (d) { return d.total }).concat([1]))
     var step = days.length > 1 ? (w - pl - pr) / (days.length - 1) : 0
     var x = function (i) { return pl + step * i }
@@ -571,7 +633,10 @@ const PAGE = `<!doctype html>
         esc(p[2].day) + ' · ' + p[2].total + ' событий · ' + p[2].people + ' людей</title></circle>'
     }).join('')
     var labels = pts.map(function (p, i) {
-      if (i % 2 !== 0 && i !== pts.length - 1) return ''
+      var show = i % (narrow ? 3 : 2) === 0
+      if (i === pts.length - 1) show = true
+      else if (narrow && i === pts.length - 2) show = false
+      if (!show) return ''
       return '<text class="tick" x="' + p[0].toFixed(1) + '" y="' + (h - 6) + '" text-anchor="middle">' + p[2].day.slice(5) + '</text>'
     }).join('')
     var top = '<text class="tick" x="0" y="' + (pt + 3) + '">' + max + '</text>'
@@ -661,17 +726,34 @@ const PAGE = `<!doctype html>
     $('toolList').innerHTML = toolRows(data.tools)
     $('pageList').innerHTML = pageRows(data.pages)
     $('actionList').innerHTML = actionTiles(data.actions, t.events)
+  }
 
-    $('feedList').innerHTML = data.recent.length
-      ? data.recent.map(function (event) {
-          var action = esc(event.action)
-          return '<div class="event">' +
-            '<span class="chip ' + action + '">' + esc(ACTION_LABEL[event.action] || event.action) + '</span>' +
-            '<span class="what"><b>' + esc(event.name) + '</b><span>' + esc(event.path || '/') + '</span></span>' +
-            '<time title="' + esc(hoursAgo(event.ts)) + '">' + ago(event.ts) + '</time>' +
-            '</div>'
-        }).join('')
-      : '<p class="empty">Событий пока нет.</p>'
+  async function downloadCsv() {
+    var button = $('csv')
+    var label = button.textContent
+    button.disabled = true
+    button.textContent = 'Готовим…'
+    try {
+      var response = await fetch('/api/export.csv', { headers: { Authorization: 'Bearer ' + token } })
+      if (!response.ok) {
+        var data = await response.json().catch(function () { return {} })
+        throw new Error(data.error || 'Не удалось выгрузить CSV')
+      }
+      var blob = await response.blob()
+      var url = URL.createObjectURL(blob)
+      var link = document.createElement('a')
+      link.href = url
+      link.download = 'rekpdf-stats-' + new Date().toISOString().slice(0, 10) + '.csv'
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      setTimeout(function () { URL.revokeObjectURL(url) }, 5000)
+    } catch (error) {
+      alert(error.message)
+    } finally {
+      button.disabled = false
+      button.textContent = label
+    }
   }
 
   $('enter').addEventListener('click', function () {
@@ -680,6 +762,7 @@ const PAGE = `<!doctype html>
   })
   $('token').addEventListener('keydown', function (event) { if (event.key === 'Enter') $('enter').click() })
   $('refresh').addEventListener('click', function () { load(false) })
+  $('csv').addEventListener('click', downloadCsv)
   $('logout').addEventListener('click', function () {
     sessionStorage.removeItem('rekpdf.admin')
     token = ''
@@ -702,6 +785,20 @@ export default {
         return await collect(request, env)
       } catch {
         return cors(request, new Headers(), 500)
+      }
+    }
+    if (url.pathname === '/api/overview') {
+      try {
+        return await overview(request, env)
+      } catch (error) {
+        return json({ error: 'Ошибка базы: ' + (error?.message ?? 'неизвестно') }, 500)
+      }
+    }
+    if (url.pathname === '/api/export.csv') {
+      try {
+        return await exportCsv(request, env)
+      } catch (error) {
+        return json({ error: 'Ошибка базы: ' + (error?.message ?? 'неизвестно') }, 500)
       }
     }
     if (url.pathname === '/api/stats') {
