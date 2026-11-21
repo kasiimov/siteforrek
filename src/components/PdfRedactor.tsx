@@ -56,6 +56,7 @@ const ICONS = {
   page: 'M7 3h10v18H7zM10 8h4M10 12h4',
   undo: 'M9 7 4 12l5 5M4 12h9a6 6 0 0 1 6 6',
   download: 'M12 3v12m0 0 4-4m-4 4-4-4M5 20h14',
+  folder: 'M3 6h6l2 2h9v11H3zM3 10h17',
   eraser: 'm9 20-3-3 8-8 3 3zM15 7l2-2 3 3-2 2M4 20h5',
   panel: 'M4 5h16v14H4zM14 5v14',
   minus: 'M6 12h12',
@@ -581,7 +582,7 @@ export function PdfRedactor() {
           <div className="ed-group">
             <div className="ed-group-row">
               <button type="button" className="ed-tool" onClick={openAnotherFile}>
-                <Icon d={ICONS.download} />
+                <Icon d={ICONS.folder} />
                 <span>Открыть</span>
               </button>
               <button type="button" className="ed-tool" onClick={addBlankPage} title="Вставить пустой лист после текущего">
