@@ -4190,3 +4190,38 @@ select.field-input option {
     font-size: 0.8rem;
   }
 }
+
+/* SEO-страницы /uz и /en: карточки инструментов */
+
+.seo-tools {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 12px;
+}
+
+.seo-tool {
+  display: grid;
+  gap: 6px;
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.03);
+  color: inherit;
+  transition: border-color 0.18s ease, transform 0.18s ease;
+}
+
+.seo-tool b {
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.seo-tool span {
+  font-size: 0.82rem;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.seo-tool:hover {
+  border-color: rgba(255, 79, 94, 0.45);
+  transform: translateY(-2px);
+}

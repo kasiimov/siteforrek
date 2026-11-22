@@ -5,6 +5,11 @@ import { ToolsPage } from './pages/ToolsPage'
 import { ServicesPage } from './pages/ServicesPage'
 import { ProfilePage } from './pages/ProfilePage'
 import { SettingsPage } from './pages/SettingsPage'
+import { SeoPage } from './pages/SeoPage'
+import { ToolSeoPage } from './pages/ToolSeoPage'
+import { PrivacyPage } from './pages/PrivacyPage'
+import { applySeo } from './lib/seo'
+import { resolvePath } from './lib/seoToolPages'
 import { Link, ROUTES, isKnownRoute, usePath } from './lib/router'
 import { initials, useUser } from './lib/profile'
 import { fetchOverview, track, type Overview } from './lib/analytics'
@@ -21,6 +26,9 @@ const FOOTER_LINKS = [
   { to: ROUTES.services, label: 'Услуги' },
   { to: ROUTES.profile, label: 'Профиль' },
   { to: ROUTES.settings, label: 'Настройки' },
+  { to: ROUTES.uz, label: "O'zbekcha" },
+  { to: ROUTES.en, label: 'English' },
+  { to: '/privacy-policy', label: 'Конфиденциальность' },
 ]
 
 function NotFound({ path }: { path: string }) {
@@ -46,11 +54,17 @@ function NotFound({ path }: { path: string }) {
 export default function App() {
   const path = usePath()
   const user = useUser()
-  const known = isKnownRoute(path)
+  const resolved = resolvePath(path)
+  const known = resolved.kind === 'static' && isKnownRoute(resolved.path)
   const [live, setLive] = useState<Overview | null>(null)
 
   useEffect(() => {
     track('страница', 'view')
+  }, [path])
+
+  // Заголовок, описание и canonical под текущую страницу — для поиска.
+  useEffect(() => {
+    applySeo(path)
   }, [path])
 
   useEffect(() => {
@@ -108,12 +122,15 @@ export default function App() {
       </header>
 
       <main id="top" className="site-main">
-        {!known && <NotFound path={path} />}
+        {(resolved.kind === 'notfound' || (resolved.kind === 'static' && !known)) && <NotFound path={path} />}
         {known && path === ROUTES.home && <HomePage />}
         {known && path === ROUTES.tools && <ToolsPage />}
         {known && path === ROUTES.services && <ServicesPage />}
         {known && path === ROUTES.profile && <ProfilePage />}
         {known && path === ROUTES.settings && <SettingsPage />}
+        {resolved.kind === 'lang' && <SeoPage lang={resolved.lang} />}
+        {resolved.kind === 'tool' && <ToolSeoPage slug={resolved.slug} lang={resolved.lang} />}
+        {resolved.kind === 'privacy' && <PrivacyPage lang={resolved.lang} />}
       </main>
 
       <footer className="footer">

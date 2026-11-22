@@ -14,14 +14,15 @@ const BUILTIN_HINTS: Record<string, string> = {
 
 const GROUPS = Object.keys(GROUP_LABELS) as ToolGroup[]
 
-export function Tool({ compact = false }: { compact?: boolean }) {
-  const [activeId, setActiveId] = useState(catalog[0].id)
+export function Tool({ compact = false, only }: { compact?: boolean; only?: string }) {
+  const initial = (only && catalog.find((tool) => tool.id === only)) || catalog[0]
+  const [activeId, setActiveId] = useState(initial.id)
   const active = catalog.find((tool) => tool.id === activeId) ?? catalog[0]
   const hint = BUILTIN_HINTS[active.id] ?? active.hint
 
   return (
     <section className="tool" id="tool">
-      {!compact && (
+      {!only && !compact && (
         <div className="section-head">
           <span className="eyebrow">Инструменты</span>
           <h2>Выберите, что сделать с файлом</h2>
@@ -32,7 +33,7 @@ export function Tool({ compact = false }: { compact?: boolean }) {
         </div>
       )}
 
-      {GROUPS.map((group) => {
+      {!only && GROUPS.map((group) => {
         const tools = catalog.filter((tool) => tool.group === group)
         if (!tools.length) return null
 

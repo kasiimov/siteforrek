@@ -9,6 +9,8 @@ export const ROUTES = {
   profile: '/profile',
   settings: '/settings',
   editor: '/editor',
+  uz: '/uz',
+  en: '/en',
 } as const
 
 export type Route = (typeof ROUTES)[keyof typeof ROUTES]
