@@ -481,7 +481,7 @@ export function PdfRedactor() {
   }
 
   return (
-    <div className={`editor-app${panelOpen ? ' show-panel' : ''}`}>
+    <div className={`editor-app${file ? ' has-file' : ''}${panelOpen ? ' show-panel' : ''}`}>
       <input
         ref={inputRef}
         className="visually-hidden"
@@ -704,7 +704,10 @@ export function PdfRedactor() {
 
         {file && (
           <aside className="ed-thumbs" aria-label="Страницы документа">
-            <p className="ed-thumbs-head">Страницы</p>
+            <p className="ed-thumbs-head">
+              <span>Страницы</span>
+              <span className="ed-thumbs-count">{pages.length}</span>
+            </p>
             <div className="ed-thumbs-list">
               {pages.map((item, pageIndex) => (
                 <button
@@ -728,6 +731,10 @@ export function PdfRedactor() {
                 </button>
               ))}
             </div>
+            <button type="button" className="ed-thumbs-add" onClick={addBlankPage} title="Вставить пустой лист после текущей">
+              <Icon d={ICONS.plus} />
+              <span>Пустой лист</span>
+            </button>
           </aside>
         )}
 
@@ -846,20 +853,31 @@ export function PdfRedactor() {
                 <span className="dropzone-note">до {MAX_FILE_MB} МБ · файл остаётся в браузере</span>
               </div>
 
-              <ol className="ed-steps">
-                <li>
-                  <strong>Текст</strong> — нажмите «Текст» и щёлкните по странице, печатайте справа в свойствах.
-                </li>
-                <li>
-                  <strong>Фото</strong> — картинка встанет на лист, её можно тащить пальцем и тянуть за уголок.
-                </li>
-                <li>
-                  <strong>Страницы</strong> — слева миниатюры, пустой лист добавляется после текущего.
-                </li>
-                <li>
-                  <strong>Экспорт</strong> — «Скачать PDF» собирает готовый файл на вашем устройстве.
-                </li>
-              </ol>
+              <div className="ed-quick">
+                <p className="ed-quick-title">Что можно сделать в редакторе</p>
+                <div className="ed-quick-grid">
+                  <div className="ed-quick-item">
+                    <Icon d={ICONS.text} />
+                    <b>Текст и подписи</b>
+                    <span>Нажмите «Текст» и щёлкните по листу — печатайте справа.</span>
+                  </div>
+                  <div className="ed-quick-item">
+                    <Icon d={ICONS.image} />
+                    <b>Фото и печати</b>
+                    <span>PNG или JPG встанет на лист, тащите и тяните за уголок.</span>
+                  </div>
+                  <div className="ed-quick-item">
+                    <Icon d={ICONS.page} />
+                    <b>Страницы</b>
+                    <span>Слева миниатюры, «Пустой лист» вставит страницу после текущей.</span>
+                  </div>
+                  <div className="ed-quick-item">
+                    <Icon d={ICONS.download} />
+                    <b>Экспорт</b>
+                    <span>«Скачать PDF» собирает файл на вашем устройстве.</span>
+                  </div>
+                </div>
+              </div>
             </div>
           )}
 
@@ -960,20 +978,82 @@ export function PdfRedactor() {
             </>
           ) : (
             <div className="panel-empty">
-              <ul className="panel-list">
-                <li>
-                  <b>Текст</b> — включите «Текст» и щёлкните по странице.
-                </li>
-                <li>
-                  <b>Фото</b> — объект встанет на лист, тащите его пальцем или мышкой.
-                </li>
-                <li>
-                  <b>Пустой лист</b> — добавит страницу после текущей.
-                </li>
-                <li>
-                  <b>Отменить</b> — шаг назад, работает и Ctrl+Z.
-                </li>
-              </ul>
+              {file ? (
+                <>
+                  <div className="ed-doc-card">
+                    <span className="ed-doc-card-badge">PDF</span>
+                    <span className="ed-doc-card-body">
+                      <b className="ed-doc-card-name" title={file.name}>
+                        {file.name}
+                      </b>
+                      <span className="ed-doc-card-meta">
+                        стр. {index + 1} из {pages.length} · {formatSize(file.size)}
+                      </span>
+                    </span>
+                    <span className="ed-doc-card-tag">у вас</span>
+                  </div>
+
+                  <div className="ed-act-grid">
+                    <button
+                      type="button"
+                      className={`ed-act${tool === 'text' ? ' is-active' : ''}`}
+                      onClick={() => setTool(tool === 'text' ? 'select' : 'text')}
+                    >
+                      <Icon d={ICONS.text} />
+                      <span>{tool === 'text' ? 'Ставлю текст' : 'Текст'}</span>
+                    </button>
+                    <button type="button" className="ed-act" onClick={() => imageInputRef.current?.click()}>
+                      <Icon d={ICONS.image} />
+                      <span>Фото</span>
+                    </button>
+                    <button type="button" className="ed-act" onClick={addBlankPage}>
+                      <Icon d={ICONS.page} />
+                      <span>Пустой лист</span>
+                    </button>
+                    <button type="button" className="ed-act" onClick={undo} disabled={!history.length}>
+                      <Icon d={ICONS.undo} />
+                      <span>Отменить</span>
+                    </button>
+                  </div>
+
+                  <ul className="ed-keys">
+                    <li>
+                      <kbd>Delete</kbd> убрать выбранный объект
+                    </li>
+                    <li>
+                      <kbd>Ctrl</kbd> + <kbd>Z</kbd> шаг назад
+                    </li>
+                    <li>Щелчок по странице — выбрать объект и тянуть</li>
+                  </ul>
+                </>
+              ) : (
+                <>
+                  <div className="ed-hero">
+                    <span className="ed-hero-icon">
+                      <Icon d={ICONS.folder} />
+                    </span>
+                    <b>Начните с PDF</b>
+                    <span>Файл не загружается на сервер — он весь у вас в браузере.</span>
+                    <button type="button" onClick={openAnotherFile}>
+                      Открыть PDF
+                    </button>
+                  </div>
+                  <ul className="ed-facts">
+                    <li>
+                      <b>100 МБ</b>
+                      <span>на файл</span>
+                    </li>
+                    <li>
+                      <b>0 загрузок</b>
+                      <span>в интернет</span>
+                    </li>
+                    <li>
+                      <b>PDF</b>
+                      <span>на выходе</span>
+                    </li>
+                  </ul>
+                </>
+              )}
             </div>
           )}
 

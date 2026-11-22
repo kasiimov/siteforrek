@@ -2462,21 +2462,6 @@ select.field-input option {
   color: #f0f0f7;
 }
 
-.panel-list {
-  margin: 0;
-  padding-left: 16px;
-  display: grid;
-  gap: 7px;
-  font-size: 0.8rem;
-  line-height: 1.45;
-  color: #9a9bb0;
-}
-
-.panel-list b {
-  color: #e9e9f2;
-  font-weight: 600;
-}
-
 .panel-note {
   font-size: 0.75rem;
   color: #7d7e94;
@@ -3268,6 +3253,12 @@ select.field-input option {
   flex: 1 1 auto;
   min-height: 0;
   display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 268px;
+}
+
+/* колонка миниатюр появляется только вместе с открытым документом,
+   иначе сетка съезжает и пустое состояние зажимается в узкую полосу */
+.editor-app.has-file .ed-work {
   grid-template-columns: 44px 128px minmax(0, 1fr) 268px;
 }
 
@@ -3323,6 +3314,10 @@ select.field-input option {
 }
 
 .ed-thumbs-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
   margin: 0;
   flex: none;
   padding: 8px 10px;
@@ -3331,6 +3326,43 @@ select.field-input option {
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: #8a909c;
+}
+
+.ed-thumbs-count {
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: #e7e9ee;
+  color: #4b5160;
+  font-size: 0.64rem;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+.ed-thumbs-add {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  width: calc(100% - 16px);
+  margin: 0 8px 10px;
+  padding: 7px 6px;
+  border: 1px dashed var(--ed-line-strong);
+  border-radius: 8px;
+  background: #fff;
+  color: #3c4250;
+  font-size: 0.72rem;
+  cursor: pointer;
+}
+
+.ed-thumbs-add svg {
+  width: 14px;
+  height: 14px;
+}
+
+.ed-thumbs-add:hover {
+  border-color: var(--ed-red);
+  color: var(--ed-red);
 }
 
 .ed-thumbs-list {
@@ -3462,19 +3494,55 @@ select.field-input option {
   border-color: rgba(216, 58, 49, 0.24);
 }
 
-.ed-steps {
-  margin: 0;
-  padding: 0 0 0 18px;
+.ed-quick {
   display: grid;
-  gap: 7px;
-  font-size: 0.82rem;
-  line-height: 1.5;
-  color: var(--ed-muted);
+  gap: 9px;
 }
 
-.ed-steps strong {
-  color: var(--ed-text);
+.ed-quick-title {
+  margin: 0;
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #8a909c;
+}
+
+.ed-quick-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.ed-quick-item {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr);
+  column-gap: 9px;
+  row-gap: 2px;
+  align-content: start;
+  padding: 12px;
+  border: 1px solid var(--ed-line);
+  border-radius: 12px;
+  background: #fff;
+}
+
+.ed-quick-item svg {
+  grid-row: 1 / span 2;
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+  color: var(--ed-red);
+}
+
+.ed-quick-item b {
+  font-size: 0.8rem;
   font-weight: 600;
+  color: var(--ed-text);
+}
+
+.ed-quick-item span {
+  font-size: 0.73rem;
+  line-height: 1.45;
+  color: var(--ed-muted);
 }
 
 .editor-app .message {
@@ -3543,15 +3611,214 @@ select.field-input option {
   color: var(--ed-text);
 }
 
-.editor-app .panel-list {
-  padding-left: 16px;
-  gap: 6px;
-  font-size: 0.78rem;
+/* Пустая панель свойств: карточка документа, быстрые действия, факты */
+.editor-app .panel-empty {
+  display: grid;
+  gap: 12px;
+}
+
+.ed-doc-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 11px 12px;
+  border: 1px solid var(--ed-line);
+  border-radius: 12px;
+  background: #f8f9fb;
+}
+
+.ed-doc-card-badge {
+  flex: none;
+  padding: 3px 6px;
+  border-radius: 6px;
+  background: var(--ed-red);
+  color: #fff;
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.ed-doc-card-body {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.ed-doc-card-name {
+  font-size: 0.8rem;
+  color: var(--ed-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ed-doc-card-meta {
+  font-size: 0.7rem;
   color: var(--ed-muted);
 }
 
-.editor-app .panel-list b {
+.ed-doc-card-tag {
+  flex: none;
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: #e8f6ee;
+  color: #2f8f5b;
+  font-size: 0.62rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.ed-act-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.ed-act {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid var(--ed-line);
+  border-radius: 10px;
+  background: #fff;
   color: var(--ed-text);
+  font: inherit;
+  font-size: 0.76rem;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.ed-act svg {
+  width: 18px;
+  height: 18px;
+  color: var(--ed-red);
+}
+
+.ed-act:hover:not(:disabled) {
+  border-color: var(--ed-red);
+  background: var(--ed-red-soft);
+}
+
+.ed-act.is-active {
+  border-color: var(--ed-red);
+  background: var(--ed-red-soft);
+  box-shadow: inset 0 0 0 1px var(--ed-red);
+}
+
+.ed-act:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.ed-keys {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.73rem;
+  line-height: 1.35;
+  color: var(--ed-muted);
+}
+
+.ed-keys kbd {
+  padding: 1px 5px;
+  border: 1px solid var(--ed-line-strong);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  background: #fff;
+  color: var(--ed-text);
+  font-family: inherit;
+  font-size: 0.66rem;
+}
+
+.ed-hero {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  padding: 14px;
+  border: 1px dashed var(--ed-line-strong);
+  border-radius: 12px;
+  background: #fbfbfd;
+  text-align: center;
+}
+
+.ed-hero-icon {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: var(--ed-red-soft);
+  color: var(--ed-red);
+}
+
+.ed-hero-icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.ed-hero b {
+  font-size: 0.82rem;
+  color: var(--ed-text);
+}
+
+.ed-hero span {
+  font-size: 0.72rem;
+  line-height: 1.4;
+  color: var(--ed-muted);
+}
+
+.ed-hero button {
+  width: 100%;
+  margin-top: 4px;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 9px;
+  background: var(--ed-red);
+  color: #fff;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ed-hero button:hover {
+  background: var(--ed-red-dark);
+}
+
+.ed-facts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ed-facts li {
+  display: grid;
+  gap: 2px;
+  padding: 8px 4px;
+  border-radius: 9px;
+  background: #f6f7f9;
+  text-align: center;
+}
+
+.ed-facts b {
+  font-size: 0.72rem;
+  color: var(--ed-text);
+}
+
+.ed-facts span {
+  font-size: 0.62rem;
+  line-height: 1.3;
+  color: var(--ed-muted);
 }
 
 .editor-app .panel-note {
@@ -3792,7 +4059,8 @@ select.field-input option {
 /* планшет и телефон: редактор разворачивается на всю ширину */
 
 @media (max-width: 900px) {
-  .ed-work {
+  .ed-work,
+  .editor-app.has-file .ed-work {
     grid-template-columns: 44px minmax(0, 1fr);
   }
 
@@ -3844,7 +4112,12 @@ select.field-input option {
 }
 
 @media (max-width: 760px) {
-  .ed-work {
+  .ed-work,
+  .editor-app.has-file .ed-work {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ed-quick-grid {
     grid-template-columns: minmax(0, 1fr);
   }
 
@@ -3915,8 +4188,8 @@ select.field-input option {
     padding: 20px 14px;
   }
 
-  .ed-steps {
-    font-size: 0.78rem;
+  .ed-quick-item {
+    padding: 10px;
   }
 
   .ed-status {
