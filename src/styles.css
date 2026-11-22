@@ -3243,12 +3243,21 @@ select.field-input option {
   flex: 1 1 auto;
   min-height: 0;
   display: grid;
-  grid-template-columns: 44px minmax(0, 1fr) 268px;
+  grid-template-columns: 44px minmax(0, 1fr);
 }
 
 /* колонка миниатюр появляется вместе с открытым документом и
    складывается кнопкой «Страницы» в узкой полосе слева */
 .editor-app.show-thumbs .ed-work {
+  grid-template-columns: 44px 128px minmax(0, 1fr);
+}
+
+/* правая панель свойств действительно сворачивается кнопкой «Свойства» */
+.editor-app.show-panel .ed-work {
+  grid-template-columns: 44px minmax(0, 1fr) 268px;
+}
+
+.editor-app.show-panel.show-thumbs .ed-work {
   grid-template-columns: 44px 128px minmax(0, 1fr) 268px;
 }
 
@@ -3550,7 +3559,7 @@ select.field-input option {
 /* панель свойств */
 
 .ed-panel {
-  display: flex;
+  display: none;
   flex-direction: column;
   gap: 13px;
   min-height: 0;
@@ -3558,6 +3567,10 @@ select.field-input option {
   overflow-y: auto;
   background: var(--ed-surface);
   border-left: 1px solid var(--ed-line);
+}
+
+.editor-app.show-panel .ed-panel {
+  display: flex;
 }
 
 .ed-panel-head {
@@ -4025,7 +4038,9 @@ select.field-input option {
 
 @media (max-width: 900px) {
   .ed-work,
-  .editor-app.show-thumbs .ed-work {
+  .editor-app.show-thumbs .ed-work,
+  .editor-app.show-panel .ed-work,
+  .editor-app.show-panel.show-thumbs .ed-work {
     grid-template-columns: 44px minmax(0, 1fr);
   }
 
@@ -4079,7 +4094,9 @@ select.field-input option {
 
 @media (max-width: 760px) {
   .ed-work,
-  .editor-app.show-thumbs .ed-work {
+  .editor-app.show-thumbs .ed-work,
+  .editor-app.show-panel .ed-work,
+  .editor-app.show-panel.show-thumbs .ed-work {
     grid-template-columns: minmax(0, 1fr);
   }
 
@@ -4224,4 +4241,403 @@ select.field-input option {
 .seo-tool:hover {
   border-color: rgba(255, 79, 94, 0.45);
   transform: translateY(-2px);
+}
+
+/* ---------- рекламные места: слоты под баннеры reklamnoj seti ---------- */
+
+.ad-tag {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  padding: 2px 5px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 0.55rem;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.ad-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  padding: 9px 14px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #7c5cff, #4f8bff);
+  color: #fff;
+  font-size: 0.78rem;
+  font-weight: 600;
+  white-space: nowrap;
+  transition: filter 0.18s ease;
+}
+
+.ad-cta svg {
+  width: 13px;
+  height: 13px;
+}
+
+.ad-cta:hover {
+  filter: brightness(1.1);
+}
+
+.ad-rail {
+  width: min(var(--maxw), 100% - 40px);
+  margin: 18px auto 0;
+}
+
+.ad-leader {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-height: 90px;
+  padding: 14px 18px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 16px;
+  background: linear-gradient(100deg, rgba(124, 92, 255, 0.16), rgba(79, 139, 255, 0.05) 65%, transparent);
+}
+
+.ad-leader-body {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+}
+
+.ad-leader-logo {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #7c5cff, #4f8bff);
+  color: #fff;
+  font-family: var(--font-display);
+  font-size: 1.2rem;
+  font-weight: 700;
+}
+
+.ad-leader-copy {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.ad-leader-copy b {
+  font-size: 0.92rem;
+  font-weight: 600;
+}
+
+.ad-leader-copy span {
+  font-size: 0.79rem;
+  line-height: 1.4;
+  color: var(--muted);
+}
+
+.ad-rect {
+  position: relative;
+  display: grid;
+  gap: 10px;
+  justify-items: start;
+  width: 100%;
+  max-width: 340px;
+  padding: 18px;
+  margin: 0 auto;
+  border: 1px dashed var(--line-strong);
+  border-radius: 18px;
+  background: radial-gradient(120% 120% at 0 0, rgba(124, 92, 255, 0.2), rgba(255, 255, 255, 0.02) 60%);
+}
+
+.ad-rect-badge {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(124, 92, 255, 0.18);
+  color: #cfc4ff;
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
+.ad-rect-badge strong {
+  font-family: var(--font-display);
+  font-size: 1rem;
+}
+
+.ad-rect-title {
+  font-size: 1rem;
+  line-height: 1.3;
+}
+
+.ad-rect-text {
+  margin: 0;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.ad-footer {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 18px;
+  width: min(var(--maxw), 100% - 40px);
+  margin: 34px auto 0;
+  padding: 20px 22px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 18px;
+  background: linear-gradient(100deg, rgba(79, 139, 255, 0.12), rgba(255, 255, 255, 0.02) 70%);
+}
+
+.ad-footer-copy {
+  display: grid;
+  gap: 4px;
+  flex: 1 1 320px;
+  min-width: 0;
+}
+
+.ad-footer-copy b {
+  font-family: var(--font-display);
+  font-size: 1rem;
+}
+
+.ad-footer-copy span {
+  font-size: 0.82rem;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.ad-footer-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.ad-footer-actions small {
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.ad-mini {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 11px;
+  background: rgba(124, 92, 255, 0.07);
+  color: var(--text);
+}
+
+.ad-mini:hover {
+  border-color: rgba(124, 92, 255, 0.55);
+}
+
+.ad-mini svg {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  color: #b9a9ff;
+}
+
+.ad-mini-badge {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #7c5cff, #4f8bff);
+  color: #fff;
+  font-weight: 700;
+}
+
+.ad-mini-copy {
+  display: grid;
+  gap: 1px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.ad-mini-copy b {
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.ad-mini-copy small {
+  font-size: 0.68rem;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* В редакторе рекламные мини-блоки живут в светлой панели. */
+.editor-app .ad-mini {
+  border-color: var(--ed-line-strong);
+  background: #f6f5ff;
+  color: var(--ed-text);
+}
+
+.editor-app .ad-mini-copy small {
+  color: var(--ed-muted);
+}
+
+@media (max-width: 760px) {
+  .ad-rail,
+  .ad-footer {
+    width: calc(100% - 24px);
+    margin-top: 14px;
+  }
+
+  .ad-leader-body {
+    flex-wrap: wrap;
+  }
+
+  .ad-rect {
+    max-width: none;
+  }
+}
+
+/* ---------- редактор: правка существующего текста, распознавание, стирание ---------- */
+
+.ed-doc-rename {
+  padding: 2px 6px;
+  margin-left: -6px;
+  border: 1px dashed transparent;
+  border-radius: 6px;
+  background: transparent;
+  cursor: text;
+  text-align: left;
+}
+
+.ed-doc-rename:hover {
+  border-color: var(--ed-line-strong);
+  background: #f6f7f9;
+}
+
+.ed-doc-input {
+  min-width: 0;
+  width: min(300px, 40vw);
+  padding: 3px 6px;
+  border: 1px solid var(--ed-red);
+  border-radius: 6px;
+  font-size: 0.84rem;
+  font-weight: 600;
+}
+
+.ed-save-mark {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: #6b7280;
+  cursor: pointer;
+}
+
+.ed-save-mark svg {
+  width: 14px;
+  height: 14px;
+}
+
+.ed-save-mark:hover:not(:disabled) {
+  background: #f2f3f6;
+  color: var(--ed-red);
+}
+
+.ed-select {
+  align-self: center;
+  max-width: 150px;
+  padding: 5px 6px;
+  border: 1px solid var(--ed-line-strong);
+  border-radius: 7px;
+  background: #fff;
+  font-size: 0.72rem;
+  color: #3c4250;
+  cursor: pointer;
+}
+
+.editor-app .redactor-cover {
+  position: absolute;
+  z-index: 2;
+  background: #fff;
+  pointer-events: none;
+}
+
+.editor-app .redactor-cover.is-visible {
+  outline: 1px dashed rgba(216, 58, 49, 0.5);
+  background: rgba(255, 255, 255, 0.94);
+}
+
+.editor-app .redactor-run {
+  position: absolute;
+  z-index: 3;
+  border: 1px dashed rgba(79, 139, 255, 0.55);
+  border-radius: 2px;
+  background: rgba(79, 139, 255, 0.06);
+  pointer-events: none;
+}
+
+.editor-app .redactor-stage.tool-text {
+  cursor: text;
+}
+
+.editor-app .redactor-stage.tool-erase {
+  cursor: crosshair;
+}
+
+.editor-app .redactor-erase {
+  position: absolute;
+  z-index: 8;
+  border: 1px dashed var(--ed-red);
+  background: rgba(255, 255, 255, 0.75);
+  pointer-events: none;
+}
+
+.ed-panel-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.editor-app .ed-panel-row .btn {
+  flex: 1 1 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 0.76rem;
+}
+
+.editor-app .ed-panel-row .btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+.ed-thumb-text {
+  display: block;
+  padding: 5px 4px;
+  overflow: hidden;
+  font-size: 3.4px;
+  line-height: 1.35;
+  color: #333;
+  background: #fff;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.editor-app .panel-empty .ad-mini {
+  margin-top: 2px;
 }

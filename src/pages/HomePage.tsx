@@ -1,5 +1,6 @@
 import { Tool } from '../components/Tool'
 import { catalog } from '../components/toolCatalog'
+import { AdRect } from '../components/Ads'
 import { PromoBanner } from '../components/PromoBanner'
 import { Arrow } from '../components/ui'
 import { Link } from '../lib/router'
@@ -245,6 +246,10 @@ export function HomePage() {
           ))}
         </div>
       </section>
+
+      <div className="promo-slot">
+        <AdRect slot="home-mid" />
+      </div>
 
       <PromoBanner slot="before-faq" />
 

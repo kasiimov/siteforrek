@@ -1,3 +1,4 @@
+import { AdRect } from '../components/Ads'
 import { Tool } from '../components/Tool'
 import { PromoBanner } from '../components/PromoBanner'
 import { Arrow } from '../components/ui'
@@ -19,6 +20,10 @@ export function ToolsPage() {
 
       <div className="promo-slot">
         <PromoBanner slot="tools-page" size="inline" />
+      </div>
+
+      <div className="promo-slot">
+        <AdRect slot="tools-grid" />
       </div>
 
       <section className="cta">

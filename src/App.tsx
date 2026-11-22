@@ -8,6 +8,7 @@ import { SettingsPage } from './pages/SettingsPage'
 import { SeoPage } from './pages/SeoPage'
 import { ToolSeoPage } from './pages/ToolSeoPage'
 import { PrivacyPage } from './pages/PrivacyPage'
+import { AdFooter, AdLeaderboard } from './components/Ads'
 import { applySeo } from './lib/seo'
 import { resolvePath } from './lib/seoToolPages'
 import { Link, ROUTES, isKnownRoute, usePath } from './lib/router'
@@ -121,6 +122,11 @@ export default function App() {
         </div>
       </header>
 
+      {/* верхний рекламный слот — на каждой странице сайта */}
+      <div className="ad-rail">
+        <AdLeaderboard slot="global-top" />
+      </div>
+
       <main id="top" className="site-main">
         {(resolved.kind === 'notfound' || (resolved.kind === 'static' && !known)) && <NotFound path={path} />}
         {known && path === ROUTES.home && <HomePage />}
@@ -132,6 +138,9 @@ export default function App() {
         {resolved.kind === 'tool' && <ToolSeoPage slug={resolved.slug} lang={resolved.lang} />}
         {resolved.kind === 'privacy' && <PrivacyPage lang={resolved.lang} />}
       </main>
+
+      {/* нижний рекламный слот перед подвалом — на каждой странице */}
+      <AdFooter slot="global-bottom" />
 
       <footer className="footer">
         <div className="footer-main">

@@ -14,9 +14,26 @@ import {
   insertBlankPage,
   objectSize,
 } from '../lib/docEditor'
-import type { EditorObject, EditorPage, TextObject, ToPdfPoint } from '../lib/docEditor'
+import type { CoverRect, EditorObject, EditorPage, ImageObject, TextObject, ToPdfPoint } from '../lib/docEditor'
+import { readPageRuns, renderPageRaster } from '../lib/pdfText'
+import type { TextRun } from '../lib/pdfText'
+import { OCR_LANGS, recognizeImage } from '../lib/ocr'
+import type { OcrLang } from '../lib/ocr'
+import {
+  A4_BOX,
+  detectKind,
+  DOC_LABELS,
+  OPEN_ACCEPT,
+  imageToPage,
+  readDocumentText,
+  textToPages,
+  unsupportedMessage,
+} from '../lib/openDoc'
+import type { DocKind } from '../lib/openDoc'
+import { pagesToDocx, pagesToText } from '../lib/exportDoc'
+import { AdMini } from './Ads'
 
-type Tool = 'select' | 'text'
+type Tool = 'select' | 'text' | 'erase'
 type Message = { tone: 'ok' | 'error' | 'info'; text: string }
 
 const MAX_FILE_MB = 100
@@ -25,8 +42,9 @@ const ZOOM_MIN = 0.5
 const ZOOM_MAX = 3
 
 const HINTS: Record<Tool, string> = {
-  select: 'Нажмите на объект, чтобы выбрать. Тащите мышкой или пальцем, чтобы двигать. Delete — удалить.',
-  text: 'Нажмите на странице в том месте, где нужен текст, — он появится и его можно будет напечатать справа.',
+  select: 'Щёлкните объект, чтобы выбрать. Тащите мышкой или пальцем, а за уголок меняйте размер.',
+  text: 'Нажмите на готовую строку — её текст откроется справа и его можно править. Пустое место — новый текст.',
+  erase: 'Проведите по странице рамкой — эта область станет белой. Так убирают старый текст, фото и штампы.',
 }
 
 const IMAGE_HINT = 'Фото встанет на страницу. Тащите его мышкой или пальцем, а за уголок справа снизу меняйте размер.'
@@ -53,8 +71,12 @@ const ICONS = {
   cursor: 'M6 4l12 7.5-5.2 1.3 3 5.2-2.2 1.3-3-5.3L6 18z',
   text: 'M5 6h14M9 6v12M15 6v12',
   image: 'M4 5h16v14H4zM4 15l4.5-4 3 3 3-2.5L20 16M9 9.5a1 1 0 1 1-2 0 1 1 0 0 1 2 0',
+  erase: 'M7 17 4 14l9-9 5 5-6 6M9 21h11',
   page: 'M7 3h10v18H7zM10 8h4M10 12h4',
+  copy: 'M9 9h11v12H9zM5 15H4V3h11v1',
+  trash: 'M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6',
   undo: 'M9 7 4 12l5 5M4 12h9a6 6 0 0 1 6 6',
+  redo: 'M15 7l5 5-5 5M20 12h-9a6 6 0 0 0-6 6',
   download: 'M12 3v12m0 0 4-4m-4 4-4-4M5 20h14',
   folder: 'M3 6h6l2 2h9v11H3zM3 10h17',
   panel: 'M4 5h16v14H4zM14 5v14',
@@ -62,10 +84,17 @@ const ICONS = {
   plus: 'M12 6v12M6 12h12',
   close: 'M6 6l12 12M18 6 6 18',
   pages: 'M8 3h8v4H8zM6 7h12v14H6zM9 11h6M9 15h6',
+  scan: 'M4 8V5h3M20 8V5h-3M4 16v3h3M20 16v3h-3M7 12h10',
+  word: 'M4 4h16v16H4zM8 8l1.4 8L12 9l2.6 7L16 8',
+  txt: 'M5 4h14v16H5zM8 9h8M8 13h8M8 17h5',
+  eye: 'M2 12s3.6-6 10-6 10 6 10 6-3.6 6-10 6S2 12 2 12zM12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6',
 }
 
 export function PdfRedactor() {
+  const [kind, setKind] = useState<DocKind>('pdf')
   const [file, setFile] = useState<File | null>(null)
+  const [docName, setDocName] = useState('')
+  const [renaming, setRenaming] = useState(false)
   const [pdf, setPdf] = useState<PDFDocumentProxy | null>(null)
   const [pages, setPages] = useState<EditorPage[]>([])
   const [index, setIndex] = useState(0)
@@ -75,23 +104,32 @@ export function PdfRedactor() {
   const [selected, setSelected] = useState<string | null>(null)
   const [eraseAnnotations, setEraseAnnotations] = useState(false)
   const [history, setHistory] = useState<EditorPage[][]>([])
+  const [future, setFuture] = useState<EditorPage[][]>([])
   const [busy, setBusy] = useState(false)
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState<Message | null>(null)
   const [dragging, setDragging] = useState(false)
-  const [panelOpen, setPanelOpen] = useState(false)
+  const [panelOpen, setPanelOpen] = useState(() => (typeof window === 'undefined' ? true : window.innerWidth > 900))
   const [thumbsOpen, setThumbsOpen] = useState(true)
+  const [runs, setRuns] = useState<Record<number, TextRun[]>>({})
+  const [ocrLang, setOcrLang] = useState<OcrLang>('rus+eng')
+  const [ocrBusy, setOcrBusy] = useState(false)
+  const [ocrProgress, setOcrProgress] = useState(0)
+  const [focusToken, setFocusToken] = useState(0)
+  const [erasePreview, setErasePreview] = useState<CoverRect | null>(null)
 
   const docRef = useRef<PDFDocumentProxy | null>(null)
   const pageCache = useRef(new Map<number, PDFPageProxy>())
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const pagesRef = useRef<EditorPage[]>([])
+  const runsRef = useRef<Record<number, TextRun[]>>({})
   const inputRef = useRef<HTMLInputElement>(null)
   const imageInputRef = useRef<HTMLInputElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const stageWrapRef = useRef<HTMLDivElement>(null)
   const dragRef = useRef<{ id: string; startX: number; startY: number; originX: number; originY: number; moved: boolean } | null>(null)
   const resizeRef = useRef<{ id: string; startX: number; originWidth: number; ratio: number; moved: boolean } | null>(null)
+  const eraseRef = useRef<{ x: number; y: number } | null>(null)
 
   pagesRef.current = pages
 
@@ -100,6 +138,11 @@ export function PdfRedactor() {
   const scale = fitScale * zoom
   const selectedObject = page?.objects.find((object) => object.id === selected) ?? null
   const zoomPercent = Math.round(zoom * 100)
+  const pageRuns = page && page.source !== null ? (runs[page.source] ?? []) : []
+  const covers = page?.covers ?? []
+  const textCount = page ? page.objects.filter((object) => object.kind === 'text').length : 0
+  const imageCount = page ? page.objects.filter((object) => object.kind === 'image').length : 0
+  const hasDoc = Boolean(page)
 
   useEffect(() => {
     return () => {
@@ -107,9 +150,50 @@ export function PdfRedactor() {
     }
   }, [])
 
+  const loadRuns = useCallback(async (model: EditorPage) => {
+    if (model.source === null || runsRef.current[model.source]) return
+    const proxy =
+      pageCache.current.get(model.source) ??
+      (docRef.current ? await docRef.current.getPage(model.source + 1) : null)
+    if (!proxy) return
+    pageCache.current.set(model.source, proxy)
+    try {
+      const list = await readPageRuns(proxy)
+      if (runsRef.current[model.source]) return
+      runsRef.current = { ...runsRef.current, [model.source]: list }
+      setRuns(runsRef.current)
+    } catch {
+      runsRef.current = { ...runsRef.current, [model.source]: [] }
+      setRuns(runsRef.current)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (page) void loadRuns(page)
+  }, [loadRuns, page])
+
+  const resetDoc = () => {
+    void docRef.current?.destroy()
+    docRef.current = null
+    pageCache.current.clear()
+    runsRef.current = {}
+    setRuns({})
+    setPdf(null)
+    setPages([])
+    setFile(null)
+    setIndex(0)
+    setSelected(null)
+    setHistory([])
+    setFuture([])
+    setZoom(1)
+    setMessage(null)
+    setErasePreview(null)
+  }
+
   const openFile = useCallback(async (next: File) => {
-    if (!(next.type === 'application/pdf' || /\.pdf$/i.test(next.name))) {
-      setMessage({ tone: 'error', text: `«${next.name}» — нужен PDF` })
+    const nextKind = detectKind(next)
+    if (!nextKind) {
+      setMessage({ tone: 'error', text: unsupportedMessage(next.name) })
       return
     }
     if (next.size > MAX_FILE_BYTES) {
@@ -121,32 +205,52 @@ export function PdfRedactor() {
     setMessage(null)
 
     try {
-      await docRef.current?.destroy()
-      pageCache.current.clear()
-      const doc = await openPdf(next)
-      docRef.current = doc
-      setPdf(doc)
+      resetDoc()
+      setKind(nextKind)
+      setDocName(baseName(next.name))
+      setFile(next)
 
-      const models: EditorPage[] = []
-      for (let pageNumber = 1; pageNumber <= doc.numPages; pageNumber++) {
-        const proxy = await doc.getPage(pageNumber)
-        const viewport = proxy.getViewport({ scale: 1 })
-        pageCache.current.set(pageNumber - 1, proxy)
-        models.push({ source: pageNumber - 1, box: { width: viewport.width, height: viewport.height }, objects: [] })
+      if (nextKind === 'pdf') {
+        const doc = await openPdf(next)
+        docRef.current = doc
+        setPdf(doc)
+
+        const models: EditorPage[] = []
+        for (let pageNumber = 1; pageNumber <= doc.numPages; pageNumber++) {
+          const proxy = await doc.getPage(pageNumber)
+          const viewport = proxy.getViewport({ scale: 1 })
+          pageCache.current.set(pageNumber - 1, proxy)
+          models.push({
+            source: pageNumber - 1,
+            box: { width: viewport.width, height: viewport.height },
+            objects: [],
+          })
+        }
+        setPages(models)
+      } else if (nextKind === 'image') {
+        const bytes = new Uint8Array(await next.arrayBuffer())
+        const isPng = next.type === 'image/png' || /\.png$/i.test(next.name)
+        const bitmap = await createImageBitmap(new Blob([bytes], { type: isPng ? 'image/png' : 'image/jpeg' }))
+        setPages([imageToPage(bytes, isPng ? 'png' : 'jpg', bitmap.width, bitmap.height, A4_BOX)])
+        bitmap.close()
+        setMessage({ tone: 'info', text: 'Фото открыто как страница. Нажмите «Распознать» — текст станет редактируемым.' })
+      } else {
+        const text = await readDocumentText(next, nextKind)
+        if (!text.trim()) throw new Error('В файле нет текста — открывать нечего.')
+        setPages(textToPages(text, A4_BOX))
       }
 
-      setFile(next)
-      setPages(models)
-      setHistory([])
       setIndex(0)
       setSelected(null)
       setZoom(1)
       setTool('select')
-      setPanelOpen(false)
       track('Редактор PDF', 'open')
     } catch (error) {
       console.error(error)
-      setMessage({ tone: 'error', text: 'Не получилось открыть PDF. Возможно, он повреждён или защищён паролем.' })
+      setMessage({
+        tone: 'error',
+        text: error instanceof Error && error.message ? error.message : 'Не получилось открыть файл.',
+      })
     } finally {
       setLoading(false)
     }
@@ -169,7 +273,7 @@ export function PdfRedactor() {
     const observer = new ResizeObserver(fit)
     observer.observe(wrap)
     return () => observer.disconnect()
-  }, [boxWidth])
+  }, [boxWidth, panelOpen, thumbsOpen])
 
   // Рисуем текущую страницу. Зависимости намеренные: объекты не должны перерисовывать canvas.
   useEffect(() => {
@@ -214,6 +318,7 @@ export function PdfRedactor() {
 
   const mutate = useCallback((updater: (current: EditorPage[]) => EditorPage[]) => {
     setHistory((previous) => [...previous.slice(-40), pagesRef.current])
+    setFuture([])
     setPages((previous) => updater(previous))
   }, [])
 
@@ -233,6 +338,16 @@ export function PdfRedactor() {
     [index],
   )
 
+  const addPageObject = (objects: EditorObject[], newCovers: CoverRect[] = []) => {
+    mutate((current) =>
+      current.map((item, itemIndex) =>
+        itemIndex === index
+          ? { ...item, objects: [...item.objects, ...objects], covers: [...(item.covers ?? []), ...newCovers] }
+          : item,
+      ),
+    )
+  }
+
   const addText = (x: number, y: number) => {
     if (!page) return
     const object: TextObject = {
@@ -245,14 +360,47 @@ export function PdfRedactor() {
       color: TEXT_COLORS[0].value,
       width: Math.max(80, Math.min(260, page.box.width - x - 24)),
     }
-    mutate((current) => current.map((item, itemIndex) => (itemIndex === index ? { ...item, objects: [...item.objects, object] } : item)))
+    addPageObject([object])
     setSelected(object.id)
-    setTool('select')
     setPanelOpen(true)
-    window.setTimeout(() => textareaRef.current?.focus(), 60)
+    setFocusToken((value) => value + 1)
   }
 
-  const addImage = async (next: File) => {
+  /** Готовая строка PDF → редактируемый текст: исходник закрываем белым пятном. */
+  const editRun = (run: TextRun) => {
+    if (!page) return
+    const object: TextObject = {
+      kind: 'text',
+      id: uid(),
+      x: run.x,
+      y: run.y,
+      text: run.text,
+      size: Math.max(6, Math.min(48, Math.round(run.size * 10) / 10)),
+      color: TEXT_COLORS[0].value,
+      width: Math.min(page.box.width - run.x - 6, Math.max(run.width + 12, 60)),
+    }
+    const cover: CoverRect = {
+      x: Math.max(0, run.x - 1.5),
+      y: Math.max(0, run.y - 1.5),
+      width: Math.min(run.width + 3, page.box.width - Math.max(0, run.x - 1.5)),
+      height: run.height + 3,
+    }
+    addPageObject([object], [cover])
+    setSelected(object.id)
+    setPanelOpen(true)
+    setFocusToken((value) => value + 1)
+  }
+
+  useEffect(() => {
+    if (!focusToken) return
+    const timer = window.setTimeout(() => {
+      textareaRef.current?.focus()
+      textareaRef.current?.select()
+    }, 60)
+    return () => window.clearTimeout(timer)
+  }, [focusToken])
+
+  const addImageFile = async (next: File) => {
     if (!page) return
     try {
       const bytes = new Uint8Array(await next.arrayBuffer())
@@ -267,7 +415,7 @@ export function PdfRedactor() {
         size.width,
         size.height,
       )
-      const object: EditorObject = {
+      const object: ImageObject = {
         kind: 'image',
         id: uid(),
         ...position,
@@ -277,9 +425,8 @@ export function PdfRedactor() {
         type,
       }
       bitmap.close()
-      mutate((current) => current.map((item, itemIndex) => (itemIndex === index ? { ...item, objects: [...item.objects, object] } : item)))
+      addPageObject([object])
       setSelected(object.id)
-      // Возвращаем «Выбор», иначе объект не потянешь: таскать умеет только этот режим.
       setTool('select')
       setMessage({ tone: 'ok', text: 'Фото добавлено и уже выделено — тащите его по странице или за уголок меняйте размер.' })
     } catch (error) {
@@ -296,6 +443,35 @@ export function PdfRedactor() {
     setMessage({ tone: 'info', text: 'Пустой лист вставлен сразу после текущей страницы.' })
   }
 
+  const duplicatePage = () => {
+    if (!page) return
+    const clone: EditorPage = {
+      ...page,
+      box: { ...page.box },
+      objects: page.objects.map((object) => ({ ...object, id: uid() })),
+      covers: [...(page.covers ?? [])],
+    }
+    mutate((current) => {
+      const next = [...current]
+      next.splice(index + 1, 0, clone)
+      return next
+    })
+    setIndex(index + 1)
+    setSelected(null)
+    setMessage({ tone: 'info', text: 'Страница скопирована — она идёт сразу после текущей.' })
+  }
+
+  const removePage = () => {
+    if (pages.length <= 1) {
+      setMessage({ tone: 'error', text: 'В документе должна остаться хотя бы одна страница.' })
+      return
+    }
+    mutate((current) => current.filter((_, itemIndex) => itemIndex !== index))
+    setIndex((current) => Math.max(0, Math.min(current, pages.length - 2)))
+    setSelected(null)
+    setMessage({ tone: 'info', text: 'Страница удалена. Ctrl+Z вернёт её.' })
+  }
+
   const removeSelected = useCallback(() => {
     if (!selected) return
     mutate((current) =>
@@ -306,15 +482,35 @@ export function PdfRedactor() {
     setSelected(null)
   }, [index, mutate, selected])
 
-  const undo = () => {
+  const clearCovers = () => {
+    if (!page?.covers?.length) return
+    mutate((current) =>
+      current.map((item, itemIndex) => (itemIndex === index ? { ...item, covers: [] } : item)),
+    )
+    setMessage({ tone: 'info', text: 'Белые пятна убраны — исходное содержимое страницы снова видно.' })
+  }
+
+  const undo = useCallback(() => {
     setHistory((previous) => {
       const last = previous[previous.length - 1]
       if (!last) return previous
+      setFuture((next) => [...next, pagesRef.current])
       setPages(last)
       return previous.slice(0, -1)
     })
     setSelected(null)
-  }
+  }, [])
+
+  const redo = useCallback(() => {
+    setFuture((previous) => {
+      const last = previous[previous.length - 1]
+      if (!last) return previous
+      setHistory((next) => [...next, pagesRef.current])
+      setPages(last)
+      return previous.slice(0, -1)
+    })
+    setSelected(null)
+  }, [])
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -327,22 +523,42 @@ export function PdfRedactor() {
       }
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'z') {
         event.preventDefault()
-        undo()
+        if (event.shiftKey) redo()
+        else undo()
       }
+      if (event.key === 'Escape') setSelected(null)
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [removeSelected, selected])
+  }, [redo, removeSelected, selected, undo])
 
   // Один снимок на жест: Ctrl+Z должен возвращать объект на место, а не удалять его.
   const snapshot = () => {
     setHistory((previous) => [...previous.slice(-40), pagesRef.current])
+    setFuture([])
   }
 
   useEffect(() => {
     const move = (event: PointerEvent) => {
       const model = pagesRef.current[index]
       if (!model) return
+
+      if (eraseRef.current) {
+        const rect = event.currentTarget === null ? null : null
+        void rect
+        const stage = canvasRef.current?.getBoundingClientRect()
+        if (!stage) return
+        const x = Math.max(0, Math.min((event.clientX - stage.left) / scale, model.box.width))
+        const y = Math.max(0, Math.min((event.clientY - stage.top) / scale, model.box.height))
+        const start = eraseRef.current
+        setErasePreview({
+          x: Math.min(start.x, x),
+          y: Math.min(start.y, y),
+          width: Math.abs(x - start.x),
+          height: Math.abs(y - start.y),
+        })
+        return
+      }
 
       const resize = resizeRef.current
       if (resize) {
@@ -376,10 +592,26 @@ export function PdfRedactor() {
       )
       updateObject(drag.id, next)
     }
+
     const up = () => {
+      const start = eraseRef.current
+      const preview = erasePreview
+      eraseRef.current = null
+      if (start && preview && preview.width > 2 && preview.height > 1) {
+        mutate((current) =>
+          current.map((item, itemIndex) =>
+            itemIndex === index
+              ? { ...item, covers: [...(item.covers ?? []), { ...preview, width: Math.max(3, preview.width), height: Math.max(2, preview.height) }] }
+              : item,
+          ),
+        )
+        setMessage({ tone: 'ok', text: 'Область стёрта — на её месте белое поле. Ctrl+Z вернёт как было.' })
+      }
+      setErasePreview(null)
       dragRef.current = null
       resizeRef.current = null
     }
+
     window.addEventListener('pointermove', move)
     window.addEventListener('pointerup', up)
     window.addEventListener('pointercancel', up)
@@ -388,22 +620,137 @@ export function PdfRedactor() {
       window.removeEventListener('pointerup', up)
       window.removeEventListener('pointercancel', up)
     }
-  }, [index, scale, updateObject])
+  }, [erasePreview, index, mutate, scale, updateObject])
 
-  const onStageClick = (event: ReactPointerEvent<HTMLDivElement>) => {
+  const onStageDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (!page) return
-    if (tool !== 'text') {
-      setSelected(null)
-      return
-    }
     const rect = event.currentTarget.getBoundingClientRect()
     const x = (event.clientX - rect.left) / scale
     const y = (event.clientY - rect.top) / scale
-    addText(Math.max(0, Math.min(x, page.box.width - 60)), Math.max(0, Math.min(y, page.box.height - 24)))
+
+    if (tool === 'erase') {
+      event.preventDefault()
+      eraseRef.current = { x, y }
+      setErasePreview({ x, y, width: 0, height: 0 })
+      return
+    }
+
+    if (tool === 'text') {
+      // Ищем готовую строку под курсором: правки начинаются с её текста.
+      const hit = pageRuns.find(
+        (run) => x >= run.x - 3 && x <= run.x + run.width + 3 && y >= run.y - 3 && y <= run.y + run.height + 3,
+      )
+      if (hit) {
+        editRun(hit)
+        return
+      }
+      if (!pageRuns.length && page.source !== null) {
+        setMessage({
+          tone: 'info',
+          text: 'На этой странице нет текстового слоя — скорее всего, это скан или фото. Нажмите «Распознать».',
+        })
+      }
+      addText(Math.max(0, Math.min(x, page.box.width - 60)), Math.max(0, Math.min(y, page.box.height - 24)))
+      return
+    }
+
+    setSelected(null)
+  }
+
+  const rasterPage = async (model: EditorPage): Promise<{ canvas: HTMLCanvasElement; scale: number }> => {
+    if (model.source !== null && docRef.current) {
+      const proxy =
+        pageCache.current.get(model.source) ?? (await docRef.current.getPage(model.source + 1))
+      pageCache.current.set(model.source, proxy)
+      return renderPageRaster(proxy, 1600)
+    }
+
+    const ratio = Math.min(3, Math.max(1.2, 1600 / Math.max(1, model.box.width)))
+    const canvas = document.createElement('canvas')
+    canvas.width = Math.round(model.box.width * ratio)
+    canvas.height = Math.round(model.box.height * ratio)
+    const context = canvas.getContext('2d')
+    if (!context) throw new Error('Canvas недоступен в этом браузере')
+    context.fillStyle = '#ffffff'
+    context.fillRect(0, 0, canvas.width, canvas.height)
+
+    for (const object of model.objects) {
+      if (object.kind !== 'image') continue
+      const bitmap = await createImageBitmap(
+        new Blob([object.data as BlobPart], { type: object.type === 'png' ? 'image/png' : 'image/jpeg' }),
+      )
+      context.drawImage(bitmap, object.x * ratio, object.y * ratio, object.width * ratio, object.height * ratio)
+      bitmap.close()
+    }
+
+    return { canvas, scale: ratio }
+  }
+
+  const recognizePage = async () => {
+    if (!page || ocrBusy) return
+    setOcrBusy(true)
+    setOcrProgress(0)
+    setMessage({ tone: 'info', text: 'Распознаём текст на странице — первый запуск скачивает языковые данные.' })
+    setPanelOpen(true)
+
+    try {
+      const { canvas } = await rasterPage(page)
+      const lines = await recognizeImage(canvas, ocrLang, (progress) => setOcrProgress(progress))
+      canvas.width = 0
+      canvas.height = 0
+
+      if (!lines.length) {
+        setMessage({
+          tone: 'error',
+          text: 'Текст не распознан. Попробуйте снимок крупнее и ровнее или другой язык распознавания.',
+        })
+        return
+      }
+
+      const objects: TextObject[] = []
+      const newCovers: CoverRect[] = []
+
+      for (const line of lines) {
+        const size = Math.max(6, Math.min(48, Math.round(line.height * 0.78 * 10) / 10))
+        objects.push({
+          kind: 'text',
+          id: uid(),
+          x: Math.round(line.x * 10) / 10,
+          y: Math.round(line.y * 10) / 10,
+          text: line.text,
+          size,
+          color: TEXT_COLORS[0].value,
+          width: Math.min(page.box.width - line.x - 4, Math.max(line.width + 10, 40)),
+        })
+        newCovers.push({
+          x: Math.max(0, line.x - 1),
+          y: Math.max(0, line.y - 1),
+          width: Math.min(line.width + 2, page.box.width - line.x + 1),
+          height: line.height + 2,
+        })
+      }
+
+      addPageObject(objects, newCovers)
+      setTool('select')
+      setMessage({
+        tone: 'ok',
+        text: `Распознано строк: ${lines.length}. Текст стал редактируемым — щёлкните по нему и правьте справа.`,
+      })
+      track('Редактор PDF', 'done')
+    } catch (error) {
+      console.error(error)
+      setMessage({
+        tone: 'error',
+        text: 'Распознавание не запустилось. Нужен интернет для языковых данных — попробуйте ещё раз.',
+      })
+    } finally {
+      setOcrBusy(false)
+      setOcrProgress(0)
+    }
   }
 
   const save = async () => {
-    if (!file || !pages.length) return
+    if (!pages.length) return
     setBusy(true)
     setMessage(null)
 
@@ -428,19 +775,17 @@ export function PdfRedactor() {
       }
 
       const result = await composePdf({
-        source: file,
+        source: kind === 'pdf' ? file : null,
         pages,
         toPdf: (pageIndex, x, y) => converters[pageIndex](x, y),
         eraseAnnotations,
       })
 
-      download(result.blob, `${baseName(file.name)}-edited.pdf`)
+      const name = (docName || 'document').replace(/[\\/:*?"<>|]+/g, '-')
+      download(result.blob, `${name}-edited.pdf`)
       track('Редактор PDF', 'done')
-      addHistory({ tool: 'Редактор PDF', fileName: file.name, result: `объектов: ${result.objects}` })
-      const parts = [`${result.pages} страниц(ы)`]
-      if (result.objects) parts.push(`добавлено объектов: ${result.objects}`)
-      if (eraseAnnotations) parts.push('пометки убраны')
-      setMessage({ tone: 'ok', text: `Готово — PDF скачивается: ${parts.join(' · ')}.` })
+      addHistory({ tool: 'Редактор PDF', fileName: name, result: `объектов: ${result.objects}` })
+      setMessage({ tone: 'ok', text: `Готово — PDF скачивается: ${result.pages} страниц(ы), объектов ${result.objects}.` })
     } catch (error) {
       console.error(error)
       setMessage({
@@ -452,15 +797,25 @@ export function PdfRedactor() {
     }
   }
 
-  const resetFile = () => {
-    setFile(null)
-    setPdf(null)
-    setPages([])
-    setIndex(0)
-    setSelected(null)
-    setHistory([])
-    setMessage(null)
-    setZoom(1)
+  const saveWord = async () => {
+    if (!pages.length) return
+    setBusy(true)
+    try {
+      const blob = await pagesToDocx(pages)
+      download(blob, `${(docName || 'document').replace(/[\\/:*?"<>|]+/g, '-')}.docx`)
+      setMessage({ tone: 'ok', text: 'DOCX скачивается — открывается в Word, Google Docs и LibreOffice.' })
+    } catch (error) {
+      console.error(error)
+      setMessage({ tone: 'error', text: 'Не получилось собрать DOCX.' })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const saveText = () => {
+    if (!pages.length) return
+    download(pagesToText(pages), `${(docName || 'document').replace(/[\\/:*?"<>|]+/g, '-')}.txt`)
+    setMessage({ tone: 'ok', text: 'Текст скачивается одним .txt.' })
   }
 
   const onDrop = (event: ReactDragEvent<HTMLDivElement>) => {
@@ -475,17 +830,25 @@ export function PdfRedactor() {
   }
 
   const openAnotherFile = () => {
-    resetFile()
+    resetDoc()
+    setDocName('')
     window.setTimeout(() => inputRef.current?.click(), 30)
   }
 
+  const coveredBy = (run: TextRun): boolean =>
+    covers.some((cover) => {
+      const cx = run.x + run.width / 2
+      const cy = run.y + run.height / 2
+      return cx >= cover.x && cx <= cover.x + cover.width && cy >= cover.y && cy <= cover.y + cover.height
+    })
+
   return (
-    <div className={`editor-app${file && thumbsOpen ? ' show-thumbs' : ''}${panelOpen ? ' show-panel' : ''}`}>
+    <div className={`editor-app${hasDoc && thumbsOpen ? ' show-thumbs' : ''}${panelOpen ? ' show-panel' : ''}`}>
       <input
         ref={inputRef}
         className="visually-hidden"
         type="file"
-        accept="application/pdf,.pdf"
+        accept={OPEN_ACCEPT}
         onChange={(event) => {
           const next = event.target.files?.[0]
           if (next) void openFile(next)
@@ -499,7 +862,7 @@ export function PdfRedactor() {
         accept="image/png,image/jpeg,.png,.jpg,.jpeg"
         onChange={(event) => {
           const next = event.target.files?.[0]
-          if (next) void addImage(next)
+          if (next) void addImageFile(next)
           event.target.value = ''
         }}
       />
@@ -513,15 +876,41 @@ export function PdfRedactor() {
         </Link>
 
         <div className="ed-doc">
-          {file ? (
+          {hasDoc ? (
             <>
-              <span className="ed-doc-badge">PDF</span>
-              <span className="ed-doc-name" title={file.name}>
-                {file.name}
-              </span>
+              <span className="ed-doc-badge">{DOC_LABELS[kind]}</span>
+              {renaming ? (
+                <input
+                  className="ed-doc-input"
+                  autoFocus
+                  value={docName}
+                  onChange={(event) => setDocName(event.target.value)}
+                  onBlur={() => {
+                    setRenaming(false)
+                    if (!docName.trim()) setDocName(baseName(file?.name ?? 'document'))
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === 'Escape') {
+                      setRenaming(false)
+                      if (!docName.trim()) setDocName(baseName(file?.name ?? 'document'))
+                    }
+                  }}
+                  aria-label="Название документа"
+                />
+              ) : (
+                <button type="button" className="ed-doc-name ed-doc-rename" title="Нажмите, чтобы переименовать" onClick={() => setRenaming(true)}>
+                  {docName || baseName(file?.name ?? 'document')}
+                </button>
+              )}
               <span className="ed-doc-meta">
-                {formatSize(file.size)} · {pages.length} стр.
+                {file ? `${formatSize(file.size)} · ` : ''}
+                {pages.length} стр.
               </span>
+              {!renaming && (
+                <button type="button" className="ed-save-mark" onClick={save} disabled={busy} title="Скачать PDF">
+                  <Icon d={ICONS.download} />
+                </button>
+              )}
             </>
           ) : (
             <span className="ed-doc-name">Новый документ</span>
@@ -529,7 +918,7 @@ export function PdfRedactor() {
         </div>
 
         <div className="ed-top-actions">
-          {file && (
+          {hasDoc && (
             <button type="button" className="ed-primary" onClick={() => void save()} disabled={busy} aria-label="Скачать PDF">
               <Icon d={ICONS.download} />
               <span className="ed-primary-text">{busy ? 'Собираем…' : 'Скачать PDF'}</span>
@@ -543,17 +932,21 @@ export function PdfRedactor() {
         </div>
       </header>
 
-      {file && (
+      {hasDoc && (
         <div className="ed-ribbon">
           <div className="ed-group">
             <div className="ed-group-row">
-              <button type="button" className="ed-tool" onClick={openAnotherFile}>
+              <button type="button" className="ed-tool" onClick={openAnotherFile} title="Открыть другой файл">
                 <Icon d={ICONS.folder} />
                 <span>Открыть</span>
               </button>
-              <button type="button" className="ed-tool" onClick={addBlankPage} title="Вставить пустой лист после текущего">
-                <Icon d={ICONS.page} />
-                <span>Пустой лист</span>
+              <button type="button" className="ed-tool" onClick={() => void saveWord()} disabled={busy}>
+                <Icon d={ICONS.word} />
+                <span>Word</span>
+              </button>
+              <button type="button" className="ed-tool" onClick={saveText} disabled={busy} title="Скачать текст">
+                <Icon d={ICONS.txt} />
+                <span>TXT</span>
               </button>
             </div>
             <span className="ed-group-label">Файл</span>
@@ -574,6 +967,7 @@ export function PdfRedactor() {
                 type="button"
                 className={`ed-tool${tool === 'text' ? ' is-active' : ''}`}
                 aria-pressed={tool === 'text'}
+                aria-label="Правка текста"
                 onClick={() => setTool('text')}
               >
                 <Icon d={ICONS.text} />
@@ -590,8 +984,17 @@ export function PdfRedactor() {
                 <Icon d={ICONS.image} />
                 <span>Фото</span>
               </button>
+              <button
+                type="button"
+                className={`ed-tool${tool === 'erase' ? ' is-active' : ''}`}
+                aria-pressed={tool === 'erase'}
+                onClick={() => setTool('erase')}
+              >
+                <Icon d={ICONS.erase} />
+                <span>Стереть</span>
+              </button>
             </div>
-            <span className="ed-group-label">Инструменты</span>
+            <span className="ed-group-label">Правка текста</span>
           </div>
 
           <div className="ed-group">
@@ -600,8 +1003,58 @@ export function PdfRedactor() {
                 <Icon d={ICONS.undo} />
                 <span>Отменить</span>
               </button>
+              <button type="button" className="ed-tool" onClick={redo} disabled={!future.length || busy}>
+                <Icon d={ICONS.redo} />
+                <span>Вернуть</span>
+              </button>
             </div>
-            <span className="ed-group-label">Правка</span>
+            <span className="ed-group-label">История</span>
+          </div>
+
+          <div className="ed-group">
+            <div className="ed-group-row">
+              <button type="button" className="ed-tool" onClick={addBlankPage} title="Вставить пустой лист после текущего">
+                <Icon d={ICONS.page} />
+                <span>Лист</span>
+              </button>
+              <button type="button" className="ed-tool" onClick={duplicatePage} title="Скопировать страницу">
+                <Icon d={ICONS.copy} />
+                <span>Копия</span>
+              </button>
+              <button type="button" className="ed-tool" onClick={removePage} disabled={pages.length <= 1} title="Удалить страницу">
+                <Icon d={ICONS.trash} />
+                <span>Удалить</span>
+              </button>
+            </div>
+            <span className="ed-group-label">Страницы</span>
+          </div>
+
+          <div className="ed-group">
+            <div className="ed-group-row">
+              <button
+                type="button"
+                className={`ed-tool${ocrBusy ? ' is-active' : ''}`}
+                onClick={() => void recognizePage()}
+                disabled={ocrBusy || loading}
+                title="Распознать текст на странице (OCR)"
+              >
+                <Icon d={ICONS.scan} />
+                <span>{ocrBusy ? `${Math.round(ocrProgress * 100)}%` : 'Распознать'}</span>
+              </button>
+              <select
+                className="ed-select"
+                value={ocrLang}
+                onChange={(event) => setOcrLang(event.target.value as OcrLang)}
+                aria-label="Язык распознавания"
+              >
+                {OCR_LANGS.map((item) => (
+                  <option key={item.value} value={item.value}>
+                    {item.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <span className="ed-group-label">Распознавание</span>
           </div>
 
           <p className="ed-hint">{selectedObject?.kind === 'image' ? IMAGE_HINT : HINTS[tool]}</p>
@@ -612,11 +1065,11 @@ export function PdfRedactor() {
         <nav className="ed-rail" aria-label="Панели редактора">
           <button
             type="button"
-            className={`ed-rail-btn ed-rail-pages${file && thumbsOpen ? ' is-active' : ''}`}
+            className={`ed-rail-btn ed-rail-pages${hasDoc && thumbsOpen ? ' is-active' : ''}`}
             title={thumbsOpen ? 'Скрыть страницы' : 'Показать страницы'}
-            aria-pressed={Boolean(file) && thumbsOpen}
+            aria-pressed={hasDoc && thumbsOpen}
             onClick={() => setThumbsOpen((value) => !value)}
-            disabled={!file}
+            disabled={!hasDoc}
           >
             <Icon d={ICONS.pages} />
           </button>
@@ -631,7 +1084,7 @@ export function PdfRedactor() {
           </button>
         </nav>
 
-        {file && thumbsOpen && (
+        {hasDoc && thumbsOpen && (
           <aside className="ed-thumbs" aria-label="Страницы документа">
             <p className="ed-thumbs-head">
               <span>Страницы</span>
@@ -651,7 +1104,7 @@ export function PdfRedactor() {
                 >
                   <span className="ed-thumb-page" style={{ aspectRatio: item.box.width / item.box.height }}>
                     {item.source === null ? (
-                      <span className="ed-thumb-blank" />
+                      <ThumbPreview page={item} />
                     ) : (
                       <PageThumb pdf={pdf} source={item.source} ratio={item.box.width / item.box.height} />
                     )}
@@ -664,13 +1117,43 @@ export function PdfRedactor() {
         )}
 
         <div className="ed-canvas-area" ref={stageWrapRef}>
-          {file && page ? (
+          {page ? (
             <div
-              className={`redactor-stage${tool === 'text' ? ' is-placing' : ''}`}
+              className={`redactor-stage tool-${tool}`}
               style={{ width: Math.floor(page.box.width * scale), height: Math.floor(page.box.height * scale) }}
-              onPointerDown={onStageClick}
+              onPointerDown={onStageDown}
             >
               <canvas ref={canvasRef} className="redactor-canvas" />
+
+              {covers.map((cover, coverIndex) => (
+                <span
+                  key={`cover-${coverIndex}`}
+                  className={`redactor-cover${tool === 'erase' ? ' is-visible' : ''}`}
+                  style={{
+                    left: Math.round(cover.x * scale),
+                    top: Math.round(cover.y * scale),
+                    width: Math.round(cover.width * scale),
+                    height: Math.round(cover.height * scale),
+                  }}
+                />
+              ))}
+
+              {tool === 'text' &&
+                pageRuns
+                  .filter((run) => !coveredBy(run))
+                  .slice(0, 600)
+                  .map((run, runIndex) => (
+                    <span
+                      key={`run-${runIndex}`}
+                      className="redactor-run"
+                      style={{
+                        left: Math.round(run.x * scale),
+                        top: Math.round(run.y * scale),
+                        width: Math.round(run.width * scale),
+                        height: Math.round(run.height * scale),
+                      }}
+                    />
+                  ))}
 
               {page.objects.map((object) => {
                 const size = objectSize(object)
@@ -689,9 +1172,16 @@ export function PdfRedactor() {
                     }}
                     onPointerDown={(event) => {
                       event.stopPropagation()
-                      if (tool !== 'select') return
+                      if (tool === 'erase') return
                       event.preventDefault()
+                      if (tool === 'text' && object.kind === 'text') {
+                        setSelected(object.id)
+                        setPanelOpen(true)
+                        setFocusToken((value) => value + 1)
+                        return
+                      }
                       setSelected(object.id)
+                      setPanelOpen(true)
                       resizeRef.current = null
                       dragRef.current = {
                         id: object.id,
@@ -741,6 +1231,18 @@ export function PdfRedactor() {
                   </div>
                 )
               })}
+
+              {erasePreview && erasePreview.width > 0 && (
+                <span
+                  className="redactor-erase"
+                  style={{
+                    left: Math.round(erasePreview.x * scale),
+                    top: Math.round(erasePreview.y * scale),
+                    width: Math.round(erasePreview.width * scale),
+                    height: Math.round(erasePreview.height * scale),
+                  }}
+                />
+              )}
             </div>
           ) : (
             <div className="ed-empty">
@@ -773,8 +1275,8 @@ export function PdfRedactor() {
                     <path d="M9 13h6M12 10v6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
                   </svg>
                 </div>
-                <p className="dropzone-title">Откройте PDF для редактирования</p>
-                <p className="dropzone-hint">Перетащите файл сюда или нажмите, чтобы выбрать</p>
+                <p className="dropzone-title">Откройте документ</p>
+                <p className="dropzone-hint">PDF, DOCX, MD, TXT и фото документа — перетащите или нажмите</p>
                 <span className="dropzone-note">до {MAX_FILE_MB} МБ · файл остаётся в браузере</span>
               </div>
 
@@ -783,8 +1285,13 @@ export function PdfRedactor() {
                 <div className="ed-quick-grid">
                   <div className="ed-quick-item">
                     <Icon d={ICONS.text} />
-                    <b>Текст и подписи</b>
-                    <span>Нажмите «Текст» и щёлкните по листу — печатайте справа.</span>
+                    <b>Править готовый текст</b>
+                    <span>Нажмите «Текст» и щёлкните строку PDF — её можно изменить или удалить.</span>
+                  </div>
+                  <div className="ed-quick-item">
+                    <Icon d={ICONS.scan} />
+                    <b>Распознать скан</b>
+                    <span>Фото документа или скан PDF → «Распознать», и текст станет редактируемым.</span>
                   </div>
                   <div className="ed-quick-item">
                     <Icon d={ICONS.image} />
@@ -792,16 +1299,12 @@ export function PdfRedactor() {
                     <span>PNG или JPG встанет на лист, тащите и тяните за уголок.</span>
                   </div>
                   <div className="ed-quick-item">
-                    <Icon d={ICONS.page} />
-                    <b>Страницы</b>
-                    <span>Слева миниатюры, «Пустой лист» вставит страницу после текущей.</span>
-                  </div>
-                  <div className="ed-quick-item">
-                    <Icon d={ICONS.download} />
-                    <b>Экспорт</b>
-                    <span>«Скачать PDF» собирает файл на вашем устройстве.</span>
+                    <Icon d={ICONS.erase} />
+                    <b>Стереть лишнее</b>
+                    <span>Рамкой «Стереть» убираются старый текст, картинки и штампы.</span>
                   </div>
                 </div>
+                <AdMini slot="editor-empty" />
               </div>
             </div>
           )}
@@ -831,7 +1334,7 @@ export function PdfRedactor() {
                       ref={textareaRef}
                       className="field-input panel-textarea"
                       value={selectedObject.text}
-                      rows={4}
+                      rows={5}
                       placeholder="Напишите что-нибудь"
                       onChange={(event) => updateObject(selectedObject.id, { text: event.target.value })}
                     />
@@ -844,13 +1347,26 @@ export function PdfRedactor() {
                         <button
                           key={size}
                           type="button"
-                          className={`chip${selectedObject.size === size ? ' is-active' : ''}`}
+                          className={`chip${Math.round(selectedObject.size) === size ? ' is-active' : ''}`}
                           onClick={() => updateObject(selectedObject.id, { size })}
                         >
                           {size}
                         </button>
                       ))}
                     </div>
+                  </div>
+
+                  <div className="field">
+                    <span className="field-label">Ширина блока</span>
+                    <input
+                      className="field-input"
+                      type="range"
+                      min={40}
+                      max={Math.max(60, Math.floor((page?.box.width ?? 500) - selectedObject.x))}
+                      value={Math.round(selectedObject.width)}
+                      onChange={(event) => updateObject(selectedObject.id, { width: Number(event.target.value) })}
+                      aria-label="Ширина текстового блока"
+                    />
                   </div>
 
                   <div className="field">
@@ -897,25 +1413,28 @@ export function PdfRedactor() {
                 </label>
               )}
 
-              <button type="button" className="btn btn-quiet panel-remove" onClick={removeSelected}>
-                Удалить объект
-              </button>
+              <div className="ed-panel-actions">
+                <button type="button" className="btn btn-quiet panel-remove" onClick={removeSelected}>
+                  Удалить объект
+                </button>
+              </div>
             </>
           ) : (
             <div className="panel-empty">
-              {file ? (
+              {hasDoc ? (
                 <>
                   <div className="ed-doc-card">
-                    <span className="ed-doc-card-badge">PDF</span>
+                    <span className="ed-doc-card-badge">{DOC_LABELS[kind]}</span>
                     <span className="ed-doc-card-body">
-                      <b className="ed-doc-card-name" title={file.name}>
-                        {file.name}
+                      <b className="ed-doc-card-name" title={docName}>
+                        {docName || 'Документ'}
                       </b>
                       <span className="ed-doc-card-meta">
-                        стр. {index + 1} из {pages.length} · {formatSize(file.size)}
+                        стр. {index + 1} из {pages.length}
+                        {file ? ` · ${formatSize(file.size)}` : ''}
                       </span>
                     </span>
-                    <span className="ed-doc-card-tag">у вас</span>
+                    <span className="ed-doc-card-tag">локально</span>
                   </div>
 
                   <p className="ed-panel-label">Страница</p>
@@ -935,24 +1454,51 @@ export function PdfRedactor() {
                       </dd>
                     </div>
                     <div>
-                      <dt>Ориентация</dt>
-                      <dd>{page && page.box.width > page.box.height ? 'Альбомная' : 'Книжная'}</dd>
+                      <dt>Объекты</dt>
+                      <dd>
+                        {textCount} текст · {imageCount} фото
+                      </dd>
                     </div>
                     <div>
-                      <dt>Масштаб</dt>
-                      <dd>{zoomPercent}%</dd>
+                      <dt>Стёрто областей</dt>
+                      <dd>{covers.length}</dd>
                     </div>
                   </dl>
 
+                  <div className="ed-panel-row">
+                    <button type="button" className="btn btn-quiet" onClick={() => void recognizePage()} disabled={ocrBusy}>
+                      <Icon d={ICONS.scan} />
+                      Распознать текст
+                    </button>
+                    {covers.length > 0 && (
+                      <button type="button" className="btn btn-quiet" onClick={clearCovers}>
+                        Убрать белые пятна
+                      </button>
+                    )}
+                  </div>
+
+                  <p className="ed-panel-label">Быстро</p>
+                  <div className="ed-panel-row">
+                    <button type="button" className="btn btn-quiet" onClick={addBlankPage}>
+                      Пустой лист
+                    </button>
+                    <button type="button" className="btn btn-quiet" onClick={duplicatePage}>
+                      Копия страницы
+                    </button>
+                  </div>
+
                   <ul className="ed-keys">
+                    <li>
+                      <kbd>Ctrl</kbd> + <kbd>Z</kbd> шаг назад, <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>Z</kbd> вперёд
+                    </li>
                     <li>
                       <kbd>Delete</kbd> убрать выбранный объект
                     </li>
-                    <li>
-                      <kbd>Ctrl</kbd> + <kbd>Z</kbd> шаг назад
-                    </li>
-                    <li>Щелчок по странице — выбрать объект и тянуть</li>
+                    <li>«Текст» → щелчок по строке PDF — правка существующего текста</li>
+                    <li>«Стереть» → рамка по области — старый текст и фото исчезают</li>
                   </ul>
+
+                  <AdMini slot="editor-panel" />
                 </>
               ) : (
                 <>
@@ -960,10 +1506,10 @@ export function PdfRedactor() {
                     <span className="ed-hero-icon">
                       <Icon d={ICONS.folder} />
                     </span>
-                    <b>Начните с PDF</b>
-                    <span>Файл не загружается на сервер — он весь у вас в браузере.</span>
+                    <b>Начните с документа</b>
+                    <span>PDF, DOCX, MD, TXT или фото. Файл не загружается на сервер — он весь у вас в браузере.</span>
                     <button type="button" onClick={openAnotherFile}>
-                      Открыть PDF
+                      Открыть файл
                     </button>
                   </div>
                   <ul className="ed-facts">
@@ -976,10 +1522,11 @@ export function PdfRedactor() {
                       <span>в интернет</span>
                     </li>
                     <li>
-                      <b>PDF</b>
-                      <span>на выходе</span>
+                      <b>OCR</b>
+                      <span>в браузере</span>
                     </li>
                   </ul>
+                  <AdMini slot="editor-panel-empty" />
                 </>
               )}
             </div>
@@ -997,9 +1544,9 @@ export function PdfRedactor() {
             </span>
           </label>
 
-          {file && (
+          {hasDoc && (
             <div className="ed-panel-actions">
-              <button type="button" className="btn btn-quiet" onClick={resetFile}>
+              <button type="button" className="btn btn-quiet" onClick={resetDoc}>
                 Закрыть документ
               </button>
             </div>
@@ -1016,14 +1563,12 @@ export function PdfRedactor() {
               setIndex((current) => Math.max(0, current - 1))
               setSelected(null)
             }}
-            disabled={!file || index === 0}
+            disabled={!hasDoc || index === 0}
             aria-label="Предыдущая страница"
           >
             ←
           </button>
-          <span>
-            {file ? `Страница ${index + 1} из ${pages.length}` : 'Файл не открыт'}
-          </span>
+          <span>{hasDoc ? `Страница ${index + 1} из ${pages.length}` : 'Файл не открыт'}</span>
           <button
             type="button"
             className="ed-nav-btn"
@@ -1031,14 +1576,14 @@ export function PdfRedactor() {
               setIndex((current) => Math.min(pages.length - 1, current + 1))
               setSelected(null)
             }}
-            disabled={!file || index >= pages.length - 1}
+            disabled={!hasDoc || index >= pages.length - 1}
             aria-label="Следующая страница"
           >
             →
           </button>
         </div>
 
-        {file && (
+        {hasDoc && (
           <div className="ed-status-group ed-status-zoom">
             <button
               type="button"
@@ -1145,6 +1690,22 @@ function PageThumb({ pdf, source, ratio }: { pdf: PDFDocumentProxy | null; sourc
   return <canvas ref={canvasRef} style={{ aspectRatio: ratio }} />
 }
 
+/** Миниатюра страницы, у которой нет исходного PDF: фото и текст из DOCX/MD/TXT. */
+function ThumbPreview({ page }: { page: EditorPage }) {
+  const image = page.objects.find((object) => object.kind === 'image')
+  const text = page.objects.find((object) => object.kind === 'text')
+
+  if (image && image.kind === 'image') {
+    return <img src={imageUrl(image)} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+  }
+
+  return (
+    <span className="ed-thumb-text" aria-hidden="true">
+      {(text && text.kind === 'text' ? text.text : '').slice(0, 240)}
+    </span>
+  )
+}
+
 /** Картинку в редакторе показываем прямо из байтов, без файлов на диске. */
 const imageUrls = new Map<string, string>()
 
@@ -1158,4 +1719,3 @@ function imageUrl(object: EditorObject): string {
   imageUrls.set(object.id, url)
   return url
 }
-

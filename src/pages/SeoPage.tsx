@@ -1,4 +1,5 @@
 import { Arrow } from '../components/ui'
+import { AdRect } from '../components/Ads'
 import { Link, ROUTES } from '../lib/router'
 
 type Lang = 'uz' | 'en'
@@ -118,6 +119,10 @@ export function SeoPage({ lang }: { lang: Lang }) {
           </Link>
         </div>
       </section>
+
+      <div className="promo-slot">
+        <AdRect slot={`lang-${lang}`} />
+      </div>
 
       <section className="tool">
         <div className="section-head">

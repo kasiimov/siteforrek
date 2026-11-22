@@ -33,11 +33,18 @@ export type ImageObject = ObjectBase & {
 
 export type EditorObject = TextObject | ImageObject
 
+/** Белое пятно поверх исходного содержимого: так убирают старый текст, фото и штампы. */
+export type CoverRect = { x: number; y: number; width: number; height: number }
+
 export type EditorPage = {
   /** номер страницы в исходном PDF (с нуля) или null для пустого листа */
   source: number | null
   box: PageBox
   objects: EditorObject[]
+  /** закрашенные области: старый текст или картинка под ними не видны */
+  covers?: CoverRect[]
+  /** на странице не было текстового слоя — значит, это скан или фото */
+  scanned?: boolean
 }
 
 export const TEXT_COLORS = [
@@ -187,6 +194,22 @@ export async function composePdf(options: ComposeOptions): Promise<{ blob: Blob;
   for (let index = 0; index < options.pages.length; index++) {
     const model = options.pages[index]
     const target = targets[index]
+
+    // Сначала закрываем то, что нужно убрать: старый текст, фото, штампы.
+    for (const cover of model.covers ?? []) {
+      const [x1, y1] = options.toPdf(index, cover.x, cover.y)
+      const [x2, y2] = options.toPdf(index, cover.x + cover.width, cover.y + cover.height)
+      const width = Math.abs(x2 - x1)
+      const height = Math.abs(y2 - y1)
+      if (width < 0.4 || height < 0.4) continue
+      target.drawRectangle({
+        x: Math.min(x1, x2),
+        y: Math.min(y1, y2),
+        width,
+        height,
+        color: rgb(1, 1, 1),
+      })
+    }
 
     for (const object of model.objects) {
       if (object.kind === 'text') {
