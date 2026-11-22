@@ -3051,16 +3051,6 @@ select.field-input option {
   flex: none;
 }
 
-.ed-zoom {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  padding: 2px;
-  border: 1px solid var(--ed-line);
-  border-radius: 8px;
-  background: #f7f8fa;
-}
-
 .ed-zoom-value {
   min-width: 42px;
   text-align: center;
@@ -3256,9 +3246,9 @@ select.field-input option {
   grid-template-columns: 44px minmax(0, 1fr) 268px;
 }
 
-/* колонка миниатюр появляется только вместе с открытым документом,
-   иначе сетка съезжает и пустое состояние зажимается в узкую полосу */
-.editor-app.has-file .ed-work {
+/* колонка миниатюр появляется вместе с открытым документом и
+   складывается кнопкой «Страницы» в узкой полосе слева */
+.editor-app.show-thumbs .ed-work {
   grid-template-columns: 44px 128px minmax(0, 1fr) 268px;
 }
 
@@ -3305,6 +3295,10 @@ select.field-input option {
   cursor: default;
 }
 
+.ed-rail-end {
+  margin-top: auto;
+}
+
 .ed-thumbs {
   display: flex;
   flex-direction: column;
@@ -3336,33 +3330,6 @@ select.field-input option {
   font-size: 0.64rem;
   font-weight: 600;
   letter-spacing: 0;
-}
-
-.ed-thumbs-add {
-  flex: none;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 5px;
-  width: calc(100% - 16px);
-  margin: 0 8px 10px;
-  padding: 7px 6px;
-  border: 1px dashed var(--ed-line-strong);
-  border-radius: 8px;
-  background: #fff;
-  color: #3c4250;
-  font-size: 0.72rem;
-  cursor: pointer;
-}
-
-.ed-thumbs-add svg {
-  width: 14px;
-  height: 14px;
-}
-
-.ed-thumbs-add:hover {
-  border-color: var(--ed-red);
-  color: var(--ed-red);
 }
 
 .ed-thumbs-list {
@@ -3670,49 +3637,47 @@ select.field-input option {
   letter-spacing: 0.04em;
 }
 
-.ed-act-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
+.ed-panel-label {
+  margin: 2px 0 -4px;
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #8a909c;
 }
 
-.ed-act {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 6px;
-  padding: 10px;
+.ed-props {
+  margin: 0;
+  padding: 0;
   border: 1px solid var(--ed-line);
-  border-radius: 10px;
+  border-radius: 12px;
   background: #fff;
+  overflow: hidden;
+}
+
+.ed-props > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 11px;
+  border-top: 1px solid var(--ed-line);
+}
+
+.ed-props > div:first-child {
+  border-top: 0;
+}
+
+.ed-props dt {
+  font-size: 0.72rem;
+  color: var(--ed-muted);
+}
+
+.ed-props dd {
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: 600;
   color: var(--ed-text);
-  font: inherit;
-  font-size: 0.76rem;
-  text-align: left;
-  cursor: pointer;
-  transition: border-color 0.15s, background 0.15s;
-}
-
-.ed-act svg {
-  width: 18px;
-  height: 18px;
-  color: var(--ed-red);
-}
-
-.ed-act:hover:not(:disabled) {
-  border-color: var(--ed-red);
-  background: var(--ed-red-soft);
-}
-
-.ed-act.is-active {
-  border-color: var(--ed-red);
-  background: var(--ed-red-soft);
-  box-shadow: inset 0 0 0 1px var(--ed-red);
-}
-
-.ed-act:disabled {
-  opacity: 0.45;
-  cursor: default;
+  text-align: right;
 }
 
 .ed-keys {
@@ -4060,11 +4025,12 @@ select.field-input option {
 
 @media (max-width: 900px) {
   .ed-work,
-  .editor-app.has-file .ed-work {
+  .editor-app.show-thumbs .ed-work {
     grid-template-columns: 44px minmax(0, 1fr);
   }
 
-  .ed-thumbs {
+  .ed-thumbs,
+  .ed-rail-pages {
     display: none;
   }
 
@@ -4113,7 +4079,7 @@ select.field-input option {
 
 @media (max-width: 760px) {
   .ed-work,
-  .editor-app.has-file .ed-work {
+  .editor-app.show-thumbs .ed-work {
     grid-template-columns: minmax(0, 1fr);
   }
 
@@ -4147,10 +4113,6 @@ select.field-input option {
 
   .ed-top-actions {
     gap: 6px;
-  }
-
-  .ed-zoom {
-    display: none;
   }
 
   .ed-close span {

@@ -57,11 +57,9 @@ const ICONS = {
   undo: 'M9 7 4 12l5 5M4 12h9a6 6 0 0 1 6 6',
   download: 'M12 3v12m0 0 4-4m-4 4-4-4M5 20h14',
   folder: 'M3 6h6l2 2h9v11H3zM3 10h17',
-  eraser: 'm9 20-3-3 8-8 3 3zM15 7l2-2 3 3-2 2M4 20h5',
   panel: 'M4 5h16v14H4zM14 5v14',
   minus: 'M6 12h12',
   plus: 'M12 6v12M6 12h12',
-  fit: 'M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5',
   close: 'M6 6l12 12M18 6 6 18',
   pages: 'M8 3h8v4H8zM6 7h12v14H6zM9 11h6M9 15h6',
 }
@@ -82,6 +80,7 @@ export function PdfRedactor() {
   const [message, setMessage] = useState<Message | null>(null)
   const [dragging, setDragging] = useState(false)
   const [panelOpen, setPanelOpen] = useState(false)
+  const [thumbsOpen, setThumbsOpen] = useState(true)
 
   const docRef = useRef<PDFDocumentProxy | null>(null)
   const pageCache = useRef(new Map<number, PDFPageProxy>())
@@ -481,7 +480,7 @@ export function PdfRedactor() {
   }
 
   return (
-    <div className={`editor-app${file ? ' has-file' : ''}${panelOpen ? ' show-panel' : ''}`}>
+    <div className={`editor-app${file && thumbsOpen ? ' show-thumbs' : ''}${panelOpen ? ' show-panel' : ''}`}>
       <input
         ref={inputRef}
         className="visually-hidden"
@@ -530,39 +529,6 @@ export function PdfRedactor() {
         </div>
 
         <div className="ed-top-actions">
-          {file && (
-            <div className="ed-zoom">
-              <button
-                type="button"
-                className="ed-icon-btn"
-                onClick={() => changeZoom(zoom - 0.1)}
-                disabled={zoom <= ZOOM_MIN}
-                aria-label="Уменьшить масштаб"
-              >
-                <Icon d={ICONS.minus} />
-              </button>
-              <span className="ed-zoom-value">{zoomPercent}%</span>
-              <button
-                type="button"
-                className="ed-icon-btn"
-                onClick={() => changeZoom(zoom + 0.1)}
-                disabled={zoom >= ZOOM_MAX}
-                aria-label="Увеличить масштаб"
-              >
-                <Icon d={ICONS.plus} />
-              </button>
-              <button
-                type="button"
-                className="ed-icon-btn"
-                onClick={() => setZoom(1)}
-                title="По ширине окна"
-                aria-label="По ширине окна"
-              >
-                <Icon d={ICONS.fit} />
-              </button>
-            </div>
-          )}
-
           {file && (
             <button type="button" className="ed-primary" onClick={() => void save()} disabled={busy} aria-label="Скачать PDF">
               <Icon d={ICONS.download} />
@@ -634,28 +600,8 @@ export function PdfRedactor() {
                 <Icon d={ICONS.undo} />
                 <span>Отменить</span>
               </button>
-              <button
-                type="button"
-                className={`ed-tool${eraseAnnotations ? ' is-active' : ''}`}
-                aria-pressed={eraseAnnotations}
-                onClick={() => setEraseAnnotations((value) => !value)}
-                title="Убрать комментарии, штампы и подписи-аннотации"
-              >
-                <Icon d={ICONS.eraser} />
-                <span>{eraseAnnotations ? 'Пометки убрать' : 'Пометки'}</span>
-              </button>
             </div>
             <span className="ed-group-label">Правка</span>
-          </div>
-
-          <div className="ed-group">
-            <div className="ed-group-row">
-              <button type="button" className="ed-tool" onClick={() => void save()} disabled={busy}>
-                <Icon d={ICONS.download} />
-                <span>{busy ? 'Собираем…' : 'Скачать PDF'}</span>
-              </button>
-            </div>
-            <span className="ed-group-label">Экспорт</span>
           </div>
 
           <p className="ed-hint">{selectedObject?.kind === 'image' ? IMAGE_HINT : HINTS[tool]}</p>
@@ -666,43 +612,26 @@ export function PdfRedactor() {
         <nav className="ed-rail" aria-label="Панели редактора">
           <button
             type="button"
-            className="ed-rail-btn is-active"
-            title="Инструменты и страницы"
-            onClick={() => setTool('select')}
+            className={`ed-rail-btn ed-rail-pages${file && thumbsOpen ? ' is-active' : ''}`}
+            title={thumbsOpen ? 'Скрыть страницы' : 'Показать страницы'}
+            aria-pressed={Boolean(file) && thumbsOpen}
+            onClick={() => setThumbsOpen((value) => !value)}
+            disabled={!file}
           >
             <Icon d={ICONS.pages} />
           </button>
-          <button type="button" className={`ed-rail-btn${tool === 'text' ? ' is-active' : ''}`} title="Добавить текст" onClick={() => setTool('text')}>
-            <Icon d={ICONS.text} />
-          </button>
           <button
             type="button"
-            className="ed-rail-btn"
-            title="Вставить фото"
-            onClick={() => {
-              setTool('select')
-              imageInputRef.current?.click()
-            }}
-          >
-            <Icon d={ICONS.image} />
-          </button>
-          <button type="button" className="ed-rail-btn" title="Пустой лист" onClick={addBlankPage} disabled={!file}>
-            <Icon d={ICONS.page} />
-          </button>
-          <button type="button" className="ed-rail-btn" title="Отменить шаг" onClick={undo} disabled={!history.length}>
-            <Icon d={ICONS.undo} />
-          </button>
-          <button
-            type="button"
-            className="ed-rail-btn"
-            title="Свойства и пометки"
+            className={`ed-rail-btn ed-rail-end${panelOpen ? ' is-active' : ''}`}
+            title="Свойства"
+            aria-pressed={panelOpen}
             onClick={() => setPanelOpen((value) => !value)}
           >
             <Icon d={ICONS.panel} />
           </button>
         </nav>
 
-        {file && (
+        {file && thumbsOpen && (
           <aside className="ed-thumbs" aria-label="Страницы документа">
             <p className="ed-thumbs-head">
               <span>Страницы</span>
@@ -731,10 +660,6 @@ export function PdfRedactor() {
                 </button>
               ))}
             </div>
-            <button type="button" className="ed-thumbs-add" onClick={addBlankPage} title="Вставить пустой лист после текущей">
-              <Icon d={ICONS.plus} />
-              <span>Пустой лист</span>
-            </button>
           </aside>
         )}
 
@@ -993,28 +918,31 @@ export function PdfRedactor() {
                     <span className="ed-doc-card-tag">у вас</span>
                   </div>
 
-                  <div className="ed-act-grid">
-                    <button
-                      type="button"
-                      className={`ed-act${tool === 'text' ? ' is-active' : ''}`}
-                      onClick={() => setTool(tool === 'text' ? 'select' : 'text')}
-                    >
-                      <Icon d={ICONS.text} />
-                      <span>{tool === 'text' ? 'Ставлю текст' : 'Текст'}</span>
-                    </button>
-                    <button type="button" className="ed-act" onClick={() => imageInputRef.current?.click()}>
-                      <Icon d={ICONS.image} />
-                      <span>Фото</span>
-                    </button>
-                    <button type="button" className="ed-act" onClick={addBlankPage}>
-                      <Icon d={ICONS.page} />
-                      <span>Пустой лист</span>
-                    </button>
-                    <button type="button" className="ed-act" onClick={undo} disabled={!history.length}>
-                      <Icon d={ICONS.undo} />
-                      <span>Отменить</span>
-                    </button>
-                  </div>
+                  <p className="ed-panel-label">Страница</p>
+                  <dl className="ed-props">
+                    <div>
+                      <dt>Номер</dt>
+                      <dd>
+                        {index + 1} / {pages.length}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>Размер</dt>
+                      <dd>
+                        {page
+                          ? `${Math.round((page.box.width * 25.4) / 72)} × ${Math.round((page.box.height * 25.4) / 72)} мм`
+                          : '—'}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>Ориентация</dt>
+                      <dd>{page && page.box.width > page.box.height ? 'Альбомная' : 'Книжная'}</dd>
+                    </div>
+                    <div>
+                      <dt>Масштаб</dt>
+                      <dd>{zoomPercent}%</dd>
+                    </div>
+                  </dl>
 
                   <ul className="ed-keys">
                     <li>
@@ -1069,16 +997,13 @@ export function PdfRedactor() {
             </span>
           </label>
 
-          <div className="ed-panel-actions">
-            <button type="button" className="btn btn-quiet" onClick={openAnotherFile}>
-              Открыть другой файл
-            </button>
-            {file && (
+          {file && (
+            <div className="ed-panel-actions">
               <button type="button" className="btn btn-quiet" onClick={resetFile}>
                 Закрыть документ
               </button>
-            )}
-          </div>
+            </div>
+          )}
         </aside>
       </div>
 
