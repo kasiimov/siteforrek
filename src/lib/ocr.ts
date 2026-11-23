@@ -101,16 +101,20 @@ const OCR_ATTEMPTS: OcrAttempt[] = [
 /** Какой вариант сработал в прошлый раз: следующие запуски идут сразу в него. */
 let preferredAttempt = 0
 
-async function loadWorker(lang: string, attempt: OcrAttempt, onProgress?: (progress: number) => void) {
+async function loadWorker(
+  lang: string,
+  attempt: OcrAttempt,
+  onProgress?: (progress: number, status?: string) => void,
+) {
   const { createWorker } = await import('tesseract.js')
   return createWorker(lang, 1, {
     workerPath: attempt.workerPath ?? LOCAL_WORKER(),
     corePath: attempt.corePath ?? LOCAL_CORE(),
     ...(attempt.langPath ? { langPath: attempt.langPath } : {}),
     logger: (message: { status?: string; progress?: number }) => {
-      if (message.status === 'recognizing text' && typeof message.progress === 'number') {
-        onProgress?.(message.progress)
-      }
+      if (typeof message.progress !== 'number') return
+      // Прогресс нужен не только по тексту: загрузка языка на телефоне занимает время.
+      onProgress?.(message.progress, message.status)
     },
   })
 }
@@ -122,7 +126,7 @@ async function loadWorker(lang: string, attempt: OcrAttempt, onProgress?: (progr
 export async function recognizeImage(
   canvas: HTMLCanvasElement,
   lang: string,
-  onProgress?: (progress: number) => void,
+  onProgress?: (progress: number, status?: string) => void,
   /** во сколько раз растр крупнее страницы: координаты слов возвращаем в точках страницы */
   rasterScale = 1,
 ): Promise<OcrLine[]> {

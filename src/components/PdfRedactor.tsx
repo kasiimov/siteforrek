@@ -13,6 +13,8 @@ import {
   fitImage,
   insertBlankPage,
   objectSize,
+  pickBackgroundColor,
+  rotateEditorPage,
 } from '../lib/docEditor'
 import type {
   CoverRect,
@@ -77,6 +79,15 @@ const HINTS: Record<Tool, string> = {
 const STAMP_TOOLS: Tool[] = ['check', 'cross']
 /** Фигуры рисуются протяжкой рамки. */
 const DRAG_TOOLS: Tool[] = ['highlight', 'rect', 'line', 'arrow', 'ink']
+
+/** Что сейчас делает распознавание: на телефоне загрузка языка — самое долгое место. */
+const OCR_STATUS_LABELS: Record<string, string> = {
+  'loading tesseract core': 'Движок…',
+  'initializing tesseract': 'Старт…',
+  'loading language traineddata': 'Язык…',
+  'initializing api': 'Словарь…',
+  'recognizing text': 'Текст…',
+}
 
 const HIGHLIGHT_COLORS = [
   { value: 'FDE047', label: 'Жёлтый' },
@@ -173,6 +184,8 @@ export function PdfRedactor() {
   const [ocrLang, setOcrLang] = useState<OcrLang>('rus+eng')
   const [ocrBusy, setOcrBusy] = useState(false)
   const [ocrProgress, setOcrProgress] = useState(0)
+  const [ocrStatus, setOcrStatus] = useState('')
+  const [dropPage, setDropPage] = useState<number | null>(null)
   const [focusToken, setFocusToken] = useState(0)
   const [erasePreview, setErasePreview] = useState<CoverRect | null>(null)
   const [selectedCover, setSelectedCover] = useState<number | null>(null)
@@ -199,7 +212,11 @@ export function PdfRedactor() {
   const eraseRef = useRef<{ x: number; y: number } | null>(null)
   const indexRef = useRef(0)
   const ocrBusyRef = useRef(false)
+  const baseCanvasRef = useRef<HTMLCanvasElement | null>(null)
   const recognizeRef = useRef<(target?: EditorPage, targetIndex?: number) => Promise<void>>(async () => {})
+  const pressRef = useRef<{ index: number; x: number; y: number; active: boolean } | null>(null)
+  const dropRef = useRef<number | null>(null)
+  const movedRef = useRef(false)
   const markRef = useRef<{ tool: Tool; start: { x: number; y: number }; points: { x: number; y: number }[] } | null>(null)
   const drawingRef = useRef<MarkObject | null>(null)
   const buildMarkRef = useRef<(tool: Tool, start: { x: number; y: number }, end: { x: number; y: number }, points: { x: number; y: number }[], id: string) => MarkObject>(() => {
@@ -217,6 +234,19 @@ export function PdfRedactor() {
   const coverList = page?.covers ?? []
   const selectedCoverRect = selectedCover !== null ? (coverList[selectedCover] ?? null) : null
   const zoomPercent = Math.round(zoom * 100)
+  const ocrLabel =
+    ocrStatus === 'recognizing text'
+      ? `${Math.round(ocrProgress * 100)}%`
+      : (OCR_STATUS_LABELS[ocrStatus] ?? 'Готовим…')
+  // Пипетка для заплаток: берём цвет фона из того же растра, что видит пользователь.
+  const sampleCoverColor = (x: number, y: number, width: number, height: number) => {
+    // На странице-фото лист рисуется картинкой, поэтому цвет берём из неё.
+    const base = page?.objects.find((object): object is ImageObject => object.kind === 'image' && Boolean(object.base))
+    if (page?.source === null && base && baseCanvasRef.current) {
+      return pickBackgroundColor(baseCanvasRef.current, { x, y, width, height }, 1)
+    }
+    return pickBackgroundColor(canvasRef.current, { x, y, width, height }, scale)
+  }
   const pageRuns = page && page.source !== null ? (runs[page.source] ?? []) : []
   const covers = page?.covers ?? []
   const textCount = page ? page.objects.filter((object) => object.kind === 'text').length : 0
@@ -250,6 +280,35 @@ export function PdfRedactor() {
   useEffect(() => {
     if (page) void loadRuns(page)
   }, [loadRuns, page])
+
+  // Копия фото-подложки в памяти: нужна пипетке для цвета заплаток.
+  const baseImage = page?.objects.find((object): object is ImageObject => object.kind === 'image' && Boolean(object.base))
+  const baseImageId = baseImage?.id ?? null
+  const baseBoxWidth = page?.box.width ?? 0
+  const baseBoxHeight = page?.box.height ?? 0
+
+  useEffect(() => {
+    baseCanvasRef.current = null
+    if (!baseImage) return
+    let cancelled = false
+    void createImageBitmap(
+      new Blob([baseImage.data as BlobPart], { type: baseImage.type === 'png' ? 'image/png' : 'image/jpeg' }),
+    )
+      .then((bitmap) => {
+        if (cancelled) return
+        const canvas = document.createElement('canvas')
+        canvas.width = Math.max(1, Math.round(baseBoxWidth))
+        canvas.height = Math.max(1, Math.round(baseBoxHeight))
+        canvas.getContext('2d')?.drawImage(bitmap, baseImage.x, baseImage.y, baseImage.width, baseImage.height)
+        bitmap.close()
+        baseCanvasRef.current = canvas
+      })
+      .catch(() => undefined)
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [baseImageId, baseBoxWidth, baseBoxHeight])
 
   const resetDoc = () => {
     void docRef.current?.destroy()
@@ -506,6 +565,7 @@ export function PdfRedactor() {
       width: Math.min(run.width + 3, page.box.width - Math.max(0, run.x - 1.5)),
       height: run.height + 3,
       owner: object.id,
+      color: sampleCoverColor(run.x - 1.5, run.y - 1.5, run.width + 3, run.height + 3),
     }
     addPageObject([object], [cover])
     setSelected(object.id)
@@ -747,6 +807,9 @@ export function PdfRedactor() {
   const rotatePageBy = async (delta: number) => {
     if (!page) return
 
+    // Всё содержимое едет вместе с листом: текст, подписи, пятна и пометки.
+    const rotated = rotateEditorPage(page, delta > 0)
+
     if (page.source === null) {
       const base = page.objects.find((object): object is ImageObject => object.kind === 'image' && Boolean(object.base))
       if (!base) return
@@ -755,8 +818,8 @@ export function PdfRedactor() {
           new Blob([base.data as BlobPart], { type: base.type === 'png' ? 'image/png' : 'image/jpeg' }),
         )
         const canvas = document.createElement('canvas')
-        canvas.width = bitmap.height
-        canvas.height = bitmap.width
+        canvas.width = rotated.box.width
+        canvas.height = rotated.box.height
         const context = canvas.getContext('2d')
         if (!context) return
         context.translate(canvas.width / 2, canvas.height / 2)
@@ -766,44 +829,28 @@ export function PdfRedactor() {
         const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'))
         if (!blob) return
         const bytes = new Uint8Array(await blob.arrayBuffer())
-        mutate((current) =>
-          current.map((item, itemIndex) =>
-            itemIndex === index
-              ? {
-                  ...item,
-                  box: { width: item.box.height, height: item.box.width },
-                  objects: item.objects.map((object) =>
-                    object.id === base.id
-                      ? { ...base, data: bytes, type: 'png' as const, x: 0, y: 0, width: item.box.height, height: item.box.width }
-                      : object,
-                  ),
-                }
-              : item,
+        const nextPage: EditorPage = {
+          ...rotated,
+          objects: rotated.objects.map((object) =>
+            object.kind === 'image' && object.base
+              ? { ...object, data: bytes, type: 'png' as const, x: 0, y: 0, width: rotated.box.width, height: rotated.box.height }
+              : object,
           ),
-        )
+        }
+        mutate((current) => current.map((item, itemIndex) => (itemIndex === index ? nextPage : item)))
         setSelected(null)
         setSelectedCover(null)
-        setMessage({ tone: 'info', text: 'Фото повёрнуто. Надписи и пометки остались на своих местах.' })
+        setMessage({ tone: 'info', text: 'Фото и всё, что на нём было, повёрнуто вместе со страницей.' })
       } catch {
         setMessage({ tone: 'error', text: 'Не получилось повернуть фото — попробуйте другой файл.' })
       }
       return
     }
 
-    mutate((current) =>
-      current.map((item, itemIndex) =>
-        itemIndex === index
-          ? {
-              ...item,
-              rotate: (((item.rotate ?? 0) + delta) % 360 + 360) % 360,
-              box: { width: item.box.height, height: item.box.width },
-            }
-          : item,
-      ),
-    )
+    mutate((current) => current.map((item, itemIndex) => (itemIndex === index ? rotated : item)))
     setSelected(null)
     setSelectedCover(null)
-    setMessage({ tone: 'info', text: 'Страница повёрнута. Надписи и пометки остались на своих местах.' })
+    setMessage({ tone: 'info', text: 'Страница повёрнута вместе с текстом и пометками.' })
   }
 
   /** Подпись из модального окна встаёт картинкой по центру листа. */
@@ -996,7 +1043,18 @@ export function PdfRedactor() {
         mutate((current) =>
           current.map((item, itemIndex) =>
             itemIndex === index
-              ? { ...item, covers: [...(item.covers ?? []), { ...preview, width: Math.max(3, preview.width), height: Math.max(2, preview.height) }] }
+              ? {
+                  ...item,
+                  covers: [
+                    ...(item.covers ?? []),
+                    {
+                      ...preview,
+                      width: Math.max(3, preview.width),
+                      height: Math.max(2, preview.height),
+                      color: sampleCoverColor(preview.x, preview.y, preview.width, preview.height),
+                    },
+                  ],
+                }
               : item,
           ),
         )
@@ -1107,9 +1165,16 @@ export function PdfRedactor() {
 
     try {
       const { canvas, scale: rasterScale } = await rasterPage(model)
-      const lines = await recognizeImage(canvas, ocrLang, (progress) => setOcrProgress(progress), rasterScale)
-      canvas.width = 0
-      canvas.height = 0
+      const lines = await recognizeImage(
+        canvas,
+        ocrLang,
+        (progress, status) => {
+          setOcrProgress(progress)
+          setOcrStatus(status ?? '')
+        },
+        rasterScale,
+      )
+      // Растр ещё нужен: из него берём цвет фона для заплаток.
 
       if (!lines.length) {
         setMessage({
@@ -1133,6 +1198,7 @@ export function PdfRedactor() {
           size,
           color: TEXT_COLORS[0].value,
           width: Math.min(model.box.width - line.x - 4, Math.max(line.width + 10, 40)),
+          ocr: true,
         }
         objects.push(object)
         newCovers.push({
@@ -1141,13 +1207,28 @@ export function PdfRedactor() {
           width: Math.min(line.width + 2, model.box.width - line.x + 1),
           height: line.height + 2,
           owner: object.id,
+          color: pickBackgroundColor(canvas, { x: line.x, y: line.y, width: line.width, height: line.height }, rasterScale),
         })
       }
 
+      // Повторное распознавание заменяет прошлые строки, а не дублирует их.
+      const previousOcr = new Set(
+        model.objects.filter((object) => object.kind === 'text' && object.ocr).map((object) => object.id),
+      )
       mutate((current) =>
         current.map((item, itemIndex) =>
           itemIndex === at
-            ? { ...item, objects: [...item.objects, ...objects], covers: [...(item.covers ?? []), ...newCovers] }
+            ? {
+                ...item,
+                objects: [
+                  ...item.objects.filter((object) => !(object.kind === 'text' && object.ocr) && !previousOcr.has(object.id)),
+                  ...objects,
+                ],
+                covers: [
+                  ...(item.covers ?? []).filter((cover) => !cover.owner || !previousOcr.has(cover.owner)),
+                  ...newCovers,
+                ],
+              }
             : item,
         ),
       )
@@ -1599,7 +1680,7 @@ export function PdfRedactor() {
                 title="Распознать текст на странице (OCR)"
               >
                 <Icon d={ICONS.scan} />
-                <span>{ocrBusy ? `${Math.round(ocrProgress * 100)}%` : 'Распознать'}</span>
+                <span>{ocrBusy ? ocrLabel : 'Распознать'}</span>
               </button>
               <select
                 className="ed-select"
@@ -1656,30 +1737,60 @@ export function PdfRedactor() {
               {pages.map((item, pageIndex) => (
                 <div
                   key={pageIndex}
-                  className={`ed-thumb-wrap${dragPage === pageIndex ? ' is-dragging' : ''}`}
-                  draggable
-                  onDragStart={(event) => {
-                    setDragPage(pageIndex)
-                    event.dataTransfer.effectAllowed = 'move'
-                    event.dataTransfer.setData('text/plain', String(pageIndex))
+                  className={`ed-thumb-wrap${dragPage === pageIndex ? ' is-dragging' : ''}${
+                    dropPage === pageIndex && dragPage !== pageIndex ? ' is-drop' : ''
+                  }`}
+                  data-page-index={pageIndex}
+                  onPointerDown={(event) => {
+                    try {
+                      event.currentTarget.setPointerCapture(event.pointerId)
+                    } catch {
+                      // Синтетические события и старые браузеры не умеют захват — не страшно.
+                    }
+                    pressRef.current = { index: pageIndex, x: event.clientX, y: event.clientY, active: false }
                   }}
-                  onDragOver={(event) => {
-                    if (dragPage === null || dragPage === pageIndex) return
-                    event.preventDefault()
-                    event.dataTransfer.dropEffect = 'move'
+                  onPointerMove={(event) => {
+                    const press = pressRef.current
+                    if (!press || press.index !== pageIndex) return
+                    if (!press.active) {
+                      if (Math.hypot(event.clientX - press.x, event.clientY - press.y) < 12) return
+                      press.active = true
+                      setDragPage(press.index)
+                    }
+                    // Ищем миниатюру под пальцем: на неё и встанет страница.
+                    const under = document.elementFromPoint(event.clientX, event.clientY)
+                    const tile = under instanceof Element ? under.closest('[data-page-index]') : null
+                    const target = tile ? Number(tile.getAttribute('data-page-index')) : null
+                    dropRef.current = target
+                    setDropPage(target)
                   }}
-                  onDrop={(event) => {
-                    event.preventDefault()
-                    const from = dragPage ?? Number(event.dataTransfer.getData('text/plain'))
+                  onPointerUp={() => {
+                    const press = pressRef.current
+                    pressRef.current = null
+                    const target = dropRef.current
+                    dropRef.current = null
                     setDragPage(null)
-                    movePage(from, pageIndex)
+                    setDropPage(null)
+                    if (press?.active && target !== null && target !== press.index) {
+                      movedRef.current = true
+                      movePage(press.index, target)
+                    }
                   }}
-                  onDragEnd={() => setDragPage(null)}
+                  onPointerCancel={() => {
+                    pressRef.current = null
+                    dropRef.current = null
+                    setDragPage(null)
+                    setDropPage(null)
+                  }}
                 >
                   <button
                     type="button"
                     className={`ed-thumb${pageIndex === index ? ' is-active' : ''}`}
                     onClick={() => {
+                      if (movedRef.current) {
+                        movedRef.current = false
+                        return
+                      }
                       setIndex(pageIndex)
                       setSelected(null)
                       setSelectedCover(null)
@@ -1758,6 +1869,7 @@ export function PdfRedactor() {
                     top: Math.round(cover.y * scale),
                     width: Math.round(cover.width * scale),
                     height: Math.round(cover.height * scale),
+                    background: cover.color ? `#${cover.color}` : undefined,
                   }}
                   onPointerDown={(event) => {
                     if (tool !== 'erase' && tool !== 'select') return

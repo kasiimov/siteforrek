@@ -23,6 +23,8 @@ export type TextObject = ObjectBase & {
   width: number
   bold?: boolean
   italic?: boolean
+  /** текст пришёл из распознавания: повторный OCR его заменяет, а не дублирует */
+  ocr?: boolean
 }
 
 export type ImageObject = ObjectBase & {
@@ -63,7 +65,15 @@ export type EditorObject = TextObject | ImageObject | MarkObject
  * Белое пятно поверх исходного содержимого: так убирают старый текст, фото и штампы.
  * owner — объект, ради которого пятно появилось: вместе с ним оно и удаляется.
  */
-export type CoverRect = { x: number; y: number; width: number; height: number; owner?: string }
+export type CoverRect = {
+  x: number
+  y: number
+  width: number
+  height: number
+  owner?: string
+  /** цвет заплатки под пипеткой: на цветном фоне белый прямоугольник выглядит дырой */
+  color?: string
+}
 
 export type EditorPage = {
   /** номер страницы в исходном PDF (с нуля) или null для пустого листа */
@@ -397,7 +407,7 @@ export async function composePdf(options: ComposeOptions): Promise<{ blob: Blob;
         y: Math.min(y1, y2),
         width,
         height,
-        color: rgb(1, 1, 1),
+        color: hexToRgb(cover.color ?? 'FFFFFF'),
       })
     }
 
@@ -423,4 +433,126 @@ export async function composePdf(options: ComposeOptions): Promise<{ blob: Blob;
   const copy = new Uint8Array(bytes.byteLength)
   copy.set(bytes)
   return { blob: new Blob([copy], { type: 'application/pdf' }), objects, pages: targets.length }
+}
+
+/**
+ * Поворот страницы вместе с содержимым: текст, картинки, пятна и пометки
+ * переезжают вслед за листом, чтобы ничего не разъезжалось.
+ */
+export function rotateEditorPage(page: EditorPage, clockwise: boolean): EditorPage {
+  const oldWidth = page.box.width
+  const oldHeight = page.box.height
+
+  const point = (x: number, y: number): { x: number; y: number } =>
+    clockwise ? { x: oldHeight - y, y: x } : { x: y, y: oldWidth - x }
+
+  const rect = (r: { x: number; y: number; width: number; height: number }) => {
+    const [cornerA, cornerB] = clockwise
+      ? [point(r.x, r.y), point(r.x + r.width, r.y + r.height)]
+      : [point(r.x + r.width, r.y + r.height), point(r.x, r.y)]
+    return {
+      x: Math.min(cornerA.x, cornerB.x),
+      y: Math.min(cornerA.y, cornerB.y),
+      width: Math.abs(cornerB.x - cornerA.x),
+      height: Math.abs(cornerB.y - cornerA.y),
+    }
+  }
+
+  const box = { width: oldHeight, height: oldWidth }
+
+  const objects: EditorObject[] = page.objects.map((object) => {
+    if (object.kind === 'text') {
+      const height = Math.max(object.size * 1.3, objectSize(object).height)
+      const moved = rect({ x: object.x, y: object.y, width: object.width, height })
+      return {
+        ...object,
+        x: moved.x,
+        y: moved.y,
+        width: Math.max(40, Math.min(moved.width, box.width - moved.x - 6)),
+      }
+    }
+
+    if (object.kind === 'mark') {
+      const moved = rect(object)
+      return {
+        ...object,
+        ...moved,
+        flipX: object.mark === 'line' || object.mark === 'arrow' ? !object.flipY : object.flipX,
+        flipY: object.mark === 'line' || object.mark === 'arrow' ? object.flipX : object.flipY,
+        points: object.points?.map((item) => point(item.x, item.y)),
+      }
+    }
+
+    return { ...object, ...rect(object) }
+  })
+
+  const covers = (page.covers ?? []).map((cover) => ({ ...cover, ...rect(cover) }))
+
+  return {
+    ...page,
+    box,
+    objects,
+    covers,
+    rotate: page.source === null ? page.rotate : (((page.rotate ?? 0) + (clockwise ? 90 : -90)) % 360 + 360) % 360,
+  }
+}
+
+/**
+ * Пипетка: самый частый светлый цвет в области — это фон. Нужен, чтобы
+ * заплатка на сером скане или цветной таблице не выглядела белой дырой.
+ */
+export function pickBackgroundColor(
+  canvas: HTMLCanvasElement | null,
+  area: { x: number; y: number; width: number; height: number },
+  factor = 1,
+): string {
+  const fallback = 'FFFFFF'
+  if (!canvas) return fallback
+  const context = canvas.getContext('2d', { willReadFrequently: true })
+  if (!context) return fallback
+
+  const left = Math.max(0, Math.round(area.x * factor))
+  const top = Math.max(0, Math.round(area.y * factor))
+  const width = Math.min(canvas.width - left, Math.round(area.width * factor))
+  const height = Math.min(canvas.height - top, Math.round(area.height * factor))
+  if (width < 1 || height < 1) return fallback
+
+  try {
+    const data = context.getImageData(left, top, width, height).data
+    // Сетка из 32 оттенков на канал: похожие пиксели складываются в один бакет,
+    // внутри бакета считаем средний цвет, чтобы попасть в фон точно.
+    const buckets = new Map<number, { r: number; g: number; b: number; count: number }>()
+    const step = Math.max(1, Math.floor(width / 64))
+    for (let py = 0; py < height; py += step) {
+      for (let px = 0; px < width; px += step) {
+        const offset = (py * width + px) * 4
+        if (data[offset + 3] < 200) continue
+        const key = ((data[offset] >> 3) << 10) | ((data[offset + 1] >> 3) << 5) | (data[offset + 2] >> 3)
+        const bucket = buckets.get(key)
+        if (bucket) {
+          bucket.r += data[offset]
+          bucket.g += data[offset + 1]
+          bucket.b += data[offset + 2]
+          bucket.count += 1
+        } else {
+          buckets.set(key, { r: data[offset], g: data[offset + 1], b: data[offset + 2], count: 1 })
+        }
+      }
+    }
+
+    let best: { r: number; g: number; b: number; count: number } | null = null
+    for (const bucket of buckets.values()) {
+      if (!best || bucket.count > best.count) best = bucket
+    }
+    if (!best) return fallback
+
+    const r = Math.round(best.r / best.count)
+    const g = Math.round(best.g / best.count)
+    const b = Math.round(best.b / best.count)
+    // Слишком тёмный «фон» — это сам текст, заплатку делаем белой.
+    if (r + g + b < 240) return fallback
+    return [r, g, b].map((value) => value.toString(16).padStart(2, '0')).join('').toUpperCase()
+  } catch {
+    return fallback
+  }
 }

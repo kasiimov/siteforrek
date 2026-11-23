@@ -5076,3 +5076,16 @@ select.field-input option {
     display: flex;
   }
 }
+
+/* Куда встанет страница при перетаскивании миниатюры. */
+.ed-thumb-wrap.is-drop .ed-thumb-page {
+  box-shadow: 0 0 0 2px var(--ed-red);
+}
+
+.ed-thumb-wrap.is-drop::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: 6px;
+  pointer-events: none;
+}
