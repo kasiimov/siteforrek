@@ -1,6 +1,6 @@
-import { PDFDocument, PDFName, rgb } from 'pdf-lib'
+import { LineCapStyle, PDFDocument, PDFName, rgb, degrees } from 'pdf-lib'
 import fontkit from '@pdf-lib/fontkit'
-import type { PDFPage } from 'pdf-lib'
+import type { PDFFont, PDFPage } from 'pdf-lib'
 
 /** Модель редактора: страница-источник + объекты, которые пользователь добавил. */
 
@@ -21,6 +21,8 @@ export type TextObject = ObjectBase & {
   color: string
   /** ширина блока в точках — по ней текст переносится */
   width: number
+  bold?: boolean
+  italic?: boolean
 }
 
 export type ImageObject = ObjectBase & {
@@ -33,7 +35,29 @@ export type ImageObject = ObjectBase & {
   base?: boolean
 }
 
-export type EditorObject = TextObject | ImageObject
+export type MarkKind = 'highlight' | 'rect' | 'line' | 'arrow' | 'check' | 'cross' | 'ink'
+
+/**
+ * Пометка на странице: выделение, рамка, линия, стрелка, галочка, крестик и рисунок от руки.
+ * Живёт в координатах страницы и при сохранении рисуется поверх содержимого.
+ */
+export type MarkObject = ObjectBase & {
+  kind: 'mark'
+  mark: MarkKind
+  width: number
+  height: number
+  color: string
+  /** толщина линии в точках */
+  stroke: number
+  opacity?: number
+  /** линия или стрелка шли справа налево / снизу вверх */
+  flipX?: boolean
+  flipY?: boolean
+  /** карандаш: точки в координатах страницы */
+  points?: { x: number; y: number }[]
+}
+
+export type EditorObject = TextObject | ImageObject | MarkObject
 
 /**
  * Белое пятно поверх исходного содержимого: так убирают старый текст, фото и штампы.
@@ -50,6 +74,8 @@ export type EditorPage = {
   covers?: CoverRect[]
   /** на странице не было текстового слоя — значит, это скан или фото */
   scanned?: boolean
+  /** поворот страницы на 90/180/270 градусов поверх исходного */
+  rotate?: number
 }
 
 export const TEXT_COLORS = [
@@ -95,6 +121,7 @@ export function wrapTextToWidth(
 /** Сколько места занимает объект — нужно и для перетаскивания, и для рамки выделения. */
 export function objectSize(object: EditorObject, lineHeight = 1.3): { width: number; height: number } {
   if (object.kind === 'image') return { width: object.width, height: object.height }
+  if (object.kind === 'mark') return { width: object.width, height: object.height }
   // Ширина символа примерно 0.52 кегля: этого хватает, чтобы оценить перенос строк.
   const perLine = Math.max(1, Math.floor(object.width / Math.max(1, object.size * 0.52)))
   const lines = object.text
@@ -166,11 +193,19 @@ export function fitImage(box: PageBox, width: number, height: number, share = 0.
   return { width: Math.round(drawWidth), height: Math.round(drawHeight) }
 }
 
-async function loadEditorFontBytes(): Promise<ArrayBuffer> {
-  const url = new URL('fonts/watermark.ttf', document.baseURI).href
+async function loadEditorFontBytes(name = 'watermark'): Promise<ArrayBuffer> {
+  const url = new URL(`fonts/${name}.ttf`, document.baseURI).href
   const response = await fetch(url)
   if (!response.ok) throw new Error('Не удалось загрузить шрифт для текста')
   return response.arrayBuffer()
+}
+
+/** Шрифт для текста: обычный, жирный, курсив или жирный курсив. */
+function fontFileFor(bold?: boolean, italic?: boolean): string {
+  if (bold && italic) return 'ptsans-bolditalic'
+  if (bold) return 'ptsans-bold'
+  if (italic) return 'ptsans-italic'
+  return 'watermark'
 }
 
 function hexToRgb(hex: string) {
@@ -203,7 +238,16 @@ export async function composePdf(options: ComposeOptions): Promise<{ blob: Blob;
 
   const out = await PDFDocument.create()
   out.registerFontkit(fontkit)
-  const font = await out.embedFont(await loadEditorFontBytes(), { subset: true })
+  const fontCache = new Map<string, PDFFont>()
+  // Жирный и курсив подключаем только если они действительно есть в тексте.
+  const getFont = async (bold?: boolean, italic?: boolean): Promise<PDFFont> => {
+    const key = fontFileFor(bold, italic)
+    const cached = fontCache.get(key)
+    if (cached) return cached
+    const embedded = await out.embedFont(await loadEditorFontBytes(key), { subset: true })
+    fontCache.set(key, embedded)
+    return embedded
+  }
 
   const source = options.source
     ? await PDFDocument.load(await options.source.arrayBuffer(), { ignoreEncryption: true })
@@ -235,6 +279,7 @@ export async function composePdf(options: ComposeOptions): Promise<{ blob: Blob;
   const drawObject = async (object: EditorObject, target: PDFPage, index: number) => {
     if (object.kind === 'text') {
       if (!object.text.trim()) return
+      const font = await getFont(object.bold, object.italic)
       const [x, top] = options.toPdf(index, object.x, object.y)
       const baseline = top - font.heightAtSize(object.size)
       const lines = wrapTextToWidth(object.text, object.width, (line) => font.widthOfTextAtSize(line, object.size))
@@ -246,6 +291,76 @@ export async function composePdf(options: ComposeOptions): Promise<{ blob: Blob;
         color: hexToRgb(object.color),
         lineHeight: object.size * 1.3,
       })
+      return
+    }
+
+    if (object.kind === 'mark') {
+      const color = hexToRgb(object.color)
+      const stroke = Math.max(0.4, object.stroke)
+      const opacity = object.opacity
+      const left = object.x
+      const top = object.y
+      const right = left + object.width
+      const bottom = top + object.height
+      const line = (ax: number, ay: number, bx: number, by: number) => {
+        const [x1, y1] = options.toPdf(index, ax, ay)
+        const [x2, y2] = options.toPdf(index, bx, by)
+        target.drawLine({
+          start: { x: x1, y: y1 },
+          end: { x: x2, y: y2 },
+          thickness: stroke,
+          color,
+          opacity,
+          lineCap: LineCapStyle.Round,
+        })
+      }
+      const rect = (x: number, y: number, width: number, height: number) => {
+        const [x1, y1] = options.toPdf(index, x, y)
+        const [x2, y2] = options.toPdf(index, x + width, y + height)
+        return { x: Math.min(x1, x2), y: Math.min(y1, y2), width: Math.abs(x2 - x1), height: Math.abs(y2 - y1) }
+      }
+
+      if (object.mark === 'highlight') {
+        target.drawRectangle({ ...rect(left, top, object.width, object.height), color, opacity: opacity ?? 0.35 })
+        return
+      }
+      if (object.mark === 'rect') {
+        target.drawRectangle({
+          ...rect(left, top, object.width, object.height),
+          borderColor: color,
+          borderWidth: stroke,
+          opacity,
+        })
+        return
+      }
+      if (object.mark === 'line' || object.mark === 'arrow') {
+        const startX = object.flipX ? right : left
+        const endX = object.flipX ? left : right
+        const startY = object.flipY ? bottom : top
+        const endY = object.flipY ? top : bottom
+        line(startX, startY, endX, endY)
+        if (object.mark === 'arrow') {
+          const angle = Math.atan2(endY - startY, endX - startX)
+          const size = Math.max(6, stroke * 4)
+          line(endX, endY, endX - Math.cos(angle - 0.5) * size, endY - Math.sin(angle - 0.5) * size)
+          line(endX, endY, endX - Math.cos(angle + 0.5) * size, endY - Math.sin(angle + 0.5) * size)
+        }
+        return
+      }
+      if (object.mark === 'check') {
+        line(left + object.width * 0.08, top + object.height * 0.55, left + object.width * 0.36, top + object.height * 0.9)
+        line(left + object.width * 0.36, top + object.height * 0.9, left + object.width * 0.94, top + object.height * 0.12)
+        return
+      }
+      if (object.mark === 'cross') {
+        line(left + object.width * 0.12, top + object.height * 0.12, right - object.width * 0.12, bottom - object.height * 0.12)
+        line(right - object.width * 0.12, top + object.height * 0.12, left + object.width * 0.12, bottom - object.height * 0.12)
+        return
+      }
+      const points = object.points ?? []
+      for (let position = 1; position < points.length; position++) {
+        line(points[position - 1].x, points[position - 1].y, points[position].x, points[position].y)
+      }
       return
     }
 
@@ -291,6 +406,12 @@ export async function composePdf(options: ComposeOptions): Promise<{ blob: Blob;
       if (object.kind === 'image' && object.base) continue
       await drawObject(object, target, index)
       objects += 1
+    }
+
+    // Поворот страницы: пользователь выпрямил кривой скан.
+    if (model.rotate) {
+      const base = target.getRotation().angle
+      target.setRotation(degrees(((base + model.rotate) % 360 + 360) % 360))
     }
 
     // Пометки и подписи-аннотации живут отдельно от содержимого страницы:

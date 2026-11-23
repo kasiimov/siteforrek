@@ -4766,3 +4766,313 @@ select.field-input option {
 .editor-app .panel-empty .ad-mini {
   margin-top: 2px;
 }
+
+/* ---------- инструменты редактора: фигуры, пометки, подпись ---------- */
+
+.editor-app .ed-shapes {
+  position: relative;
+}
+
+.editor-app .ed-shapes-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 30;
+  display: grid;
+  gap: 2px;
+  min-width: 136px;
+  padding: 5px;
+  border: 1px solid var(--ed-line-strong);
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 18px 36px -22px rgba(15, 23, 42, 0.6);
+}
+
+.editor-app .ed-shapes-menu button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 9px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: #3c4250;
+  font-size: 0.78rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.editor-app .ed-shapes-menu button:hover {
+  background: #f2f3f6;
+}
+
+.editor-app .ed-shapes-menu button.is-active {
+  background: var(--ed-red-soft);
+  color: var(--ed-red);
+}
+
+.editor-app .ed-shapes-menu svg {
+  width: 14px;
+  height: 14px;
+}
+
+.editor-app .ed-tool > span > svg {
+  display: block;
+}
+
+.editor-app .redactor-mark {
+  cursor: grab;
+}
+
+.editor-app .redactor-mark-svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.editor-app .redactor-mark-highlight {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 1px;
+  pointer-events: none;
+}
+
+.editor-app .redactor-stage.tool-highlight,
+.editor-app .redactor-stage.tool-ink,
+.editor-app .redactor-stage.tool-rect,
+.editor-app .redactor-stage.tool-line,
+.editor-app .redactor-stage.tool-arrow,
+.editor-app .redactor-stage.tool-check,
+.editor-app .redactor-stage.tool-cross {
+  cursor: crosshair;
+}
+
+.editor-app .ed-tool-settings {
+  display: grid;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid var(--ed-line);
+  border-radius: 10px;
+  background: #f8f9fb;
+}
+
+/* модальное окно подписи */
+
+.editor-app .ed-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(15, 23, 42, 0.45);
+}
+
+.editor-app .ed-modal-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: min(560px, 100%);
+  max-height: 90dvh;
+  overflow-y: auto;
+  padding: 16px;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 30px 60px -30px rgba(15, 23, 42, 0.65);
+}
+
+.editor-app .ed-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.editor-app .ed-modal-head h4 {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.editor-app .ed-modal-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 3px;
+  border-radius: 9px;
+  background: #f1f2f5;
+}
+
+.editor-app .ed-modal-tabs button {
+  flex: 1;
+  padding: 7px 8px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  font-size: 0.78rem;
+  color: #4b5160;
+  cursor: pointer;
+}
+
+.editor-app .ed-modal-tabs button.is-active {
+  background: #fff;
+  color: var(--ed-text);
+  font-weight: 600;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.14);
+}
+
+.editor-app .ed-sign-canvas {
+  width: 100%;
+  height: auto;
+  border: 1px dashed var(--ed-line-strong);
+  border-radius: 10px;
+  background: #fff;
+  touch-action: none;
+  cursor: crosshair;
+}
+
+.editor-app .ed-modal-row {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.editor-app .ed-modal-upload {
+  display: grid;
+  place-items: center;
+  gap: 6px;
+  padding: 22px;
+  border: 1.5px dashed var(--ed-line-strong);
+  border-radius: 10px;
+  font-size: 0.82rem;
+  color: #4b5160;
+  cursor: pointer;
+}
+
+.editor-app .ed-modal-upload input {
+  display: none;
+}
+
+/* ---------- мобильная версия редактора ---------- */
+
+/* Кнопки миниатюр на телефоне нужны всегда: наведения мышью там нет. */
+@media (hover: none) {
+  .ed-thumb-tools {
+    display: flex;
+  }
+
+  .ed-thumb-tools button {
+    width: 26px;
+    height: 26px;
+    font-size: 0.78rem;
+  }
+}
+
+/* Уведомление должно быть выше шторки свойств, иначе его не видно. */
+.editor-app .message {
+  z-index: 45;
+}
+
+/* В режиме «Выбор» страницу можно прокрутить пальцем, а не только таскать. */
+.editor-app .redactor-stage.tool-select {
+  touch-action: pan-y pinch-zoom;
+}
+
+.editor-app .ed-pages-toggle {
+  display: none;
+}
+
+@media (max-width: 900px) {
+  .editor-app .ed-pages-toggle {
+    display: inline-flex;
+  }
+
+  /* Миниатюры на телефоне — горизонтальная полоса над листом. */
+  .editor-app.show-thumbs .ed-work {
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .editor-app.show-thumbs .ed-rail {
+    grid-row: 2;
+    grid-column: 1;
+  }
+
+  .editor-app.show-thumbs .ed-thumbs {
+    display: flex;
+    grid-row: 1;
+    grid-column: 1 / -1;
+    flex-direction: row;
+    height: 108px;
+    border-right: 0;
+    border-bottom: 1px solid var(--ed-line);
+  }
+
+  .editor-app.show-thumbs .ed-thumbs-head {
+    display: none;
+  }
+
+  .editor-app.show-thumbs .ed-thumbs-list {
+    flex-direction: row;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 8px;
+    gap: 8px;
+  }
+
+  .editor-app.show-thumbs .ed-thumb-wrap {
+    flex: 0 0 auto;
+    width: 72px;
+  }
+
+  .editor-app.show-thumbs .ed-thumb-page {
+    max-height: 68px;
+  }
+
+  .editor-app.show-thumbs .ed-canvas-area {
+    grid-row: 2;
+    grid-column: 2 / -1;
+  }
+
+  .editor-app .ed-nav-btn {
+    width: 32px;
+    height: 32px;
+    font-size: 0.95rem;
+  }
+
+  .editor-app .ed-icon-btn {
+    width: 32px;
+    height: 32px;
+  }
+
+  .editor-app .ed-zoom-value {
+    min-width: 42px;
+    text-align: center;
+  }
+
+  .editor-app .ed-tool {
+    min-width: 56px;
+  }
+
+  .editor-app .ed-modal-card {
+    gap: 10px;
+    padding: 14px;
+  }
+}
+
+@media (max-width: 760px) {
+  .editor-app.show-thumbs .ed-canvas-area {
+    grid-column: 1 / -1;
+  }
+}
+
+.editor-app .ed-status-group {
+  white-space: nowrap;
+}
+
+@media (max-width: 900px) {
+  /* На узком экране кнопки миниатюр показываем всегда: наведения нет. */
+  .ed-thumb-tools {
+    display: flex;
+  }
+}

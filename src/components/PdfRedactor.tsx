@@ -14,7 +14,15 @@ import {
   insertBlankPage,
   objectSize,
 } from '../lib/docEditor'
-import type { CoverRect, EditorObject, EditorPage, ImageObject, TextObject, ToPdfPoint } from '../lib/docEditor'
+import type {
+  CoverRect,
+  EditorObject,
+  EditorPage,
+  ImageObject,
+  MarkObject,
+  TextObject,
+  ToPdfPoint,
+} from '../lib/docEditor'
 import { readPageRuns, renderPageRaster } from '../lib/pdfText'
 import type { TextRun } from '../lib/pdfText'
 import { OCR_LANGS, recognizeImage } from '../lib/ocr'
@@ -33,7 +41,17 @@ import type { DocKind } from '../lib/openDoc'
 import { pagesToDocx, pagesToText } from '../lib/exportDoc'
 import { AdMini } from './Ads'
 
-type Tool = 'select' | 'text' | 'erase'
+type Tool =
+  | 'select'
+  | 'text'
+  | 'erase'
+  | 'highlight'
+  | 'ink'
+  | 'rect'
+  | 'line'
+  | 'arrow'
+  | 'check'
+  | 'cross'
 type TextMode = 'flow' | 'free'
 type Message = { tone: 'ok' | 'error' | 'info'; text: string }
 
@@ -46,7 +64,26 @@ const HINTS: Record<Tool, string> = {
   select: 'Щёлкните объект, чтобы выбрать. Тащите мышкой или пальцем, а за уголок меняйте размер.',
   text: 'Нажмите на готовую строку — её текст откроется справа и его можно править. Пустое место — новый текст.',
   erase: 'Проведите по странице рамкой — эта область станет белой. Так убирают старый текст, фото и штампы.',
+  highlight: 'Проведите по строке — сверху ляжет полупрозрачная полоса. Цвет и толщину — справа.',
+  ink: 'Рисуйте от руки мышкой или пальцем. Толщина и цвет пера — справа.',
+  rect: 'Растяните рамку вокруг важного места.',
+  line: 'Проведите линию: подчеркнуть или зачеркнуть.',
+  arrow: 'Растяните стрелку — покажет, где ошибка.',
+  check: 'Щёлкните по листу — поставится галочка. Размер ставится справа.',
+  cross: 'Щёлкните по листу — поставится крестик. Размер ставится справа.',
 }
+
+/** Одиночные штампы: один тап ставит готовую отметку. */
+const STAMP_TOOLS: Tool[] = ['check', 'cross']
+/** Фигуры рисуются протяжкой рамки. */
+const DRAG_TOOLS: Tool[] = ['highlight', 'rect', 'line', 'arrow', 'ink']
+
+const HIGHLIGHT_COLORS = [
+  { value: 'FDE047', label: 'Жёлтый' },
+  { value: '86EFAC', label: 'Зелёный' },
+  { value: 'FDBA74', label: 'Оранжевый' },
+  { value: '93C5FD', label: 'Голубой' },
+] as const
 
 const IMAGE_HINT = 'Фото встанет на страницу. Тащите его мышкой или пальцем, а за уголок справа снизу меняйте размер.'
 
@@ -96,6 +133,15 @@ const ICONS = {
   close: 'M6 6l12 12M18 6 6 18',
   pages: 'M8 3h8v4H8zM6 7h12v14H6zM9 11h6M9 15h6',
   scan: 'M4 8V5h3M20 8V5h-3M4 16v3h3M20 16v3h-3M7 12h10',
+  marker: 'M5 19l3-1 9-9-3-3-9 9-1 3zM14 5l3 3',
+  pen: 'M4 20l3.5-.8L19 7.7l-2.7-2.7L4.8 16.5zM15 4.5l3 3',
+  rect: 'M4 5h16v14H4z',
+  line: 'M5 19L19 5',
+  arrow: 'M5 19L19 5M19 5h-6M19 5v6',
+  check: 'M5 13l4 4L19 7',
+  cross: 'M6 6l12 12M18 6L6 18',
+  sign: 'M3 16c3.5 0 5-9 8-9s1.5 7 4 7 2-4 6-4',
+  rotate: 'M20 12a8 8 0 1 1-2.4-5.7M20 4v5h-5',
   word: 'M4 4h16v16H4zM8 8l1.4 8L12 9l2.6 7L16 8',
   txt: 'M5 4h14v16H5zM8 9h8M8 13h8M8 17h5',
   eye: 'M2 12s3.6-6 10-6 10 6 10 6-3.6 6-10 6S2 12 2 12zM12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6',
@@ -131,6 +177,13 @@ export function PdfRedactor() {
   const [erasePreview, setErasePreview] = useState<CoverRect | null>(null)
   const [selectedCover, setSelectedCover] = useState<number | null>(null)
   const [dragPage, setDragPage] = useState<number | null>(null)
+  const [markColor, setMarkColor] = useState('FDE047')
+  const [penColor, setPenColor] = useState('111111')
+  const [penWidth, setPenWidth] = useState(2)
+  const [stampSize, setStampSize] = useState(32)
+  const [drawing, setDrawing] = useState<MarkObject | null>(null)
+  const [signOpen, setSignOpen] = useState(false)
+  const [shapesOpen, setShapesOpen] = useState(false)
 
   const docRef = useRef<PDFDocumentProxy | null>(null)
   const pageCache = useRef(new Map<number, PDFPageProxy>())
@@ -147,6 +200,11 @@ export function PdfRedactor() {
   const indexRef = useRef(0)
   const ocrBusyRef = useRef(false)
   const recognizeRef = useRef<(target?: EditorPage, targetIndex?: number) => Promise<void>>(async () => {})
+  const markRef = useRef<{ tool: Tool; start: { x: number; y: number }; points: { x: number; y: number }[] } | null>(null)
+  const drawingRef = useRef<MarkObject | null>(null)
+  const buildMarkRef = useRef<(tool: Tool, start: { x: number; y: number }, end: { x: number; y: number }, points: { x: number; y: number }[], id: string) => MarkObject>(() => {
+    throw new Error('not ready')
+  })
 
   pagesRef.current = pages
   indexRef.current = index
@@ -326,7 +384,7 @@ export function PdfRedactor() {
         pageCache.current.set(model.source as number, proxy)
       }
       if (cancelled) return
-      const viewport = proxy.getViewport({ scale })
+      const viewport = proxy.getViewport({ scale, rotation: (proxy.rotate + (model.rotate ?? 0)) % 360 })
       await proxy.render({ canvas, canvasContext: context, viewport }).promise
     }
 
@@ -588,6 +646,199 @@ export function PdfRedactor() {
     [index, mutate],
   )
 
+  const setDrawPreview = (value: MarkObject | null) => {
+    drawingRef.current = value
+    setDrawing(value)
+  }
+
+  /** Собирает пометку по протяжке мыши: маркер, рамка, линия, стрелка, карандаш. */
+  const buildMark = (
+    tool: Tool,
+    start: { x: number; y: number },
+    end: { x: number; y: number },
+    points: { x: number; y: number }[],
+    id: string,
+  ): MarkObject => {
+    const x = Math.min(start.x, end.x)
+    const y = Math.min(start.y, end.y)
+    const width = Math.abs(end.x - start.x)
+    const height = Math.abs(end.y - start.y)
+
+    if (tool === 'ink') {
+      const xs = points.map((point) => point.x)
+      const ys = points.map((point) => point.y)
+      const left = Math.min(...xs)
+      const top = Math.min(...ys)
+      return {
+        kind: 'mark',
+        mark: 'ink',
+        id,
+        x: left,
+        y: top,
+        width: Math.max(0.5, Math.max(...xs) - left),
+        height: Math.max(0.5, Math.max(...ys) - top),
+        color: penColor,
+        stroke: penWidth,
+        points,
+      }
+    }
+
+    if (tool === 'highlight') {
+      return {
+        kind: 'mark',
+        mark: 'highlight',
+        id,
+        x,
+        y,
+        width: Math.max(2, width),
+        height: Math.max(9, height),
+        color: markColor,
+        stroke: 0,
+        opacity: 0.35,
+      }
+    }
+
+    if (tool === 'rect') {
+      return { kind: 'mark', mark: 'rect', id, x, y, width, height, color: penColor, stroke: penWidth }
+    }
+
+    // Линия и стрелка: направление задаётся тем, куда тянули.
+    return {
+      kind: 'mark',
+      mark: tool === 'arrow' ? 'arrow' : 'line',
+      id,
+      x,
+      y,
+      width: Math.max(1, width),
+      height: Math.max(1, height),
+      color: penColor,
+      stroke: penWidth,
+      flipX: end.x < start.x,
+      flipY: end.y < start.y,
+    }
+  }
+
+  buildMarkRef.current = buildMark
+
+  const addMark = (object: MarkObject) => {
+    addPageObject([object])
+    setSelected(object.id)
+    setSelectedCover(null)
+    setPanelOpen(true)
+  }
+
+  const stampMark = (tool: Tool, x: number, y: number) => {
+    if (!page) return
+    const size = Math.max(14, Math.min(120, stampSize))
+    addMark({
+      kind: 'mark',
+      mark: tool === 'check' ? 'check' : 'cross',
+      id: uid(),
+      x: Math.max(0, Math.min(x - size / 2, page.box.width - size)),
+      y: Math.max(0, Math.min(y - size / 2, page.box.height - size)),
+      width: size,
+      height: size,
+      color: penColor === '111111' ? '0F7B4F' : penColor,
+      stroke: Math.max(1.4, size / 11),
+    })
+  }
+
+  /** Поворот страницы: у PDF крутим саму страницу, у фото — перерисовываем снимок. */
+  const rotatePageBy = async (delta: number) => {
+    if (!page) return
+
+    if (page.source === null) {
+      const base = page.objects.find((object): object is ImageObject => object.kind === 'image' && Boolean(object.base))
+      if (!base) return
+      try {
+        const bitmap = await createImageBitmap(
+          new Blob([base.data as BlobPart], { type: base.type === 'png' ? 'image/png' : 'image/jpeg' }),
+        )
+        const canvas = document.createElement('canvas')
+        canvas.width = bitmap.height
+        canvas.height = bitmap.width
+        const context = canvas.getContext('2d')
+        if (!context) return
+        context.translate(canvas.width / 2, canvas.height / 2)
+        context.rotate(delta > 0 ? Math.PI / 2 : -Math.PI / 2)
+        context.drawImage(bitmap, -bitmap.width / 2, -bitmap.height / 2)
+        bitmap.close()
+        const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'))
+        if (!blob) return
+        const bytes = new Uint8Array(await blob.arrayBuffer())
+        mutate((current) =>
+          current.map((item, itemIndex) =>
+            itemIndex === index
+              ? {
+                  ...item,
+                  box: { width: item.box.height, height: item.box.width },
+                  objects: item.objects.map((object) =>
+                    object.id === base.id
+                      ? { ...base, data: bytes, type: 'png' as const, x: 0, y: 0, width: item.box.height, height: item.box.width }
+                      : object,
+                  ),
+                }
+              : item,
+          ),
+        )
+        setSelected(null)
+        setSelectedCover(null)
+        setMessage({ tone: 'info', text: 'Фото повёрнуто. Надписи и пометки остались на своих местах.' })
+      } catch {
+        setMessage({ tone: 'error', text: 'Не получилось повернуть фото — попробуйте другой файл.' })
+      }
+      return
+    }
+
+    mutate((current) =>
+      current.map((item, itemIndex) =>
+        itemIndex === index
+          ? {
+              ...item,
+              rotate: (((item.rotate ?? 0) + delta) % 360 + 360) % 360,
+              box: { width: item.box.height, height: item.box.width },
+            }
+          : item,
+      ),
+    )
+    setSelected(null)
+    setSelectedCover(null)
+    setMessage({ tone: 'info', text: 'Страница повёрнута. Надписи и пометки остались на своих местах.' })
+  }
+
+  /** Подпись из модального окна встаёт картинкой по центру листа. */
+  const insertSignature = async (bytes: Uint8Array) => {
+    if (!page) return
+    try {
+      const bitmap = await createImageBitmap(new Blob([bytes as BlobPart], { type: 'image/png' }))
+      const size = fitImage(page.box, bitmap.width, bitmap.height, 0.42)
+      const position = clampPosition(
+        page.box,
+        Math.round((page.box.width - size.width) / 2),
+        Math.round(page.box.height * 0.6),
+        size.width,
+        size.height,
+      )
+      const object: ImageObject = {
+        kind: 'image',
+        id: uid(),
+        ...position,
+        width: size.width,
+        height: size.height,
+        data: bytes,
+        type: 'png',
+      }
+      bitmap.close()
+      addPageObject([object])
+      setSelected(object.id)
+      setPanelOpen(true)
+      setSignOpen(false)
+      setMessage({ tone: 'ok', text: 'Подпись поставлена. Тащите её мышкой или пальцем и меняйте размер за уголок.' })
+    } catch {
+      setMessage({ tone: 'error', text: 'Не получилось вставить подпись.' })
+    }
+  }
+
   const clearCovers = () => {
     if (!page?.covers?.length) return
     mutate((current) =>
@@ -661,6 +912,20 @@ export function PdfRedactor() {
       const model = pagesRef.current[index]
       if (!model) return
 
+      if (markRef.current) {
+        const stage = canvasRef.current?.getBoundingClientRect()
+        if (!stage) return
+        const x = Math.max(0, Math.min((event.clientX - stage.left) / scale, model.box.width))
+        const y = Math.max(0, Math.min((event.clientY - stage.top) / scale, model.box.height))
+        const current = markRef.current
+        if (current.tool === 'ink') {
+          const last = current.points[current.points.length - 1]
+          if (!last || Math.hypot(x - last.x, y - last.y) > 0.7) current.points.push({ x, y })
+        }
+        setDrawPreview(buildMarkRef.current(current.tool, current.start, { x, y }, current.points, 'preview'))
+        return
+      }
+
       if (eraseRef.current) {
         const rect = event.currentTarget === null ? null : null
         void rect
@@ -712,6 +977,18 @@ export function PdfRedactor() {
     }
 
     const up = () => {
+      const markStart = markRef.current
+      markRef.current = null
+      if (markStart) {
+        const preview = drawingRef.current
+        setDrawPreview(null)
+        if (preview) {
+          const inked = (preview.points?.length ?? 0) > 1
+          const drawn = preview.width > 2 || preview.height > 2
+          if (preview.mark === 'ink' ? inked : drawn) addMark({ ...preview, id: uid() })
+        }
+      }
+
       const start = eraseRef.current
       const preview = erasePreview
       eraseRef.current = null
@@ -745,6 +1022,19 @@ export function PdfRedactor() {
     const rect = event.currentTarget.getBoundingClientRect()
     const x = (event.clientX - rect.left) / scale
     const y = (event.clientY - rect.top) / scale
+
+    if (STAMP_TOOLS.includes(tool)) {
+      event.preventDefault()
+      stampMark(tool, x, y)
+      return
+    }
+
+    if (DRAG_TOOLS.includes(tool)) {
+      event.preventDefault()
+      markRef.current = { tool, start: { x, y }, points: [{ x, y }] }
+      setDrawPreview(buildMarkRef.current(tool, { x, y }, { x, y }, [{ x, y }], 'preview'))
+      return
+    }
 
     if (tool === 'erase') {
       event.preventDefault()
@@ -907,7 +1197,10 @@ export function PdfRedactor() {
           proxy = await doc.getPage(model.source + 1)
           pageCache.current.set(model.source, proxy)
         }
-        const viewport = proxy.getViewport({ scale: 1 })
+        const viewport = proxy.getViewport({
+          scale: 1,
+          rotation: (proxy.rotate + (model.rotate ?? 0)) % 360,
+        })
         converters.push((x, y) => viewport.convertToPdfPoint(x, y) as [number, number])
       }
 
@@ -1073,24 +1366,6 @@ export function PdfRedactor() {
         <div className="ed-ribbon">
           <div className="ed-group">
             <div className="ed-group-row">
-              <button type="button" className="ed-tool" onClick={openAnotherFile} title="Открыть другой файл">
-                <Icon d={ICONS.folder} />
-                <span>Открыть</span>
-              </button>
-              <button type="button" className="ed-tool" onClick={() => void saveWord()} disabled={busy}>
-                <Icon d={ICONS.word} />
-                <span>Word</span>
-              </button>
-              <button type="button" className="ed-tool" onClick={saveText} disabled={busy} title="Скачать текст">
-                <Icon d={ICONS.txt} />
-                <span>TXT</span>
-              </button>
-            </div>
-            <span className="ed-group-label">Файл</span>
-          </div>
-
-          <div className="ed-group">
-            <div className="ed-group-row">
               <button
                 type="button"
                 className={`ed-tool${tool === 'select' ? ' is-active' : ''}`}
@@ -1112,6 +1387,27 @@ export function PdfRedactor() {
               </button>
               <button
                 type="button"
+                className={`ed-tool${tool === 'erase' ? ' is-active' : ''}`}
+                aria-pressed={tool === 'erase'}
+                onClick={() => setTool('erase')}
+              >
+                <Icon d={ICONS.erase} />
+                <span>Замазка</span>
+              </button>
+              <button
+                type="button"
+                className={`ed-tool${signOpen ? ' is-active' : ''}`}
+                aria-pressed={signOpen}
+                onClick={() => {
+                  setTool('select')
+                  setSignOpen(true)
+                }}
+              >
+                <Icon d={ICONS.sign} />
+                <span>Подпись</span>
+              </button>
+              <button
+                type="button"
                 className="ed-tool"
                 onClick={() => {
                   setTool('select')
@@ -1123,12 +1419,75 @@ export function PdfRedactor() {
               </button>
               <button
                 type="button"
-                className={`ed-tool${tool === 'erase' ? ' is-active' : ''}`}
-                aria-pressed={tool === 'erase'}
-                onClick={() => setTool('erase')}
+                className={`ed-tool${tool === 'highlight' ? ' is-active' : ''}`}
+                aria-pressed={tool === 'highlight'}
+                onClick={() => setTool('highlight')}
               >
-                <Icon d={ICONS.erase} />
-                <span>Стереть</span>
+                <Icon d={ICONS.marker} />
+                <span>Маркер</span>
+              </button>
+              <button
+                type="button"
+                className={`ed-tool${tool === 'ink' ? ' is-active' : ''}`}
+                aria-pressed={tool === 'ink'}
+                onClick={() => setTool('ink')}
+              >
+                <Icon d={ICONS.pen} />
+                <span>Карандаш</span>
+              </button>
+              <div className="ed-shapes">
+                <button
+                  type="button"
+                  className={`ed-tool${tool === 'rect' || tool === 'line' || tool === 'arrow' ? ' is-active' : ''}`}
+                  aria-expanded={shapesOpen}
+                  aria-haspopup="true"
+                  onClick={() => setShapesOpen((value) => !value)}
+                >
+                  <Icon d={ICONS.rect} />
+                  <span>Фигуры</span>
+                </button>
+                {shapesOpen && (
+                  <div className="ed-shapes-menu" role="menu">
+                    {([
+                      ['rect', 'Рамка', ICONS.rect],
+                      ['line', 'Линия', ICONS.line],
+                      ['arrow', 'Стрелка', ICONS.arrow],
+                    ] as [Tool, string, string][]).map(([value, label, icon]) => (
+                      <button
+                        key={value}
+                        type="button"
+                        className={tool === value ? 'is-active' : ''}
+                        onClick={() => {
+                          setTool(value)
+                          setShapesOpen(false)
+                        }}
+                      >
+                        <Icon d={icon} />
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <button
+                type="button"
+                className={`ed-tool${tool === 'check' ? ' is-active' : ''}`}
+                aria-pressed={tool === 'check'}
+                onClick={() => setTool('check')}
+                title="Поставить галочку"
+              >
+                <Icon d={ICONS.check} />
+                <span>✓</span>
+              </button>
+              <button
+                type="button"
+                className={`ed-tool${tool === 'cross' ? ' is-active' : ''}`}
+                aria-pressed={tool === 'cross'}
+                onClick={() => setTool('cross')}
+                title="Поставить крестик"
+              >
+                <Icon d={ICONS.cross} />
+                <span>✕</span>
               </button>
             </div>
             <div className="ed-mode-row" role="group" aria-label="Режим ввода текста">
@@ -1157,7 +1516,7 @@ export function PdfRedactor() {
                 Свободно
               </button>
             </div>
-            <span className="ed-group-label">Правка текста</span>
+            <span className="ed-group-label">Инструменты</span>
           </div>
 
           <div className="ed-group">
@@ -1176,6 +1535,24 @@ export function PdfRedactor() {
 
           <div className="ed-group">
             <div className="ed-group-row">
+              <button type="button" className="ed-tool" onClick={openAnotherFile} title="Открыть другой файл">
+                <Icon d={ICONS.folder} />
+                <span>Открыть</span>
+              </button>
+              <button type="button" className="ed-tool" onClick={() => void saveWord()} disabled={busy}>
+                <Icon d={ICONS.word} />
+                <span>Word</span>
+              </button>
+              <button type="button" className="ed-tool" onClick={saveText} disabled={busy} title="Скачать текст">
+                <Icon d={ICONS.txt} />
+                <span>TXT</span>
+              </button>
+            </div>
+            <span className="ed-group-label">Файл</span>
+          </div>
+
+          <div className="ed-group">
+            <div className="ed-group-row">
               <button type="button" className="ed-tool" onClick={addBlankPage} title="Вставить пустой лист после текущего">
                 <Icon d={ICONS.page} />
                 <span>Лист</span>
@@ -1187,6 +1564,26 @@ export function PdfRedactor() {
               <button type="button" className="ed-tool" onClick={removePage} disabled={pages.length <= 1} title="Удалить страницу">
                 <Icon d={ICONS.trash} />
                 <span>Удалить</span>
+              </button>
+              <button
+                type="button"
+                className="ed-tool"
+                onClick={() => void rotatePageBy(-90)}
+                title="Повернуть страницу влево"
+              >
+                <span style={{ transform: 'scaleX(-1)' }}>
+                  <Icon d={ICONS.rotate} />
+                </span>
+                <span>Влево</span>
+              </button>
+              <button
+                type="button"
+                className="ed-tool"
+                onClick={() => void rotatePageBy(90)}
+                title="Повернуть страницу вправо"
+              >
+                <Icon d={ICONS.rotate} />
+                <span>Вправо</span>
               </button>
             </div>
             <span className="ed-group-label">Страницы</span>
@@ -1293,7 +1690,12 @@ export function PdfRedactor() {
                       {item.source === null ? (
                         <ThumbPreview page={item} />
                       ) : (
-                        <PageThumb pdf={pdf} source={item.source} ratio={item.box.width / item.box.height} />
+                        <PageThumb
+                        pdf={pdf}
+                        source={item.source}
+                        ratio={item.box.width / item.box.height}
+                        rotate={item.rotate ?? 0}
+                      />
                       )}
                     </span>
                     <span>{pageIndex + 1}</span>
@@ -1433,10 +1835,14 @@ export function PdfRedactor() {
                           fontSize: Math.max(4, object.size * scale),
                           lineHeight: 1.3,
                           color: `#${object.color}`,
+                          fontWeight: object.bold ? 700 : 400,
+                          fontStyle: object.italic ? 'italic' : 'normal',
                         }}
                       >
                         {object.text || 'Введите текст'}
                       </span>
+                    ) : object.kind === 'mark' ? (
+                      <MarkView object={object} />
                     ) : (
                       <>
                         <img className="redactor-image" src={imageUrl(object)} alt="" draggable={false} />
@@ -1464,6 +1870,20 @@ export function PdfRedactor() {
                   </div>
                 )
               })}
+
+              {drawing && (
+                <div
+                  className="redactor-object redactor-mark"
+                  style={{
+                    left: Math.round(drawing.x * scale),
+                    top: Math.round(drawing.y * scale),
+                    width: Math.max(1, Math.round(drawing.width * scale)),
+                    height: Math.max(1, Math.round(drawing.height * scale)),
+                  }}
+                >
+                  <MarkView object={drawing} />
+                </div>
+              )}
 
               {erasePreview && erasePreview.width > 0 && (
                 <span
@@ -1615,6 +2035,30 @@ export function PdfRedactor() {
                   </div>
 
                   <div className="field">
+                    <span className="field-label">Начертание</span>
+                    <div className="chip-row">
+                      <button
+                        type="button"
+                        className={`chip${selectedObject.bold ? ' is-active' : ''}`}
+                        aria-pressed={Boolean(selectedObject.bold)}
+                        onClick={() => updateObject(selectedObject.id, { bold: !selectedObject.bold })}
+                        title="Жирный"
+                      >
+                        <b>Ж</b>
+                      </button>
+                      <button
+                        type="button"
+                        className={`chip${selectedObject.italic ? ' is-active' : ''}`}
+                        aria-pressed={Boolean(selectedObject.italic)}
+                        onClick={() => updateObject(selectedObject.id, { italic: !selectedObject.italic })}
+                        title="Курсив"
+                      >
+                        <i>К</i>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="field">
                     <span className="field-label">Ширина блока</span>
                     <input
                       className="field-input"
@@ -1642,6 +2086,63 @@ export function PdfRedactor() {
                         />
                       ))}
                     </div>
+                  </div>
+                </>
+              ) : selectedObject.kind === 'mark' ? (
+                <>
+                  <p className="panel-note">
+                    {selectedObject.mark === 'highlight'
+                      ? 'Полупрозрачная полоса поверх текста — сам текст остаётся виден и не меняется.'
+                      : 'Пометка лежит поверх содержимого страницы и попадает в готовый PDF.'}
+                  </p>
+
+                  <div className="field">
+                    <span className="field-label">Цвет</span>
+                    <div className="chip-row">
+                      {(selectedObject.mark === 'highlight' ? HIGHLIGHT_COLORS : TEXT_COLORS).map((color) => (
+                        <button
+                          key={color.value}
+                          type="button"
+                          className={`swatch${selectedObject.color === color.value ? ' is-active' : ''}`}
+                          style={{ background: `#${color.value}` }}
+                          onClick={() => updateObject(selectedObject.id, { color: color.value })}
+                          aria-label={color.label}
+                          title={color.label}
+                        />
+                      ))}
+                    </div>
+                  </div>
+
+                  {selectedObject.mark !== 'highlight' && (
+                    <div className="field">
+                      <span className="field-label">Толщина</span>
+                      <input
+                        className="field-input"
+                        type="range"
+                        min={1}
+                        max={14}
+                        value={Math.round(selectedObject.stroke)}
+                        onChange={(event) => updateObject(selectedObject.id, { stroke: Number(event.target.value) })}
+                        aria-label="Толщина линии"
+                      />
+                    </div>
+                  )}
+
+                  <div className="field">
+                    <span className="field-label">Размер</span>
+                    <input
+                      className="field-input"
+                      type="range"
+                      min={10}
+                      max={Math.max(60, Math.round(page?.box.width ?? 400))}
+                      value={Math.round(selectedObject.width)}
+                      onChange={(event) => {
+                        const width = Number(event.target.value)
+                        const ratio = selectedObject.width ? selectedObject.height / selectedObject.width : 1
+                        updateObject(selectedObject.id, { width, height: Math.round(width * ratio) })
+                      }}
+                      aria-label="Размер пометки"
+                    />
                   </div>
                 </>
               ) : (
@@ -1760,6 +2261,61 @@ export function PdfRedactor() {
                 </>
               ) : (
                 <>
+                  {hasDoc && tool !== 'select' && (
+                    <div className="ed-tool-settings">
+                      <p className="ed-panel-label">Настройки инструмента</p>
+                      <div className="field">
+                        <span className="field-label">Цвет</span>
+                        <div className="chip-row">
+                          {(tool === 'highlight' ? HIGHLIGHT_COLORS : TEXT_COLORS).map((color) => (
+                            <button
+                              key={color.value}
+                              type="button"
+                              className={`swatch${(tool === 'highlight' ? markColor : penColor) === color.value ? ' is-active' : ''}`}
+                              style={{ background: `#${color.value}` }}
+                              aria-label={color.label}
+                              title={color.label}
+                              onClick={() => (tool === 'highlight' ? setMarkColor(color.value) : setPenColor(color.value))}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                      {(tool === 'ink' || tool === 'rect' || tool === 'line' || tool === 'arrow') && (
+                        <div className="field">
+                          <span className="field-label">Толщина</span>
+                          <input
+                            className="field-input"
+                            type="range"
+                            min={1}
+                            max={12}
+                            value={penWidth}
+                            onChange={(event) => setPenWidth(Number(event.target.value))}
+                            aria-label="Толщина линии"
+                          />
+                        </div>
+                      )}
+                      {STAMP_TOOLS.includes(tool) && (
+                        <div className="field">
+                          <span className="field-label">Размер штампа</span>
+                          <input
+                            className="field-input"
+                            type="range"
+                            min={16}
+                            max={96}
+                            value={stampSize}
+                            onChange={(event) => setStampSize(Number(event.target.value))}
+                            aria-label="Размер штампа"
+                          />
+                        </div>
+                      )}
+                      {tool === 'text' && (
+                        <p className="panel-note">
+                          Щёлкните по строке или свободному месту — размер, цвет и начертание появятся в свойствах объекта справа.
+                        </p>
+                      )}
+                    </div>
+                  )}
+
                   <div className="ed-hero">
                     <span className="ed-hero-icon">
                       <Icon d={ICONS.folder} />
@@ -1876,6 +2432,17 @@ export function PdfRedactor() {
         )}
 
         <div className="ed-status-group ed-status-right">
+          {hasDoc && (
+            <button
+              type="button"
+              className="ed-panel-toggle ed-pages-toggle"
+              aria-pressed={thumbsOpen}
+              onClick={() => setThumbsOpen((value) => !value)}
+            >
+              <Icon d={ICONS.pages} />
+              Страницы
+            </button>
+          )}
           <button
             type="button"
             className="ed-panel-toggle"
@@ -1888,12 +2455,26 @@ export function PdfRedactor() {
           <span className="ed-status-note">Всё локально в браузере</span>
         </div>
       </footer>
+
+      {signOpen && (
+        <SignatureDialog onClose={() => setSignOpen(false)} onInsert={(bytes) => void insertSignature(bytes)} />
+      )}
     </div>
   )
 }
 
 /** Миниатюра страницы: pdf.js рисует её только когда она подъехала к экрану. */
-function PageThumb({ pdf, source, ratio }: { pdf: PDFDocumentProxy | null; source: number; ratio: number }) {
+function PageThumb({
+  pdf,
+  source,
+  ratio,
+  rotate = 0,
+}: {
+  pdf: PDFDocumentProxy | null
+  source: number
+  ratio: number
+  rotate?: number
+}) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [visible, setVisible] = useState(false)
 
@@ -1923,8 +2504,9 @@ function PageThumb({ pdf, source, ratio }: { pdf: PDFDocumentProxy | null; sourc
     const draw = async () => {
       const proxy = await pdf.getPage(source + 1)
       if (cancelled) return
-      const sourceWidth = proxy.getViewport({ scale: 1 }).width || 1
-      const viewport = proxy.getViewport({ scale: 128 / sourceWidth })
+      const rotated = (proxy.rotate + rotate) % 360
+      const sourceWidth = proxy.getViewport({ scale: 1, rotation: rotated }).width || 1
+      const viewport = proxy.getViewport({ scale: 128 / sourceWidth, rotation: rotated })
       const canvas = canvasRef.current
       if (!canvas) return
       canvas.width = Math.round(viewport.width)
@@ -1943,7 +2525,7 @@ function PageThumb({ pdf, source, ratio }: { pdf: PDFDocumentProxy | null; sourc
     return () => {
       cancelled = true
     }
-  }, [visible, pdf, source])
+  }, [visible, pdf, source, rotate])
 
   return <canvas ref={canvasRef} style={{ aspectRatio: ratio }} />
 }
@@ -1976,4 +2558,312 @@ function imageUrl(object: EditorObject): string {
   const url = URL.createObjectURL(blob)
   imageUrls.set(object.id, url)
   return url
+}
+
+/** Пометка на листе: маркер, рамка, линия, стрелка, галочка, крестик или рисунок. */
+function MarkView({ object }: { object: MarkObject }) {
+  const w = Math.max(0.5, object.width)
+  const h = Math.max(0.5, object.height)
+  const color = `#${object.color}`
+  const stroke = Math.max(0.4, object.stroke)
+  const common = {
+    stroke: color,
+    strokeWidth: stroke,
+    fill: 'none' as const,
+    strokeLinecap: 'round' as const,
+    strokeLinejoin: 'round' as const,
+  }
+
+  if (object.mark === 'highlight') {
+    return (
+      <span
+        className="redactor-mark-highlight"
+        style={{ background: color, opacity: object.opacity ?? 0.35 }}
+        aria-hidden="true"
+      />
+    )
+  }
+
+  const x1 = object.flipX ? w : 0
+  const x2 = object.flipX ? 0 : w
+  const y1 = object.flipY ? h : 0
+  const y2 = object.flipY ? 0 : h
+  const angle = Math.atan2(y2 - y1, x2 - x1)
+  const head = Math.max(6, stroke * 4)
+
+  return (
+    <svg
+      className="redactor-mark-svg"
+      viewBox={`0 0 ${w} ${h}`}
+      preserveAspectRatio="none"
+      aria-hidden="true"
+    >
+      {object.mark === 'rect' && (
+        <rect x={stroke / 2} y={stroke / 2} width={Math.max(0.5, w - stroke)} height={Math.max(0.5, h - stroke)} {...common} />
+      )}
+
+      {(object.mark === 'line' || object.mark === 'arrow') && (
+        <>
+          <line x1={x1} y1={y1} x2={x2} y2={y2} {...common} />
+          {object.mark === 'arrow' && (
+            <>
+              <line x1={x2} y1={y2} x2={x2 - Math.cos(angle - 0.5) * head} y2={y2 - Math.sin(angle - 0.5) * head} {...common} />
+              <line x1={x2} y1={y2} x2={x2 - Math.cos(angle + 0.5) * head} y2={y2 - Math.sin(angle + 0.5) * head} {...common} />
+            </>
+          )}
+        </>
+      )}
+
+      {object.mark === 'check' && (
+        <polyline points={`${w * 0.08},${h * 0.55} ${w * 0.36},${h * 0.9} ${w * 0.94},${h * 0.12}`} {...common} />
+      )}
+
+      {object.mark === 'cross' && (
+        <>
+          <line x1={w * 0.12} y1={h * 0.12} x2={w * 0.88} y2={h * 0.88} {...common} />
+          <line x1={w * 0.88} y1={h * 0.12} x2={w * 0.12} y2={h * 0.88} {...common} />
+        </>
+      )}
+
+      {object.mark === 'ink' && object.points && object.points.length > 1 && (
+        <polyline
+          points={object.points.map((point) => `${point.x - object.x},${point.y - object.y}`).join(' ')}
+          {...common}
+        />
+      )}
+    </svg>
+  )
+}
+
+type SignTab = 'draw' | 'upload' | 'type'
+
+/** Подпись: нарисовать пальцем, загрузить готовую картинку или напечатать. */
+function SignatureDialog({ onClose, onInsert }: { onClose: () => void; onInsert: (bytes: Uint8Array) => void }) {
+  const [tab, setTab] = useState<SignTab>('draw')
+  const [typed, setTyped] = useState('Подпись')
+  const [font, setFont] = useState('cursive')
+  const [size, setSize] = useState(72)
+  const [color, setColor] = useState('111111')
+  const [hasInk, setHasInk] = useState(false)
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const drawingRef = useRef(false)
+  const lastRef = useRef<{ x: number; y: number } | null>(null)
+
+  const clear = () => {
+    const canvas = canvasRef.current
+    const context = canvas?.getContext('2d')
+    if (!canvas || !context) return
+    context.clearRect(0, 0, canvas.width, canvas.height)
+    setHasInk(false)
+  }
+
+  const point = (event: ReactPointerEvent<HTMLCanvasElement>) => {
+    const canvas = event.currentTarget
+    const rect = canvas.getBoundingClientRect()
+    return {
+      x: (event.clientX - rect.left) * (canvas.width / Math.max(1, rect.width)),
+      y: (event.clientY - rect.top) * (canvas.height / Math.max(1, rect.height)),
+    }
+  }
+
+  const start = (event: ReactPointerEvent<HTMLCanvasElement>) => {
+    event.preventDefault()
+    event.currentTarget.setPointerCapture(event.pointerId)
+    drawingRef.current = true
+    lastRef.current = point(event)
+  }
+
+  const move = (event: ReactPointerEvent<HTMLCanvasElement>) => {
+    if (!drawingRef.current) return
+    const canvas = canvasRef.current
+    const context = canvas?.getContext('2d')
+    const next = point(event)
+    if (!canvas || !context || !lastRef.current) return
+    context.strokeStyle = `#${color}`
+    context.lineWidth = 3.4
+    context.lineCap = 'round'
+    context.lineJoin = 'round'
+    context.beginPath()
+    context.moveTo(lastRef.current.x, lastRef.current.y)
+    context.lineTo(next.x, next.y)
+    context.stroke()
+    lastRef.current = next
+    setHasInk(true)
+  }
+
+  const end = () => {
+    drawingRef.current = false
+    lastRef.current = null
+  }
+
+  const typedCanvas = () => {
+    const text = typed.trim() || 'Подпись'
+    const spec = `${size}px ${font}`
+    const measure = document.createElement('canvas').getContext('2d')
+    if (!measure) return null
+    measure.font = spec
+    const canvas = document.createElement('canvas')
+    canvas.width = Math.max(160, Math.ceil(measure.measureText(text).width) + 56)
+    canvas.height = Math.ceil(size * 1.9)
+    const context = canvas.getContext('2d')
+    if (!context) return null
+    context.font = spec
+    context.fillStyle = `#${color}`
+    context.textBaseline = 'middle'
+    context.fillText(text, 28, canvas.height / 2)
+    return canvas
+  }
+
+  const send = async (canvas: HTMLCanvasElement) => {
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'))
+    if (!blob) return
+    onInsert(new Uint8Array(await blob.arrayBuffer()))
+  }
+
+  return (
+    <div className="ed-modal" role="dialog" aria-modal="true" aria-label="Подпись">
+      <div className="ed-modal-card">
+        <header className="ed-modal-head">
+          <h4>Подпись</h4>
+          <button type="button" className="ed-icon-btn" onClick={onClose} aria-label="Закрыть">
+            <Icon d={ICONS.close} />
+          </button>
+        </header>
+
+        <div className="ed-modal-tabs" role="tablist">
+          {(
+            [
+              ['draw', 'Нарисовать'],
+              ['upload', 'Загрузить'],
+              ['type', 'Напечатать'],
+            ] as [SignTab, string][]
+          ).map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              role="tab"
+              aria-selected={tab === value}
+              className={tab === value ? 'is-active' : ''}
+              onClick={() => setTab(value)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {tab === 'draw' && (
+          <>
+            <canvas
+              ref={canvasRef}
+              width={640}
+              height={230}
+              className="ed-sign-canvas"
+              onPointerDown={start}
+              onPointerMove={move}
+              onPointerUp={end}
+              onPointerLeave={end}
+              onPointerCancel={end}
+            />
+            <div className="ed-modal-row">
+              <button type="button" className="btn btn-quiet" onClick={clear}>
+                Очистить
+              </button>
+              <button
+                type="button"
+                className="ed-primary"
+                onClick={() => {
+                  const canvas = canvasRef.current
+                  if (canvas) void send(canvas)
+                }}
+                disabled={!hasInk}
+              >
+                Вставить подпись
+              </button>
+            </div>
+          </>
+        )}
+
+        {tab === 'upload' && (
+          <>
+            <p className="panel-note">
+              PNG с прозрачным фоном подойдёт лучше всего — скан подписи или печати. Файл не отправляется на сервер.
+            </p>
+            <label className="ed-modal-upload">
+              <input
+                type="file"
+                accept="image/png,image/jpeg"
+                onChange={(event) => {
+                  const file = event.target.files?.[0]
+                  if (file) void file.arrayBuffer().then((buffer) => onInsert(new Uint8Array(buffer)))
+                }}
+              />
+              <span>Выбрать картинку подписи</span>
+            </label>
+          </>
+        )}
+
+        {tab === 'type' && (
+          <>
+            <label className="field">
+              <span className="field-label">Текст подписи</span>
+              <input
+                className="field-input"
+                value={typed}
+                maxLength={60}
+                onChange={(event) => setTyped(event.target.value)}
+                placeholder="Алишер Каримов"
+              />
+            </label>
+            <div className="field">
+              <span className="field-label">Шрифт</span>
+              <select className="ed-select" value={font} onChange={(event) => setFont(event.target.value)}>
+                <option value="cursive">Рукописный</option>
+                <option value="'Segoe Script', cursive">Segoe Script</option>
+                <option value="Georgia, serif">Georgia (курсив)</option>
+                <option value="'Brush Script MT', cursive">Brush Script</option>
+              </select>
+            </div>
+            <div className="field">
+              <span className="field-label">Размер</span>
+              <input
+                className="field-input"
+                type="range"
+                min={28}
+                max={140}
+                value={size}
+                onChange={(event) => setSize(Number(event.target.value))}
+              />
+            </div>
+            <div className="field">
+              <span className="field-label">Цвет</span>
+              <div className="chip-row">
+                {['111111', '1A56DB', 'C81E1E'].map((value) => (
+                  <button
+                    key={value}
+                    type="button"
+                    className={`swatch${color === value ? ' is-active' : ''}`}
+                    style={{ background: `#${value}` }}
+                    onClick={() => setColor(value)}
+                    aria-label={`Цвет ${value}`}
+                  />
+                ))}
+              </div>
+            </div>
+            <div className="ed-modal-row">
+              <button
+                type="button"
+                className="ed-primary"
+                onClick={() => {
+                  const canvas = typedCanvas()
+                  if (canvas) void send(canvas)
+                }}
+              >
+                Вставить подпись
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  )
 }
