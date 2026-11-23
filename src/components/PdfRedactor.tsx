@@ -7,10 +7,15 @@ import { addHistory } from '../lib/profile'
 import { track } from '../lib/analytics'
 import { Link, ROUTES } from '../lib/router'
 import {
+  FONT_SIZES,
+  MAX_FONT_SIZE,
+  MIN_FONT_SIZE,
   TEXT_COLORS,
+  TEXT_FONTS,
   clampPosition,
   composePdf,
   fitImage,
+  fontStackFor,
   insertBlankPage,
   objectSize,
   pickBackgroundColor,
@@ -22,9 +27,11 @@ import type {
   EditorPage,
   ImageObject,
   MarkObject,
+  TextFamily,
   TextObject,
   ToPdfPoint,
 } from '../lib/docEditor'
+import { ColorPicker } from './ColorPicker'
 import { readPageRuns, renderPageRaster } from '../lib/pdfText'
 import type { TextRun } from '../lib/pdfText'
 import { OCR_LANGS, recognizeImage } from '../lib/ocr'
@@ -89,13 +96,6 @@ const OCR_STATUS_LABELS: Record<string, string> = {
   'recognizing text': 'Текст…',
 }
 
-const HIGHLIGHT_COLORS = [
-  { value: 'FDE047', label: 'Жёлтый' },
-  { value: '86EFAC', label: 'Зелёный' },
-  { value: 'FDBA74', label: 'Оранжевый' },
-  { value: '93C5FD', label: 'Голубой' },
-] as const
-
 const IMAGE_HINT = 'Фото встанет на страницу. Тащите его мышкой или пальцем, а за уголок справа снизу меняйте размер.'
 
 const TEXT_HINTS: Record<TextMode, string> = {
@@ -156,6 +156,96 @@ const ICONS = {
   word: 'M4 4h16v16H4zM8 8l1.4 8L12 9l2.6 7L16 8',
   txt: 'M5 4h14v16H5zM8 9h8M8 13h8M8 17h5',
   eye: 'M2 12s3.6-6 10-6 10 6 10 6-3.6 6-10 6S2 12 2 12zM12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6',
+}
+
+/**
+ * Размер шрифта как в Word: можно выбрать готовое значение из списка
+ * или вписать любое своё число.
+ */
+function FontSizeField({ value, onChange }: { value: number; onChange: (size: number) => void }) {
+  const [draft, setDraft] = useState(String(Math.round(value * 10) / 10))
+  const [open, setOpen] = useState(false)
+  const rootRef = useRef<HTMLSpanElement | null>(null)
+
+  useEffect(() => setDraft(String(Math.round(value * 10) / 10)), [value])
+
+  useEffect(() => {
+    if (!open) return
+    const onDown = (event: MouseEvent | TouchEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', onDown)
+    document.addEventListener('touchstart', onDown)
+    return () => {
+      document.removeEventListener('mousedown', onDown)
+      document.removeEventListener('touchstart', onDown)
+    }
+  }, [open])
+
+  const commit = (raw: string) => {
+    const parsed = Number(raw.replace(',', '.').trim())
+    if (!raw.trim() || !Number.isFinite(parsed)) {
+      setDraft(String(Math.round(value * 10) / 10))
+      return
+    }
+    const next = Math.min(MAX_FONT_SIZE, Math.max(MIN_FONT_SIZE, Math.round(parsed * 10) / 10))
+    setDraft(String(next))
+    if (next !== Math.round(value * 10) / 10) onChange(next)
+  }
+
+  return (
+    <span className="ed-size" ref={rootRef}>
+      <input
+        className="field-input ed-size-input"
+        type="text"
+        inputMode="decimal"
+        value={draft}
+        onChange={(event) => setDraft(event.target.value)}
+        onBlur={(event) => commit(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') {
+            event.preventDefault()
+            commit((event.target as HTMLInputElement).value)
+            setOpen(false)
+          }
+          if (event.key === 'Escape') setOpen(false)
+        }}
+        aria-label="Размер шрифта, можно вписать своё число"
+      />
+      <button
+        type="button"
+        className="ed-size-toggle"
+        onClick={() => setOpen((current) => !current)}
+        aria-expanded={open}
+        aria-label="Готовые размеры шрифта"
+        title="Выбрать из списка"
+      >
+        <svg viewBox="0 0 12 12" aria-hidden="true">
+          <path d="M2 4.5 6 8.5 10 4.5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+        </svg>
+      </button>
+      {open && (
+        <span className="ed-size-menu" role="listbox" aria-label="Размеры шрифта">
+          {FONT_SIZES.map((size) => (
+            <button
+              key={size}
+              type="button"
+              role="option"
+              aria-selected={Math.round(value) === size}
+              className={`ed-size-option${Math.round(value) === size ? ' is-active' : ''}`}
+              onClick={() => {
+                setDraft(String(size))
+                onChange(size)
+                setOpen(false)
+              }}
+            >
+              {size}
+            </button>
+          ))}
+        </span>
+      )}
+    </span>
+  )
 }
 
 export function PdfRedactor() {
@@ -470,7 +560,14 @@ export function PdfRedactor() {
             ? item
             : {
                 ...item,
-                objects: item.objects.map((object) => (object.id === id ? ({ ...object, ...patch } as EditorObject) : object)),
+                objects: item.objects.map((object) => {
+                  if (object.id !== id) return object
+                  const next = { ...object, ...patch } as EditorObject
+                  // Распознанную строку тронули руками — значит, она теперь своя:
+                  // повторное «Распознать» не имеет права её перезаписать.
+                  if (next.kind === 'text' && next.ocr && !next.edited) return { ...next, edited: true }
+                  return next
+                }),
               },
         ),
       )
@@ -1187,7 +1284,28 @@ export function PdfRedactor() {
       const objects: TextObject[] = []
       const newCovers: CoverRect[] = []
 
+      // Строки, которые человек уже поправил руками, остаются как есть: OCR заменяет
+      // только нетронутые. Новые строки на месте поправленных пропускаем, иначе
+      // поверх ручной правки лёг бы второй текст.
+      const handwritten = model.objects.filter(
+        (object): object is TextObject => object.kind === 'text' && Boolean(object.ocr && object.edited),
+      )
+      const handwrittenIds = new Set(handwritten.map((object) => object.id))
+      const handwrittenCovers = (model.covers ?? []).filter((cover) => cover.owner && handwrittenIds.has(cover.owner))
+      const overlapsHandwritten = (line: { x: number; y: number; width: number; height: number }) => {
+        const centerX = line.x + line.width / 2
+        const centerY = line.y + line.height / 2
+        return handwrittenCovers.some(
+          (cover) =>
+            centerX >= cover.x &&
+            centerX <= cover.x + cover.width &&
+            centerY >= cover.y &&
+            centerY <= cover.y + cover.height,
+        )
+      }
+
       for (const line of lines) {
+        if (overlapsHandwritten(line)) continue
         const size = Math.max(6, Math.min(48, Math.round(line.height * 0.78 * 10) / 10))
         const object: TextObject = {
           kind: 'text',
@@ -1211,19 +1329,19 @@ export function PdfRedactor() {
         })
       }
 
-      // Повторное распознавание заменяет прошлые строки, а не дублирует их.
+      // Повторное распознавание заменяет только нетронутые строки: поправленные
+      // руками остаются на своих местах вместе со своими пятнами.
       const previousOcr = new Set(
-        model.objects.filter((object) => object.kind === 'text' && object.ocr).map((object) => object.id),
+        model.objects
+          .filter((object) => object.kind === 'text' && object.ocr && !object.edited)
+          .map((object) => object.id),
       )
       mutate((current) =>
         current.map((item, itemIndex) =>
           itemIndex === at
             ? {
                 ...item,
-                objects: [
-                  ...item.objects.filter((object) => !(object.kind === 'text' && object.ocr) && !previousOcr.has(object.id)),
-                  ...objects,
-                ],
+                objects: [...item.objects.filter((object) => !previousOcr.has(object.id)), ...objects],
                 covers: [
                   ...(item.covers ?? []).filter((cover) => !cover.owner || !previousOcr.has(cover.owner)),
                   ...newCovers,
@@ -1236,7 +1354,9 @@ export function PdfRedactor() {
       setTool('text')
       setMessage({
         tone: 'ok',
-        text: `Распознано строк: ${lines.length}. Текст стал редактируемым — щёлкните по нему и правьте справа.`,
+        text: `Распознано строк: ${objects.length}.${
+          handwritten.length ? ` Ваши правки сохранены: ${handwritten.length}.` : ''
+        } Текст стал редактируемым — щёлкните по нему и правьте справа.`,
       })
       track('Редактор PDF', 'done')
     } catch (error) {
@@ -1947,6 +2067,7 @@ export function PdfRedactor() {
                           fontSize: Math.max(4, object.size * scale),
                           lineHeight: 1.3,
                           color: `#${object.color}`,
+                          fontFamily: fontStackFor(object.family),
                           fontWeight: object.bold ? 700 : 400,
                           fontStyle: object.italic ? 'italic' : 'normal',
                         }}
@@ -2131,19 +2252,29 @@ export function PdfRedactor() {
                   </label>
 
                   <div className="field">
-                    <span className="field-label">Размер</span>
-                    <div className="chip-row">
-                      {[10, 12, 14, 18, 24, 32].map((size) => (
-                        <button
-                          key={size}
-                          type="button"
-                          className={`chip${Math.round(selectedObject.size) === size ? ' is-active' : ''}`}
-                          onClick={() => updateObject(selectedObject.id, { size })}
-                        >
-                          {size}
-                        </button>
+                    <span className="field-label">Шрифт</span>
+                    <select
+                      className="field-input"
+                      value={selectedObject.family ?? 'sans'}
+                      onChange={(event) =>
+                        updateObject(selectedObject.id, { family: event.target.value as TextFamily })
+                      }
+                      aria-label="Шрифт текста"
+                    >
+                      {TEXT_FONTS.map((font) => (
+                        <option key={font.value} value={font.value}>
+                          {font.label} — {font.hint}
+                        </option>
                       ))}
-                    </div>
+                    </select>
+                  </div>
+
+                  <div className="field">
+                    <span className="field-label">Размер</span>
+                    <FontSizeField
+                      value={selectedObject.size}
+                      onChange={(size) => updateObject(selectedObject.id, { size })}
+                    />
                   </div>
 
                   <div className="field">
@@ -2185,19 +2316,11 @@ export function PdfRedactor() {
 
                   <div className="field">
                     <span className="field-label">Цвет</span>
-                    <div className="chip-row">
-                      {TEXT_COLORS.map((color) => (
-                        <button
-                          key={color.value}
-                          type="button"
-                          className={`swatch${selectedObject.color === color.value ? ' is-active' : ''}`}
-                          style={{ background: `#${color.value}` }}
-                          onClick={() => updateObject(selectedObject.id, { color: color.value })}
-                          aria-label={color.label}
-                          title={color.label}
-                        />
-                      ))}
-                    </div>
+                    <ColorPicker
+                      value={selectedObject.color}
+                      onChange={(color) => updateObject(selectedObject.id, { color })}
+                      label="Цвет текста"
+                    />
                   </div>
                 </>
               ) : selectedObject.kind === 'mark' ? (
@@ -2210,19 +2333,11 @@ export function PdfRedactor() {
 
                   <div className="field">
                     <span className="field-label">Цвет</span>
-                    <div className="chip-row">
-                      {(selectedObject.mark === 'highlight' ? HIGHLIGHT_COLORS : TEXT_COLORS).map((color) => (
-                        <button
-                          key={color.value}
-                          type="button"
-                          className={`swatch${selectedObject.color === color.value ? ' is-active' : ''}`}
-                          style={{ background: `#${color.value}` }}
-                          onClick={() => updateObject(selectedObject.id, { color: color.value })}
-                          aria-label={color.label}
-                          title={color.label}
-                        />
-                      ))}
-                    </div>
+                    <ColorPicker
+                      value={selectedObject.color}
+                      onChange={(color) => updateObject(selectedObject.id, { color })}
+                      label="Цвет пометки"
+                    />
                   </div>
 
                   {selectedObject.mark !== 'highlight' && (
@@ -2378,19 +2493,11 @@ export function PdfRedactor() {
                       <p className="ed-panel-label">Настройки инструмента</p>
                       <div className="field">
                         <span className="field-label">Цвет</span>
-                        <div className="chip-row">
-                          {(tool === 'highlight' ? HIGHLIGHT_COLORS : TEXT_COLORS).map((color) => (
-                            <button
-                              key={color.value}
-                              type="button"
-                              className={`swatch${(tool === 'highlight' ? markColor : penColor) === color.value ? ' is-active' : ''}`}
-                              style={{ background: `#${color.value}` }}
-                              aria-label={color.label}
-                              title={color.label}
-                              onClick={() => (tool === 'highlight' ? setMarkColor(color.value) : setPenColor(color.value))}
-                            />
-                          ))}
-                        </div>
+                        <ColorPicker
+                          value={tool === 'highlight' ? markColor : penColor}
+                          onChange={(color) => (tool === 'highlight' ? setMarkColor(color) : setPenColor(color))}
+                          label="Цвет инструмента"
+                        />
                       </div>
                       {(tool === 'ink' || tool === 'rect' || tool === 'line' || tool === 'arrow') && (
                         <div className="field">

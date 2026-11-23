@@ -5089,3 +5089,251 @@ select.field-input option {
   border-radius: 6px;
   pointer-events: none;
 }
+
+/* Шрифты редактора: тот же файл идёт в PDF, поэтому предпросмотр не врёт. */
+@font-face {
+  font-family: 'PT Sans Editor';
+  src: url('/fonts/watermark.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'PT Sans Editor';
+  src: url('/fonts/ptsans-bold.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'PT Sans Editor';
+  src: url('/fonts/ptsans-italic.ttf') format('truetype');
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'PT Sans Editor';
+  src: url('/fonts/ptsans-bolditalic.ttf') format('truetype');
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'PT Serif Editor';
+  src: url('/fonts/ptserif.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'PT Serif Editor';
+  src: url('/fonts/ptserif-bold.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Plex Mono Editor';
+  src: url('/fonts/plexmono.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Plex Mono Editor';
+  src: url('/fonts/plexmono-bold.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Палитра цвета как в Word: сетка оттенков, стандартные цвета и свой HEX. */
+.ed-color {
+  position: relative;
+  align-self: flex-start;
+}
+
+.ed-color-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  border-radius: 10px;
+  border: 1px solid var(--line-strong);
+  background: rgba(255, 255, 255, 0.04);
+  cursor: pointer;
+}
+
+.ed-color-trigger:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.ed-color-swatch {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+}
+
+.ed-color-caret {
+  width: 12px;
+  height: 12px;
+  color: #9a9bb0;
+}
+
+.ed-color-pop {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 60;
+  display: grid;
+  gap: 8px;
+  width: max-content;
+  max-width: min(260px, 82vw);
+  padding: 10px;
+  border-radius: 12px;
+  border: 1px solid var(--line-strong);
+  background: #1c1d29;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.55);
+}
+
+.ed-color-grid {
+  display: grid;
+  grid-template-rows: repeat(6, 17px);
+  grid-auto-flow: column;
+  gap: 3px;
+}
+
+.ed-color-row {
+  display: grid;
+  grid-template-columns: repeat(10, 17px);
+  gap: 3px;
+  padding-top: 6px;
+  border-top: 1px solid var(--line);
+}
+
+.ed-color-cell {
+  width: 17px;
+  height: 17px;
+  padding: 0;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  cursor: pointer;
+}
+
+.ed-color-cell:hover {
+  outline: 2px solid rgba(139, 92, 246, 0.8);
+  outline-offset: 1px;
+}
+
+.ed-color-cell.is-active {
+  border-color: #fff;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.25);
+}
+
+.ed-color-custom {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+
+.ed-color-hex {
+  display: grid;
+  gap: 4px;
+  font-size: 0.72rem;
+  color: #9a9bb0;
+}
+
+.ed-color-hex input {
+  width: 104px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--line-strong);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.82rem;
+  text-transform: uppercase;
+}
+
+.ed-color-native {
+  width: 34px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+}
+
+/* Размер шрифта: поле для своего числа плюс список готовых значений. */
+.ed-size {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+}
+
+.ed-size-input {
+  padding: 9px 12px;
+  text-align: right;
+}
+
+.ed-size-toggle {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  border-radius: 10px;
+  border: 1px solid var(--line-strong);
+  background: rgba(255, 255, 255, 0.04);
+  color: #9a9bb0;
+  cursor: pointer;
+}
+
+.ed-size-toggle svg {
+  width: 12px;
+  height: 12px;
+}
+
+.ed-size-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 60;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(44px, 1fr));
+  gap: 4px;
+  padding: 8px;
+  border-radius: 12px;
+  border: 1px solid var(--line-strong);
+  background: #1c1d29;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.55);
+}
+
+.ed-size-option {
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.04);
+  color: #c3c3d4;
+  font: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.ed-size-option.is-active {
+  border-color: rgba(139, 92, 246, 0.6);
+  background: rgba(139, 92, 246, 0.22);
+  color: #fff;
+}

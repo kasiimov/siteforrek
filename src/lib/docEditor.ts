@@ -14,6 +14,8 @@ export type ObjectBase = {
   y: number
 }
 
+export type TextFamily = 'sans' | 'serif' | 'mono'
+
 export type TextObject = ObjectBase & {
   kind: 'text'
   text: string
@@ -23,8 +25,12 @@ export type TextObject = ObjectBase & {
   width: number
   bold?: boolean
   italic?: boolean
+  /** семейство шрифта: без засечек, с засечками или моноширинный */
+  family?: TextFamily
   /** текст пришёл из распознавания: повторный OCR его заменяет, а не дублирует */
   ocr?: boolean
+  /** строку из распознавания правили руками: второй OCR её не трогает */
+  edited?: boolean
 }
 
 export type ImageObject = ObjectBase & {
@@ -95,7 +101,25 @@ export const TEXT_COLORS = [
   { value: '0F7B4F', label: 'Зелёный' },
 ] as const
 
-export const FONT_SIZES = [8, 10, 12, 14, 18, 24, 32, 48] as const
+/** Классические базовые шрифты: с засечками, без засечек и моноширинный. */
+export const TEXT_FONTS = [
+  { value: 'sans', label: 'PT Sans', hint: 'без засечек' },
+  { value: 'serif', label: 'PT Serif', hint: 'с засечками' },
+  { value: 'mono', label: 'IBM Plex Mono', hint: 'моноширинный' },
+] as const
+
+/** Размеры как в Word: можно выбрать из списка или вписать своё число. */
+export const FONT_SIZES = [8, 9, 10, 11, 12, 14, 16, 18, 20, 22, 24, 28, 32, 36, 48, 72] as const
+
+export const MIN_FONT_SIZE = 4
+export const MAX_FONT_SIZE = 400
+
+/** CSS-стек для предпросмотра: в редакторе подключены те же TTF, что уходят в PDF. */
+export function fontStackFor(family?: TextFamily): string {
+  if (family === 'serif') return "'PT Serif Editor', Georgia, 'Times New Roman', serif"
+  if (family === 'mono') return "'Plex Mono Editor', 'Courier New', monospace"
+  return "'PT Sans Editor', Helvetica, Arial, sans-serif"
+}
 
 /**
  * Разбивает текст на строки по ширине блока — так же, как это сделает PDF при сборке.
@@ -210,12 +234,24 @@ async function loadEditorFontBytes(name = 'watermark'): Promise<ArrayBuffer> {
   return response.arrayBuffer()
 }
 
-/** Шрифт для текста: обычный, жирный, курсив или жирный курсив. */
-function fontFileFor(bold?: boolean, italic?: boolean): string {
-  if (bold && italic) return 'ptsans-bolditalic'
-  if (bold) return 'ptsans-bold'
-  if (italic) return 'ptsans-italic'
-  return 'watermark'
+/**
+ * Файлы начертаний по семействам. PT Sans Regular лежит под старым именем
+ * watermark.ttf — менять его не стали. У новых семейств есть только обычное
+ * и жирное: на курсив берём ближайшее доступное, чтобы PDF не падал без шрифта.
+ */
+const FAMILY_FILES: Record<TextFamily, { regular: string; bold?: string; italic?: string; bolditalic?: string }> = {
+  sans: { regular: 'watermark', bold: 'ptsans-bold', italic: 'ptsans-italic', bolditalic: 'ptsans-bolditalic' },
+  serif: { regular: 'ptserif', bold: 'ptserif-bold' },
+  mono: { regular: 'plexmono', bold: 'plexmono-bold' },
+}
+
+/** Файл шрифта: семейство плюс начертание (обычное, жирное, курсив, жирный курсив). */
+function fontFileFor(family: TextFamily = 'sans', bold?: boolean, italic?: boolean): string {
+  const files = FAMILY_FILES[family] ?? FAMILY_FILES.sans
+  if (bold && italic) return files.bolditalic ?? files.bold ?? files.italic ?? files.regular
+  if (bold) return files.bold ?? files.regular
+  if (italic) return files.italic ?? files.regular
+  return files.regular
 }
 
 function hexToRgb(hex: string) {
@@ -249,9 +285,9 @@ export async function composePdf(options: ComposeOptions): Promise<{ blob: Blob;
   const out = await PDFDocument.create()
   out.registerFontkit(fontkit)
   const fontCache = new Map<string, PDFFont>()
-  // Жирный и курсив подключаем только если они действительно есть в тексте.
-  const getFont = async (bold?: boolean, italic?: boolean): Promise<PDFFont> => {
-    const key = fontFileFor(bold, italic)
+  // Начертания и семейства подключаем только если они действительно есть в тексте.
+  const getFont = async (family?: TextFamily, bold?: boolean, italic?: boolean): Promise<PDFFont> => {
+    const key = fontFileFor(family, bold, italic)
     const cached = fontCache.get(key)
     if (cached) return cached
     const embedded = await out.embedFont(await loadEditorFontBytes(key), { subset: true })
@@ -289,7 +325,7 @@ export async function composePdf(options: ComposeOptions): Promise<{ blob: Blob;
   const drawObject = async (object: EditorObject, target: PDFPage, index: number) => {
     if (object.kind === 'text') {
       if (!object.text.trim()) return
-      const font = await getFont(object.bold, object.italic)
+      const font = await getFont(object.family, object.bold, object.italic)
       const [x, top] = options.toPdf(index, object.x, object.y)
       const baseline = top - font.heightAtSize(object.size)
       const lines = wrapTextToWidth(object.text, object.width, (line) => font.widthOfTextAtSize(line, object.size))
