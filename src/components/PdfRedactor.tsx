@@ -129,6 +129,8 @@ export function PdfRedactor() {
   const [ocrProgress, setOcrProgress] = useState(0)
   const [focusToken, setFocusToken] = useState(0)
   const [erasePreview, setErasePreview] = useState<CoverRect | null>(null)
+  const [selectedCover, setSelectedCover] = useState<number | null>(null)
+  const [dragPage, setDragPage] = useState<number | null>(null)
 
   const docRef = useRef<PDFDocumentProxy | null>(null)
   const pageCache = useRef(new Map<number, PDFPageProxy>())
@@ -154,6 +156,8 @@ export function PdfRedactor() {
   const boxWidth = page?.box.width ?? 0
   const scale = fitScale * zoom
   const selectedObject = page?.objects.find((object) => object.id === selected) ?? null
+  const coverList = page?.covers ?? []
+  const selectedCoverRect = selectedCover !== null ? (coverList[selectedCover] ?? null) : null
   const zoomPercent = Math.round(zoom * 100)
   const pageRuns = page && page.source !== null ? (runs[page.source] ?? []) : []
   const covers = page?.covers ?? []
@@ -437,11 +441,13 @@ export function PdfRedactor() {
       color: TEXT_COLORS[0].value,
       width,
     }
+    // Пятно принадлежит этому тексту: удалишь текст — уйдёт и пятно.
     const cover: CoverRect = {
       x: Math.max(0, run.x - 1.5),
       y: Math.max(0, run.y - 1.5),
       width: Math.min(run.width + 3, page.box.width - Math.max(0, run.x - 1.5)),
       height: run.height + 3,
+      owner: object.id,
     }
     addPageObject([object], [cover])
     setSelected(object.id)
@@ -519,26 +525,68 @@ export function PdfRedactor() {
     setMessage({ tone: 'info', text: 'Страница скопирована — она идёт сразу после текущей.' })
   }
 
-  const removePage = () => {
+  const removePageAt = (target: number) => {
     if (pages.length <= 1) {
       setMessage({ tone: 'error', text: 'В документе должна остаться хотя бы одна страница.' })
       return
     }
-    mutate((current) => current.filter((_, itemIndex) => itemIndex !== index))
-    setIndex((current) => Math.max(0, Math.min(current, pages.length - 2)))
+    mutate((current) => current.filter((_, itemIndex) => itemIndex !== target))
+    setIndex((current) => Math.max(0, Math.min(current > target ? current - 1 : current, pages.length - 2)))
     setSelected(null)
-    setMessage({ tone: 'info', text: 'Страница удалена. Ctrl+Z вернёт её.' })
+    setSelectedCover(null)
+    setMessage({ tone: 'info', text: `Страница ${target + 1} удалена. Ctrl+Z вернёт её на место.` })
+  }
+
+  const removePage = () => removePageAt(index)
+
+  /** Перетащили миниатюру: страницы меняются местами, номера пересчитываются сами. */
+  const movePage = (from: number, to: number) => {
+    if (from === to || from < 0 || to < 0 || from >= pages.length || to >= pages.length) return
+    mutate((current) => {
+      const next = [...current]
+      const [moved] = next.splice(from, 1)
+      next.splice(to, 0, moved)
+      return next
+    })
+    setIndex(to)
+    setSelected(null)
+    setSelectedCover(null)
+    setMessage({ tone: 'info', text: `Страница ${from + 1} теперь на месте ${to + 1}.` })
   }
 
   const removeSelected = useCallback(() => {
     if (!selected) return
     mutate((current) =>
       current.map((item, itemIndex) =>
-        itemIndex !== index ? item : { ...item, objects: item.objects.filter((object) => object.id !== selected) },
+        itemIndex !== index
+          ? item
+          : {
+              ...item,
+              objects: item.objects.filter((object) => object.id !== selected),
+              // Белое пятно уходит вместе со своим текстом — иначе на листе остаётся дырка.
+              covers: (item.covers ?? []).filter((cover) => cover.owner !== selected),
+            },
       ),
     )
     setSelected(null)
+    setSelectedCover(null)
   }, [index, mutate, selected])
+
+  /** Убрать конкретное белое пятно, не трогая остальные. */
+  const removeCover = useCallback(
+    (coverIndex: number) => {
+      mutate((current) =>
+        current.map((item, itemIndex) =>
+          itemIndex === index
+            ? { ...item, covers: (item.covers ?? []).filter((_, position) => position !== coverIndex) }
+            : item,
+        ),
+      )
+      setSelectedCover(null)
+      setMessage({ tone: 'ok', text: 'Белое пятно убрано — под ним снова видно исходное содержимое.' })
+    },
+    [index, mutate],
+  )
 
   const clearCovers = () => {
     if (!page?.covers?.length) return
@@ -579,6 +627,10 @@ export function PdfRedactor() {
         event.preventDefault()
         removeSelected()
       }
+      if ((event.key === 'Delete' || event.key === 'Backspace') && selectedCover !== null) {
+        event.preventDefault()
+        removeCover(selectedCover)
+      }
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'z') {
         event.preventDefault()
         if (event.shiftKey) redo()
@@ -588,7 +640,15 @@ export function PdfRedactor() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [redo, removeSelected, selected, undo])
+  }, [redo, removeCover, removeSelected, selected, selectedCover, undo])
+
+  // Уведомление снизу не должно висеть вечно: ошибки держим дольше, остальное
+  // убираем само. Повторное сообщение перезапускает таймер.
+  useEffect(() => {
+    if (!message) return
+    const timer = window.setTimeout(() => setMessage(null), message.tone === 'error' ? 9000 : 4500)
+    return () => window.clearTimeout(timer)
+  }, [message])
 
   // Один снимок на жест: Ctrl+Z должен возвращать объект на место, а не удалять его.
   const snapshot = () => {
@@ -774,7 +834,7 @@ export function PdfRedactor() {
 
       for (const line of lines) {
         const size = Math.max(6, Math.min(48, Math.round(line.height * 0.78 * 10) / 10))
-        objects.push({
+        const object: TextObject = {
           kind: 'text',
           id: uid(),
           x: Math.round(line.x * 10) / 10,
@@ -783,12 +843,14 @@ export function PdfRedactor() {
           size,
           color: TEXT_COLORS[0].value,
           width: Math.min(model.box.width - line.x - 4, Math.max(line.width + 10, 40)),
-        })
+        }
+        objects.push(object)
         newCovers.push({
           x: Math.max(0, line.x - 1),
           y: Math.max(0, line.y - 1),
           width: Math.min(line.width + 2, model.box.width - line.x + 1),
           height: line.height + 2,
+          owner: object.id,
         })
       }
 
@@ -808,9 +870,12 @@ export function PdfRedactor() {
       track('Редактор PDF', 'done')
     } catch (error) {
       console.error(error)
+      const offline = typeof navigator !== 'undefined' && navigator.onLine === false
       setMessage({
         tone: 'error',
-        text: 'Распознавание не запустилось. Нужен интернет для языковых данных — попробуйте ещё раз.',
+        text: offline
+          ? 'Нет интернета: языковые данные распознавания скачиваются при первом запуске. Подключитесь к сети и нажмите «Распознать» ещё раз.'
+          : 'Не удалось загрузить языковые данные распознавания. Проверьте интернет и нажмите «Распознать» ещё раз — скачанный язык сохранится, и следующий запуск будет быстрым.',
       })
     } finally {
       ocrBusyRef.current = false
@@ -1192,25 +1257,79 @@ export function PdfRedactor() {
             </p>
             <div className="ed-thumbs-list">
               {pages.map((item, pageIndex) => (
-                <button
+                <div
                   key={pageIndex}
-                  type="button"
-                  className={`ed-thumb${pageIndex === index ? ' is-active' : ''}`}
-                  onClick={() => {
-                    setIndex(pageIndex)
-                    setSelected(null)
+                  className={`ed-thumb-wrap${dragPage === pageIndex ? ' is-dragging' : ''}`}
+                  draggable
+                  onDragStart={(event) => {
+                    setDragPage(pageIndex)
+                    event.dataTransfer.effectAllowed = 'move'
+                    event.dataTransfer.setData('text/plain', String(pageIndex))
                   }}
-                  aria-label={`Страница ${pageIndex + 1}`}
+                  onDragOver={(event) => {
+                    if (dragPage === null || dragPage === pageIndex) return
+                    event.preventDefault()
+                    event.dataTransfer.dropEffect = 'move'
+                  }}
+                  onDrop={(event) => {
+                    event.preventDefault()
+                    const from = dragPage ?? Number(event.dataTransfer.getData('text/plain'))
+                    setDragPage(null)
+                    movePage(from, pageIndex)
+                  }}
+                  onDragEnd={() => setDragPage(null)}
                 >
-                  <span className="ed-thumb-page" style={{ aspectRatio: item.box.width / item.box.height }}>
-                    {item.source === null ? (
-                      <ThumbPreview page={item} />
-                    ) : (
-                      <PageThumb pdf={pdf} source={item.source} ratio={item.box.width / item.box.height} />
-                    )}
-                  </span>
-                  <span>{pageIndex + 1}</span>
-                </button>
+                  <button
+                    type="button"
+                    className={`ed-thumb${pageIndex === index ? ' is-active' : ''}`}
+                    onClick={() => {
+                      setIndex(pageIndex)
+                      setSelected(null)
+                      setSelectedCover(null)
+                    }}
+                    aria-label={`Страница ${pageIndex + 1}. Перетащите, чтобы поменять порядок.`}
+                  >
+                    <span className="ed-thumb-page" style={{ aspectRatio: item.box.width / item.box.height }}>
+                      {item.source === null ? (
+                        <ThumbPreview page={item} />
+                      ) : (
+                        <PageThumb pdf={pdf} source={item.source} ratio={item.box.width / item.box.height} />
+                      )}
+                    </span>
+                    <span>{pageIndex + 1}</span>
+                  </button>
+
+                  <div className="ed-thumb-tools">
+                    <button
+                      type="button"
+                      onClick={() => movePage(pageIndex, pageIndex - 1)}
+                      disabled={pageIndex === 0}
+                      aria-label="Поднять страницу выше"
+                      title="Выше"
+                    >
+                      ↑
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => movePage(pageIndex, pageIndex + 1)}
+                      disabled={pageIndex === pages.length - 1}
+                      aria-label="Опустить страницу ниже"
+                      title="Ниже"
+                    >
+                      ↓
+                    </button>
+                    <button
+                      type="button"
+                      className="is-danger"
+                      onClick={() => removePageAt(pageIndex)}
+                      disabled={pages.length <= 1}
+                      aria-label={`Удалить страницу ${pageIndex + 1}`}
+                      title="Удалить страницу"
+                    >
+                      <Icon d={ICONS.trash} />
+                    </button>
+                  </div>
+                </div>
               ))}
             </div>
           </aside>
@@ -1228,12 +1347,23 @@ export function PdfRedactor() {
               {covers.map((cover, coverIndex) => (
                 <span
                   key={`cover-${coverIndex}`}
-                  className={`redactor-cover${tool === 'erase' ? ' is-visible' : ''}`}
+                  className={`redactor-cover${tool === 'erase' ? ' is-visible' : ''}${
+                    tool === 'erase' || tool === 'select' ? ' is-clickable' : ''
+                  }${selectedCover === coverIndex ? ' is-selected' : ''}`}
+                  title="Белое пятно: закрывает старый текст. Щёлкните, чтобы убрать (Delete)."
                   style={{
                     left: Math.round(cover.x * scale),
                     top: Math.round(cover.y * scale),
                     width: Math.round(cover.width * scale),
                     height: Math.round(cover.height * scale),
+                  }}
+                  onPointerDown={(event) => {
+                    if (tool !== 'erase' && tool !== 'select') return
+                    event.stopPropagation()
+                    event.preventDefault()
+                    setSelected(null)
+                    setSelectedCover(coverIndex)
+                    setPanelOpen(true)
                   }}
                 />
               ))}
@@ -1261,7 +1391,9 @@ export function PdfRedactor() {
                 return (
                   <div
                     key={object.id}
-                    className={`redactor-object${isSelected ? ' is-selected' : ''}`}
+                    className={`redactor-object${isSelected ? ' is-selected' : ''}${
+                      object.kind === 'image' && object.base ? ' is-base' : ''
+                    }`}
                     style={{
                       left: Math.round(object.x * scale),
                       top: Math.round(object.y * scale),
@@ -1281,6 +1413,7 @@ export function PdfRedactor() {
                         return
                       }
                       setSelected(object.id)
+                      setSelectedCover(null)
                       setPanelOpen(true)
                       resizeRef.current = null
                       dragRef.current = {
@@ -1410,7 +1543,12 @@ export function PdfRedactor() {
           )}
 
           {message && (
-            <p className={`message message-${message.tone}`} role="status">
+            <p
+              className={`message message-${message.tone}`}
+              role="status"
+              title="Нажмите, чтобы скрыть"
+              onClick={() => setMessage(null)}
+            >
               {message.text}
             </p>
           )}
@@ -1418,13 +1556,33 @@ export function PdfRedactor() {
 
         <aside className="ed-panel" aria-label="Свойства">
           <div className="ed-panel-head">
-            <h4 className="panel-title">{selectedObject ? 'Выбранный объект' : 'Свойства'}</h4>
+            <h4 className="panel-title">
+              {selectedCoverRect ? 'Белое пятно' : selectedObject ? 'Выбранный объект' : 'Свойства'}
+            </h4>
             <button type="button" className="ed-icon-btn ed-panel-close" onClick={() => setPanelOpen(false)} aria-label="Закрыть свойства">
               <Icon d={ICONS.close} />
             </button>
           </div>
 
-          {selectedObject ? (
+          {selectedCoverRect ? (
+            <>
+              <p className="panel-note">
+                Пятно закрывает старый текст на фото или в PDF. Появляется при распознавании и правке строки —
+                чтобы под новым текстом не просвечивал старый.
+              </p>
+              <dl className="ed-props">
+                <div>
+                  <dt>Размер</dt>
+                  <dd>
+                    {Math.round(selectedCoverRect.width)} × {Math.round(selectedCoverRect.height)} pt
+                  </dd>
+                </div>
+              </dl>
+              <button type="button" className="btn btn-quiet" onClick={() => removeCover(selectedCover as number)}>
+                Удалить пятно
+              </button>
+            </>
+          ) : selectedObject ? (
             <>
               {selectedObject.kind === 'text' ? (
                 <>

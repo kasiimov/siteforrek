@@ -161,6 +161,8 @@ export function imageToPage(
     height: size.height,
     data,
     type,
+    // Это фон страницы: пятна и правки должны ложиться сверху него.
+    base: true,
   }
   return { source: null, box: { ...box }, objects: [object] }
 }

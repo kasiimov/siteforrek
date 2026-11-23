@@ -29,12 +29,17 @@ export type ImageObject = ObjectBase & {
   height: number
   data: Uint8Array
   type: 'png' | 'jpg'
+  /** фото-подложка страницы: рисуется под пятнами и текстом */
+  base?: boolean
 }
 
 export type EditorObject = TextObject | ImageObject
 
-/** Белое пятно поверх исходного содержимого: так убирают старый текст, фото и штампы. */
-export type CoverRect = { x: number; y: number; width: number; height: number }
+/**
+ * Белое пятно поверх исходного содержимого: так убирают старый текст, фото и штампы.
+ * owner — объект, ради которого пятно появилось: вместе с ним оно и удаляется.
+ */
+export type CoverRect = { x: number; y: number; width: number; height: number; owner?: string }
 
 export type EditorPage = {
   /** номер страницы в исходном PDF (с нуля) или null для пустого листа */
@@ -226,11 +231,46 @@ export async function composePdf(options: ComposeOptions): Promise<{ blob: Blob;
 
   let objects = 0
 
+  /** Один объект редактора на готовой странице PDF. */
+  const drawObject = async (object: EditorObject, target: PDFPage, index: number) => {
+    if (object.kind === 'text') {
+      if (!object.text.trim()) return
+      const [x, top] = options.toPdf(index, object.x, object.y)
+      const baseline = top - font.heightAtSize(object.size)
+      const lines = wrapTextToWidth(object.text, object.width, (line) => font.widthOfTextAtSize(line, object.size))
+      target.drawText(lines.join('\n'), {
+        x,
+        y: baseline,
+        size: object.size,
+        font,
+        color: hexToRgb(object.color),
+        lineHeight: object.size * 1.3,
+      })
+      return
+    }
+
+    if (!object.data.length) return
+    const image = object.type === 'png' ? await out.embedPng(object.data) : await out.embedJpg(object.data)
+    const [x1, y1] = options.toPdf(index, object.x, object.y)
+    const [x2, y2] = options.toPdf(index, object.x + object.width, object.y + object.height)
+    target.drawImage(image, {
+      x: Math.min(x1, x2),
+      y: Math.min(y1, y2),
+      width: Math.abs(x2 - x1),
+      height: Math.abs(y2 - y1),
+    })
+  }
+
   for (let index = 0; index < options.pages.length; index++) {
     const model = options.pages[index]
     const target = targets[index]
 
-    // Сначала закрываем то, что нужно убрать: старый текст, фото, штампы.
+    // 1. Подложка страницы: фото скана лежит ниже всех пятен и правок.
+    for (const object of model.objects) {
+      if (object.kind === 'image' && object.base) await drawObject(object, target, index)
+    }
+
+    // 2. Закрываем то, что нужно убрать: старый текст, фото, штампы.
     for (const cover of model.covers ?? []) {
       const [x1, y1] = options.toPdf(index, cover.x, cover.y)
       const [x2, y2] = options.toPdf(index, cover.x + cover.width, cover.y + cover.height)
@@ -246,34 +286,10 @@ export async function composePdf(options: ComposeOptions): Promise<{ blob: Blob;
       })
     }
 
+    // 3. Всё остальное поверх пятен: новый текст, картинки, подписи.
     for (const object of model.objects) {
-      if (object.kind === 'text') {
-        if (!object.text.trim()) continue
-        const [x, top] = options.toPdf(index, object.x, object.y)
-        const baseline = top - font.heightAtSize(object.size)
-        const lines = wrapTextToWidth(object.text, object.width, (line) => font.widthOfTextAtSize(line, object.size))
-        target.drawText(lines.join('\n'), {
-          x,
-          y: baseline,
-          size: object.size,
-          font,
-          color: hexToRgb(object.color),
-          lineHeight: object.size * 1.3,
-        })
-      } else {
-        if (!object.data.length) continue
-        const image = object.type === 'png' ? await out.embedPng(object.data) : await out.embedJpg(object.data)
-        const [x1, y1] = options.toPdf(index, object.x, object.y)
-        const [x2, y2] = options.toPdf(index, object.x + object.width, object.y + object.height)
-        const left = Math.min(x1, x2)
-        const bottom = Math.min(y1, y2)
-        target.drawImage(image, {
-          x: left,
-          y: bottom,
-          width: Math.abs(x2 - x1),
-          height: Math.abs(y2 - y1),
-        })
-      }
+      if (object.kind === 'image' && object.base) continue
+      await drawObject(object, target, index)
       objects += 1
     }
 

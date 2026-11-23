@@ -3380,6 +3380,74 @@ select.field-input option {
   padding: 10px 9px 16px;
 }
 
+.ed-thumb-wrap {
+  position: relative;
+}
+
+.ed-thumb-wrap.is-dragging {
+  opacity: 0.45;
+}
+
+.ed-thumb-wrap.is-dragging .ed-thumb-page {
+  box-shadow: 0 0 0 2px var(--ed-red);
+}
+
+/* Кнопки страницы: появляются при наведении или фокусе. */
+.ed-thumb-tools {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  display: none;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.18);
+}
+
+.ed-thumb-wrap:hover .ed-thumb-tools,
+.ed-thumb-wrap:focus-within .ed-thumb-tools {
+  display: flex;
+}
+
+.ed-thumb-tools button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 19px;
+  height: 19px;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: #4b5160;
+  font-size: 0.72rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.ed-thumb-tools button:hover:not(:disabled) {
+  background: #eef0f4;
+}
+
+.ed-thumb-tools button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.ed-thumb-tools button.is-danger {
+  color: var(--ed-red);
+}
+
+.ed-thumb-tools button.is-danger:hover {
+  background: #fdeceb;
+}
+
+.ed-thumb-tools svg {
+  width: 12px;
+  height: 12px;
+}
+
 .ed-thumb {
   display: flex;
   flex-direction: column;
@@ -3563,6 +3631,7 @@ select.field-input option {
   background: #fff;
   border: 1px solid var(--ed-line-strong);
   color: var(--ed-text);
+  cursor: pointer;
   font-size: 0.82rem;
   box-shadow: 0 14px 34px -16px rgba(15, 23, 42, 0.5);
 }
@@ -4598,6 +4667,18 @@ select.field-input option {
   cursor: pointer;
 }
 
+.editor-app .redactor-object {
+  z-index: 3;
+}
+
+/* Фото-подложка страницы: под пятнами, иначе они не видны. И не таскается:
+   сдвинешь фон — пятна и текст разъедутся. */
+.editor-app .redactor-object.is-base {
+  z-index: 1;
+  pointer-events: none;
+  cursor: default;
+}
+
 .editor-app .redactor-cover {
   position: absolute;
   z-index: 2;
@@ -4608,6 +4689,21 @@ select.field-input option {
 .editor-app .redactor-cover.is-visible {
   outline: 1px dashed rgba(216, 58, 49, 0.5);
   background: rgba(255, 255, 255, 0.94);
+}
+
+/* Пятно можно выбрать и убрать, а не только стереть все сразу. */
+.editor-app .redactor-cover.is-clickable {
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.editor-app .redactor-cover.is-clickable:hover {
+  outline: 1px dashed rgba(216, 58, 49, 0.7);
+}
+
+.editor-app .redactor-cover.is-selected {
+  outline: 2px solid var(--ed-red);
+  background: rgba(255, 255, 255, 0.96);
 }
 
 .editor-app .redactor-run {

@@ -4,3 +4,4 @@ dist
 artifacts
 
 admin/.admin-token
+public/tesseract
