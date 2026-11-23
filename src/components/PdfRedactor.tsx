@@ -51,7 +51,7 @@ const HINTS: Record<Tool, string> = {
 const IMAGE_HINT = 'Фото встанет на страницу. Тащите его мышкой или пальцем, а за уголок справа снизу меняйте размер.'
 
 const TEXT_HINTS: Record<TextMode, string> = {
-  flow: 'По линии: щёлкните строку — правите её как в Word, текст переносится по ширине полей. Щелчок по пустому месту — новый абзац под этой строкой.',
+  flow: 'По линии: щёлкните строку — правите её как в Word, длинный текст переносится по ширине этой строки. Ширину можно менять ползунком справа. Щелчок по пустому месту — новый абзац от поля до поля.',
   free: 'Свободно: текст встаёт точно туда, куда щёлкнули, и его можно перетаскивать по странице.',
 }
 
@@ -423,13 +423,10 @@ export function PdfRedactor() {
   /** Готовая строка PDF → редактируемый текст: исходник закрываем белым пятном. */
   const editRun = (run: TextRun) => {
     if (!page) return
-    // В режиме «по линии» блок сразу получает ширину абзаца: длинный текст переносится,
-    // как в Word, а не уезжает одной строкой за край листа.
-    const paragraph = Math.min(page.box.width - run.x - 6, page.box.width - run.x - pageMargin(page.box.width))
-    const width =
-      textMode === 'flow'
-        ? Math.max(120, paragraph)
-        : Math.min(page.box.width - run.x - 6, Math.max(run.width + 12, 60))
+    // Блок по умолчанию держит ширину исходной строки: длинный текст переносится внутри неё
+    // и не наезжает на соседние строки. Расширить можно ползунком «Ширина блока».
+    const maxWidth = Math.max(60, page.box.width - run.x - 6)
+    const width = Math.min(maxWidth, Math.max(run.width + (textMode === 'flow' ? 0 : 12), 60))
     const object: TextObject = {
       kind: 'text',
       id: uid(),
