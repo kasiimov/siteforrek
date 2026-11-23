@@ -1862,11 +1862,10 @@ export function PdfRedactor() {
                   }`}
                   data-page-index={pageIndex}
                   onPointerDown={(event) => {
-                    try {
-                      event.currentTarget.setPointerCapture(event.pointerId)
-                    } catch {
-                      // Синтетические события и старые браузеры не умеют захват — не страшно.
-                    }
+                    // Кнопки страницы живут внутри миниатюры: им не мешаем — иначе
+                    // захват указателя уводит их клик на контейнер и кнопки молчат.
+                    if ((event.target as Element).closest('.ed-thumb-tools')) return
+                    movedRef.current = false
                     pressRef.current = { index: pageIndex, x: event.clientX, y: event.clientY, active: false }
                   }}
                   onPointerMove={(event) => {
@@ -1875,6 +1874,13 @@ export function PdfRedactor() {
                     if (!press.active) {
                       if (Math.hypot(event.clientX - press.x, event.clientY - press.y) < 12) return
                       press.active = true
+                      // Захват нужен только на время перетаскивания: обычный тап
+                      // по миниатюре остаётся кликом по кнопке страницы.
+                      try {
+                        (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId)
+                      } catch {
+                        // Синтетические события и старые браузеры не умеют захват — не страшно.
+                      }
                       setDragPage(press.index)
                     }
                     // Ищем миниатюру под пальцем: на неё и встанет страница.
