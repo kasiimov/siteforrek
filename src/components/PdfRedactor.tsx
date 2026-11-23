@@ -1537,11 +1537,6 @@ export function PdfRedactor() {
                 {file ? `${formatSize(file.size)} · ` : ''}
                 {pages.length} стр.
               </span>
-              {!renaming && (
-                <button type="button" className="ed-save-mark" onClick={save} disabled={busy} title="Скачать PDF">
-                  <Icon d={ICONS.download} />
-                </button>
-              )}
             </>
           ) : (
             <span className="ed-doc-name">Новый документ</span>
