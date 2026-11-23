@@ -14,7 +14,7 @@ type PrivacyCopy = {
 const CONTENT: Record<SeoLang, PrivacyCopy> = {
   ru: {
     title: 'Политика конфиденциальности',
-    updated: 'Обновлено 22 ноября 2026 года',
+    updated: 'Обновлено 23 ноября 2026 года',
     intro:
       'RekPDF — бесплатный сервис для работы с PDF. Ниже честно описано, какие данные обрабатываются и что с ними происходит.',
     sections: [
@@ -23,6 +23,7 @@ const CONTENT: Record<SeoLang, PrivacyCopy> = {
         text: [
           'Файлы PDF, JPG и PNG не загружаются на наш сервер. Документы читаются и собираются прямо в браузере на вашем устройстве, поэтому мы не получаем их содержимое, не просматриваем, не копируем и не передаём третьим лицам.',
           'Нам нечего удалять через час: файл никогда не попадает в наше хранилище. Соединение по HTTPS нужно только для загрузки страницы сайта.',
+          'Для распознавания текста (OCR) браузер скачивает языковые модели с публичного CDN — jsDelivr и tessdata.projectnaptha.com. Уходит только запрос за моделью языка: сам документ, его страницы и распознанный текст никуда не отправляются и обрабатываются на вашем устройстве. Скачанные модели кешируются браузером, поэтому повторное распознавание идёт быстрее и без новой загрузки.',
         ],
       },
       {
@@ -52,7 +53,7 @@ const CONTENT: Record<SeoLang, PrivacyCopy> = {
   },
   uz: {
     title: 'Maxfiylik siyosati',
-    updated: '2026-yil 22-noyabrda yangilandi',
+    updated: '2026-yil 23-noyabrda yangilandi',
     intro:
       "RekPDF — PDF bilan ishlash uchun bepul xizmat. Quyida qanday ma'lumotlar qayta ishlanishi va ular bilan nima bo'lishi ochiq yozilgan.",
     sections: [
@@ -61,6 +62,7 @@ const CONTENT: Record<SeoLang, PrivacyCopy> = {
         text: [
           "PDF, JPG va PNG fayllar bizning serverga yuklanmaydi. Hujjatlar to'g'ridan-to'g'ri brauzeringizda, qurilmangizda o'qiladi va yig'iladi — shuning uchun biz ularning mazmunini olmaymiz, ko'rmaymiz, nusxalamaymiz va uchinchi shaxslarga bermaymiz.",
           "Bir soatdan keyin o'chirishimiz shart emas: fayl bizning xotiraga umuman tushmaydi. HTTPS ulanish faqat sayt sahifasini yuklash uchun kerak.",
+          "Matnni aniqlash (OCR) uchun brauzer til modellarini ochiq CDN — jsDelivr va tessdata.projectnaptha.com dan yuklab oladi. Faqat til modeli uchun so'rov ketadi: hujjatning o'zi, sahifalari va aniqlangan matn hech qayerga yuborilmaydi, hammasi qurilmangizda qayta ishlanadi. Yuklangan modellar brauzer keshida saqlanadi, shuning uchun keyingi aniqlash tezroq ishlaydi.",
         ],
       },
       {
@@ -90,7 +92,7 @@ const CONTENT: Record<SeoLang, PrivacyCopy> = {
   },
   en: {
     title: 'Privacy policy',
-    updated: 'Updated on 22 November 2026',
+    updated: 'Updated on 23 November 2026',
     intro:
       'RekPDF is a free service for working with PDF files. Below is a plain description of what data is processed and what happens to it.',
     sections: [
@@ -99,6 +101,7 @@ const CONTENT: Record<SeoLang, PrivacyCopy> = {
         text: [
           'PDF, JPG and PNG files are not uploaded to our server. Documents are read and rebuilt directly in your browser on your device, so we never receive their contents, never look at them, never copy them and never share them with third parties.',
           'There is nothing to delete after an hour: the file never reaches our storage. HTTPS is only needed to load the page itself.',
+          'For text recognition (OCR) the browser downloads language models from a public CDN — jsDelivr and tessdata.projectnaptha.com. Only a request for the language model leaves your device: the document itself, its pages and the recognized text are never sent anywhere and are processed locally. Downloaded models are cached by the browser, so the next recognition runs faster.',
         ],
       },
       {

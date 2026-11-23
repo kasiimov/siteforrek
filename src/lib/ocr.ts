@@ -75,6 +75,8 @@ export async function recognizeImage(
   canvas: HTMLCanvasElement,
   lang: string,
   onProgress?: (progress: number) => void,
+  /** во сколько раз растр крупнее страницы: координаты слов возвращаем в точках страницы */
+  rasterScale = 1,
 ): Promise<OcrLine[]> {
   const { createWorker } = await import('tesseract.js')
 
@@ -90,9 +92,7 @@ export async function recognizeImage(
     const result = await worker.recognize(canvas)
     const page = result.data as unknown as { words?: RawWord[] }
     const words = page.words ?? []
-    const width = canvas.width || 1
-    const scale = width / Math.max(1, canvas.width)
-    return groupWords(words, scale)
+    return groupWords(words, Math.max(0.01, rasterScale))
   } finally {
     await worker.terminate()
   }

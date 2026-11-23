@@ -3226,6 +3226,35 @@ select.field-input option {
   color: #9aa0ab;
 }
 
+.ed-mode-row {
+  display: flex;
+  gap: 3px;
+  margin-top: 4px;
+  padding: 2px;
+  border: 1px solid var(--ed-line);
+  border-radius: 7px;
+  background: #f6f7f9;
+}
+
+.ed-mode {
+  padding: 3px 7px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: #6b7280;
+  font: inherit;
+  font-size: 0.64rem;
+  line-height: 1.2;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.ed-mode.is-active {
+  background: #fff;
+  color: var(--ed-red);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.16);
+}
+
 .ed-hint {
   margin: 0 0 0 auto;
   align-self: center;

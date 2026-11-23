@@ -56,10 +56,45 @@ export const TEXT_COLORS = [
 
 export const FONT_SIZES = [8, 10, 12, 14, 18, 24, 32, 48] as const
 
+/**
+ * Разбивает текст на строки по ширине блока — так же, как это сделает PDF при сборке.
+ * Без этого длинная строка уезжала бы за край блока в готовом файле.
+ */
+export function wrapTextToWidth(
+  text: string,
+  width: number,
+  measure: (line: string) => number,
+): string[] {
+  const lines: string[] = []
+  for (const paragraph of text.replace(/\r\n?/g, '\n').split('\n')) {
+    const words = paragraph.split(/\s+/).filter(Boolean)
+    if (!words.length) {
+      lines.push('')
+      continue
+    }
+    let line = words[0]
+    for (let index = 1; index < words.length; index++) {
+      const candidate = `${line} ${words[index]}`
+      if (measure(candidate) <= width) {
+        line = candidate
+        continue
+      }
+      lines.push(line)
+      line = words[index]
+    }
+    lines.push(line)
+  }
+  return lines
+}
+
 /** Сколько места занимает объект — нужно и для перетаскивания, и для рамки выделения. */
 export function objectSize(object: EditorObject, lineHeight = 1.3): { width: number; height: number } {
   if (object.kind === 'image') return { width: object.width, height: object.height }
-  const lines = object.text.split('\n').length
+  // Ширина символа примерно 0.52 кегля: этого хватает, чтобы оценить перенос строк.
+  const perLine = Math.max(1, Math.floor(object.width / Math.max(1, object.size * 0.52)))
+  const lines = object.text
+    .split('\n')
+    .reduce((total, line) => total + Math.max(1, Math.ceil(line.length / perLine)), 0)
   return { width: object.width, height: Math.round(Math.max(object.size, lines * object.size * lineHeight) * 10) / 10 }
 }
 
@@ -216,7 +251,8 @@ export async function composePdf(options: ComposeOptions): Promise<{ blob: Blob;
         if (!object.text.trim()) continue
         const [x, top] = options.toPdf(index, object.x, object.y)
         const baseline = top - font.heightAtSize(object.size)
-        target.drawText(object.text, {
+        const lines = wrapTextToWidth(object.text, object.width, (line) => font.widthOfTextAtSize(line, object.size))
+        target.drawText(lines.join('\n'), {
           x,
           y: baseline,
           size: object.size,

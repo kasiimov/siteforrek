@@ -34,6 +34,7 @@ import { pagesToDocx, pagesToText } from '../lib/exportDoc'
 import { AdMini } from './Ads'
 
 type Tool = 'select' | 'text' | 'erase'
+type TextMode = 'flow' | 'free'
 type Message = { tone: 'ok' | 'error' | 'info'; text: string }
 
 const MAX_FILE_MB = 100
@@ -48,6 +49,16 @@ const HINTS: Record<Tool, string> = {
 }
 
 const IMAGE_HINT = 'Фото встанет на страницу. Тащите его мышкой или пальцем, а за уголок справа снизу меняйте размер.'
+
+const TEXT_HINTS: Record<TextMode, string> = {
+  flow: 'По линии: щёлкните строку — правите её как в Word, текст переносится по ширине полей. Щелчок по пустому месту — новый абзац под этой строкой.',
+  free: 'Свободно: текст встаёт точно туда, куда щёлкнули, и его можно перетаскивать по странице.',
+}
+
+/** Поля абзаца для режима «по линии»: текст идёт от края до края, как в Word. */
+function pageMargin(width: number): number {
+  return Math.min(56, Math.max(16, Math.round(width * 0.09)))
+}
 
 const uid = () => Math.random().toString(36).slice(2, 10)
 
@@ -101,6 +112,7 @@ export function PdfRedactor() {
   const [fitScale, setFitScale] = useState(1)
   const [zoom, setZoom] = useState(1)
   const [tool, setTool] = useState<Tool>('select')
+  const [textMode, setTextMode] = useState<TextMode>('flow')
   const [selected, setSelected] = useState<string | null>(null)
   const [eraseAnnotations, setEraseAnnotations] = useState(false)
   const [history, setHistory] = useState<EditorPage[][]>([])
@@ -130,8 +142,13 @@ export function PdfRedactor() {
   const dragRef = useRef<{ id: string; startX: number; startY: number; originX: number; originY: number; moved: boolean } | null>(null)
   const resizeRef = useRef<{ id: string; startX: number; originWidth: number; ratio: number; moved: boolean } | null>(null)
   const eraseRef = useRef<{ x: number; y: number } | null>(null)
+  const indexRef = useRef(0)
+  const ocrBusyRef = useRef(false)
+  const recognizeRef = useRef<(target?: EditorPage, targetIndex?: number) => Promise<void>>(async () => {})
 
   pagesRef.current = pages
+  indexRef.current = index
+  ocrBusyRef.current = ocrBusy
 
   const page = pages[index] ?? null
   const boxWidth = page?.box.width ?? 0
@@ -231,9 +248,11 @@ export function PdfRedactor() {
         const bytes = new Uint8Array(await next.arrayBuffer())
         const isPng = next.type === 'image/png' || /\.png$/i.test(next.name)
         const bitmap = await createImageBitmap(new Blob([bytes], { type: isPng ? 'image/png' : 'image/jpeg' }))
-        setPages([imageToPage(bytes, isPng ? 'png' : 'jpg', bitmap.width, bitmap.height, A4_BOX)])
+        const photoPage = imageToPage(bytes, isPng ? 'png' : 'jpg', bitmap.width, bitmap.height, A4_BOX)
+        setPages([photoPage])
         bitmap.close()
-        setMessage({ tone: 'info', text: 'Фото открыто как страница. Нажмите «Распознать» — текст станет редактируемым.' })
+        // Текст на фото распознаём сразу: дальше его правим как обычный документ.
+        window.setTimeout(() => void recognizeRef.current(photoPage, 0), 350)
       } else {
         const text = await readDocumentText(next, nextKind)
         if (!text.trim()) throw new Error('В файле нет текста — открывать нечего.')
@@ -348,7 +367,7 @@ export function PdfRedactor() {
     )
   }
 
-  const addText = (x: number, y: number) => {
+  const addText = (x: number, y: number, width?: number) => {
     if (!page) return
     const object: TextObject = {
       kind: 'text',
@@ -358,7 +377,7 @@ export function PdfRedactor() {
       text: '',
       size: 14,
       color: TEXT_COLORS[0].value,
-      width: Math.max(80, Math.min(260, page.box.width - x - 24)),
+      width: width ?? Math.max(80, Math.min(260, page.box.width - x - 24)),
     }
     addPageObject([object])
     setSelected(object.id)
@@ -366,9 +385,51 @@ export function PdfRedactor() {
     setFocusToken((value) => value + 1)
   }
 
+  /**
+   * Режим «по линии»: новый текст не висит где попало, а встаёт абзацем
+   * под строкой, по которой щёлкнули, и тянется от поля до поля.
+   */
+  const addFlowText = (x: number, y: number) => {
+    if (!page) return
+    const margin = pageMargin(page.box.width)
+    const anchors: { x: number; y: number; height: number }[] = [
+      ...pageRuns
+        .filter(
+          (run) =>
+            !(page.covers ?? []).some((cover) => {
+              const cx = run.x + run.width / 2
+              const cy = run.y + run.height / 2
+              return cx >= cover.x && cx <= cover.x + cover.width && cy >= cover.y && cy <= cover.y + cover.height
+            }),
+        )
+        .map((run) => ({ x: run.x, y: run.y, height: run.height })),
+      ...page.objects
+        .filter((object): object is TextObject => object.kind === 'text')
+        .map((object) => ({ x: object.x, y: object.y, height: objectSize(object).height })),
+    ].sort((a, b) => a.y - b.y)
+
+    const above = anchors.filter((anchor) => anchor.y + anchor.height <= y + 6)
+    const last = above[above.length - 1]
+    const top = last
+      ? Math.min(page.box.height - 18, last.y + Math.max(last.height, 12) + 4)
+      : Math.max(0, Math.min(y, page.box.height - 24))
+    const left = last
+      ? Math.max(margin, Math.min(last.x, page.box.width - margin - 80))
+      : Math.max(0, Math.min(x, page.box.width - margin - 80))
+    const width = Math.max(80, page.box.width - left - margin)
+    addText(left, top, width)
+  }
+
   /** Готовая строка PDF → редактируемый текст: исходник закрываем белым пятном. */
   const editRun = (run: TextRun) => {
     if (!page) return
+    // В режиме «по линии» блок сразу получает ширину абзаца: длинный текст переносится,
+    // как в Word, а не уезжает одной строкой за край листа.
+    const paragraph = Math.min(page.box.width - run.x - 6, page.box.width - run.x - pageMargin(page.box.width))
+    const width =
+      textMode === 'flow'
+        ? Math.max(120, paragraph)
+        : Math.min(page.box.width - run.x - 6, Math.max(run.width + 12, 60))
     const object: TextObject = {
       kind: 'text',
       id: uid(),
@@ -377,7 +438,7 @@ export function PdfRedactor() {
       text: run.text,
       size: Math.max(6, Math.min(48, Math.round(run.size * 10) / 10)),
       color: TEXT_COLORS[0].value,
-      width: Math.min(page.box.width - run.x - 6, Math.max(run.width + 12, 60)),
+      width,
     }
     const cover: CoverRect = {
       x: Math.max(0, run.x - 1.5),
@@ -650,7 +711,8 @@ export function PdfRedactor() {
           text: 'На этой странице нет текстового слоя — скорее всего, это скан или фото. Нажмите «Распознать».',
         })
       }
-      addText(Math.max(0, Math.min(x, page.box.width - 60)), Math.max(0, Math.min(y, page.box.height - 24)))
+      if (textMode === 'flow') addFlowText(x, y)
+      else addText(Math.max(0, Math.min(x, page.box.width - 60)), Math.max(0, Math.min(y, page.box.height - 24)))
       return
     }
 
@@ -686,16 +748,19 @@ export function PdfRedactor() {
     return { canvas, scale: ratio }
   }
 
-  const recognizePage = async () => {
-    if (!page || ocrBusy) return
+  const recognizePage = async (target?: EditorPage, targetIndex?: number) => {
+    const model = target ?? page
+    const at = targetIndex ?? indexRef.current
+    if (!model || ocrBusyRef.current) return
+    ocrBusyRef.current = true
     setOcrBusy(true)
     setOcrProgress(0)
     setMessage({ tone: 'info', text: 'Распознаём текст на странице — первый запуск скачивает языковые данные.' })
     setPanelOpen(true)
 
     try {
-      const { canvas } = await rasterPage(page)
-      const lines = await recognizeImage(canvas, ocrLang, (progress) => setOcrProgress(progress))
+      const { canvas, scale: rasterScale } = await rasterPage(model)
+      const lines = await recognizeImage(canvas, ocrLang, (progress) => setOcrProgress(progress), rasterScale)
       canvas.width = 0
       canvas.height = 0
 
@@ -720,18 +785,25 @@ export function PdfRedactor() {
           text: line.text,
           size,
           color: TEXT_COLORS[0].value,
-          width: Math.min(page.box.width - line.x - 4, Math.max(line.width + 10, 40)),
+          width: Math.min(model.box.width - line.x - 4, Math.max(line.width + 10, 40)),
         })
         newCovers.push({
           x: Math.max(0, line.x - 1),
           y: Math.max(0, line.y - 1),
-          width: Math.min(line.width + 2, page.box.width - line.x + 1),
+          width: Math.min(line.width + 2, model.box.width - line.x + 1),
           height: line.height + 2,
         })
       }
 
-      addPageObject(objects, newCovers)
-      setTool('select')
+      mutate((current) =>
+        current.map((item, itemIndex) =>
+          itemIndex === at
+            ? { ...item, objects: [...item.objects, ...objects], covers: [...(item.covers ?? []), ...newCovers] }
+            : item,
+        ),
+      )
+      // Фото и сканы после распознавания ведём сразу в правку текста.
+      setTool('text')
       setMessage({
         tone: 'ok',
         text: `Распознано строк: ${lines.length}. Текст стал редактируемым — щёлкните по нему и правьте справа.`,
@@ -744,10 +816,13 @@ export function PdfRedactor() {
         text: 'Распознавание не запустилось. Нужен интернет для языковых данных — попробуйте ещё раз.',
       })
     } finally {
+      ocrBusyRef.current = false
       setOcrBusy(false)
       setOcrProgress(0)
     }
   }
+
+  recognizeRef.current = recognizePage
 
   const save = async () => {
     if (!pages.length) return
@@ -994,6 +1069,32 @@ export function PdfRedactor() {
                 <span>Стереть</span>
               </button>
             </div>
+            <div className="ed-mode-row" role="group" aria-label="Режим ввода текста">
+              <button
+                type="button"
+                className={`ed-mode${textMode === 'flow' ? ' is-active' : ''}`}
+                aria-pressed={textMode === 'flow'}
+                onClick={() => {
+                  setTextMode('flow')
+                  setTool('text')
+                }}
+                title="Текст идёт по строке и переносится по полям, как в Word"
+              >
+                По линии
+              </button>
+              <button
+                type="button"
+                className={`ed-mode${textMode === 'free' ? ' is-active' : ''}`}
+                aria-pressed={textMode === 'free'}
+                onClick={() => {
+                  setTextMode('free')
+                  setTool('text')
+                }}
+                title="Текст встаёт точно туда, куда щёлкнули, и его можно перетаскивать"
+              >
+                Свободно
+              </button>
+            </div>
             <span className="ed-group-label">Правка текста</span>
           </div>
 
@@ -1057,7 +1158,9 @@ export function PdfRedactor() {
             <span className="ed-group-label">Распознавание</span>
           </div>
 
-          <p className="ed-hint">{selectedObject?.kind === 'image' ? IMAGE_HINT : HINTS[tool]}</p>
+          <p className="ed-hint">
+            {selectedObject?.kind === 'image' ? IMAGE_HINT : tool === 'text' ? TEXT_HINTS[textMode] : HINTS[tool]}
+          </p>
         </div>
       )}
 
