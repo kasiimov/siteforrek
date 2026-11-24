@@ -440,7 +440,7 @@ export async function pdfToDocx(
   }
 
   const doc = new Document({
-    creator: 'RekPDF',
+    creator: 'Congix Docs',
     title: 'Документ, сконвертированный из PDF',
     styles: {
       default: {

@@ -89,9 +89,9 @@ export default function App() {
 
       <header className="nav">
         <Link className="brand" to={ROUTES.home}>
-          <span className="brand-mark">R</span>
+          <span className="brand-mark">C</span>
           <span className="brand-name">
-            Rek<span className="accent">PDF</span>
+            Congix <span className="accent">Docs</span>
           </span>
         </Link>
 
@@ -145,14 +145,14 @@ export default function App() {
       <footer className="footer">
         <div className="footer-main">
           <div className="footer-brand">
-            <span className="brand-mark small">R</span>
-            <span>RekPDF</span>
+            <span className="brand-mark small">C</span>
+            <span>Congix Docs</span>
           </div>
           <p className="footer-note">
             PDF в Word, редактор PDF и все картинки из PDF — прямо в браузере. Файлы не покидают
             устройство.
           </p>
-          <span className="footer-badge" title="Анонимная статистика RekPDF">
+          <span className="footer-badge" title="Анонимная статистика Congix Docs">
             <span className="footer-dot" aria-hidden="true" />
             {live ? `Пользователей: ${live.people} · сегодня ${live.today}` : 'Ноль загрузок'}
           </span>
@@ -168,7 +168,7 @@ export default function App() {
         </nav>
 
         <div className="footer-bottom">
-          <p className="footer-copy">© {new Date().getFullYear()} RekPDF</p>
+          <p className="footer-copy">© {new Date().getFullYear()} Congix Docs</p>
           <p className="footer-stack">pdf.js · docx · pdf-lib — всё считается на вашем устройстве</p>
         </div>
       </footer>

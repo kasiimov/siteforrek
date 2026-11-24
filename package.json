@@ -1,5 +1,5 @@
 {
-  "name": "rekpdf",
+  "name": "congix-docs",
   "private": true,
   "version": "1.0.0",
   "type": "module",
@@ -12,7 +12,9 @@
     "prebuild": "node scripts/prepare-tesseract.mjs",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview --host 0.0.0.0 --port 3000",
-    "test": "vitest run"
+    "test": "vitest run",
+    "admin:build": "node admin/build.mjs",
+    "admin:test": "node admin/build.mjs && node admin/test.mjs"
   },
   "dependencies": {
     "@pdf-lib/fontkit": "^1.1.1",

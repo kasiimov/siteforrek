@@ -50,7 +50,7 @@ export function ServicesPage() {
     <>
       <section className="page-hero">
         <span className="eyebrow">Услуги</span>
-        <h1>Что делает RekPDF</h1>
+        <h1>Что делает Congix Docs</h1>
         <p>
           Четыре направления работы с документами. Всё выполняется в браузере: ни файла на сервер, ни
           очереди, ни регистрации.

@@ -18,7 +18,7 @@ type PageMeta = {
  */
 const PAGES: Record<string, PageMeta> = {
   [ROUTES.home]: {
-    title: 'Конвертировать PDF в Word онлайн бесплатно — RekPDF',
+    title: 'Конвертировать PDF в Word онлайн бесплатно — Congix Docs',
     description:
       'Конвертируйте PDF в Word, сжимайте PDF без потери качества, объединяйте и разделяйте PDF файлы, переводите JPG в PDF и PDF в JPG. Бесплатно, без регистрации — файлы остаются в браузере.',
     keywords:
@@ -26,7 +26,7 @@ const PAGES: Record<string, PageMeta> = {
     lang: 'ru',
   },
   [ROUTES.tools]: {
-    title: 'Инструменты PDF: Word, JPG, сжатие и страницы — RekPDF',
+    title: 'Инструменты PDF: Word, JPG, сжатие и страницы — Congix Docs',
     description:
       'Все инструменты для PDF в одном окне: PDF в Word, PDF в JPG, JPG в PDF, сжать PDF, объединить, разделить, повернуть и переставить страницы. Бесплатно и без загрузки файлов на сервер.',
     keywords:
@@ -34,22 +34,22 @@ const PAGES: Record<string, PageMeta> = {
     lang: 'ru',
   },
   [ROUTES.services]: {
-    title: 'Что умеет RekPDF — конвертация и редактор PDF онлайн',
+    title: 'Что умеет Congix Docs — конвертация и редактор PDF онлайн',
     description:
       'Редактор PDF, конвертация PDF в Word и изображения, сжатие, объединение и разделение файлов. Всё работает в браузере: документы не загружаются на сервер.',
     keywords: 'редактор PDF онлайн, конвертер PDF, работа с PDF в браузере',
     lang: 'ru',
   },
   [ROUTES.profile]: {
-    title: 'Профиль — RekPDF',
+    title: 'Профиль — Congix Docs',
     description: 'История обработки файлов хранится только на вашем устройстве.',
-    keywords: 'RekPDF профиль',
+    keywords: 'Congix Docs профиль',
     lang: 'ru',
   },
   [ROUTES.settings]: {
-    title: 'Настройки — RekPDF',
-    description: 'Приватность, история и анонимная статистика RekPDF.',
-    keywords: 'RekPDF настройки',
+    title: 'Настройки — Congix Docs',
+    description: 'Приватность, история и анонимная статистика Congix Docs.',
+    keywords: 'Congix Docs настройки',
     lang: 'ru',
   },
   [ROUTES.editor]: {
@@ -60,7 +60,7 @@ const PAGES: Record<string, PageMeta> = {
     lang: 'ru',
   },
   [ROUTES.uz]: {
-    title: "PDF ni Word ga o'tkazish va PDF bilan ishlash onlayn — RekPDF",
+    title: "PDF ni Word ga o'tkazish va PDF bilan ishlash onlayn — Congix Docs",
     description:
       "PDF ni Word ga o'tkazish, Word ni PDF qilish, PDF hajmini kichraytirish, PDF fayllarni birlashtirish va bo'lish, rasmni PDF qilish, PDF ni rasmga aylantirish — bepul, onlayn, telefon orqali. Fayllar brauzerda qoladi.",
     keywords:
@@ -68,7 +68,7 @@ const PAGES: Record<string, PageMeta> = {
     lang: 'uz',
   },
   [ROUTES.en]: {
-    title: 'Convert PDF to Word online free — RekPDF',
+    title: 'Convert PDF to Word online free — Congix Docs',
     description:
       'Convert PDF to Word, compress PDF file size online, merge and split PDF files, convert JPG to PDF and PDF to JPG. Free, no sign-up, files stay in your browser.',
     keywords:
@@ -89,23 +89,23 @@ function setMeta(attribute: 'name' | 'property', key: string, content: string) {
 
 const PRIVACY_META: Record<SeoLang, PageMeta> = {
   ru: {
-    title: 'Политика конфиденциальности — RekPDF',
+    title: 'Политика конфиденциальности — Congix Docs',
     description:
-      'Как RekPDF обращается с файлами и данными: документы не загружаются на сервер, статистика анонимная, реклама congix.uz.',
-    keywords: 'политика конфиденциальности RekPDF, обработка файлов, cookie, аналитика',
+      'Как Congix Docs обращается с файлами и данными: документы не загружаются на сервер, статистика анонимная, реклама congix.uz.',
+    keywords: 'политика конфиденциальности Congix Docs, обработка файлов, cookie, аналитика',
     lang: 'ru',
   },
   uz: {
-    title: 'Maxfiylik siyosati — RekPDF',
+    title: 'Maxfiylik siyosati — Congix Docs',
     description:
-      "RekPDF fayllar va ma'lumotlar bilan qanday ishlaydi: hujjatlar serverga yuklanmaydi, statistika anonim, reklama congix.uz.",
+      "Congix Docs fayllar va ma'lumotlar bilan qanday ishlaydi: hujjatlar serverga yuklanmaydi, statistika anonim, reklama congix.uz.",
     keywords: 'maxfiylik siyosati, PDF fayllar, cookie, statistika',
     lang: 'uz',
   },
   en: {
-    title: 'Privacy policy — RekPDF',
+    title: 'Privacy policy — Congix Docs',
     description:
-      'How RekPDF handles files and data: documents are never uploaded, statistics are anonymous and ads come from congix.uz.',
+      'How Congix Docs handles files and data: documents are never uploaded, statistics are anonymous and ads come from congix.uz.',
     keywords: 'privacy policy, PDF files, cookies, analytics',
     lang: 'en',
   },

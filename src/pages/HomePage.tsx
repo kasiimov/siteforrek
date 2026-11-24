@@ -150,7 +150,7 @@ export function HomePage() {
               <span className="art-dot" />
               <span className="art-dot" />
               <span className="art-dot" />
-              <span className="art-url">rekpdf · всё в браузере</span>
+              <span className="art-url">congix docs · всё в браузере</span>
             </div>
             <div className="art-stage">
               <div className="art-card art-pdf">
@@ -209,7 +209,7 @@ export function HomePage() {
 
       <section className="features" id="features">
         <div className="section-head">
-          <span className="eyebrow">Почему RekPDF</span>
+          <span className="eyebrow">Почему Congix Docs</span>
           <h2>Инструмент, а не «сервис с подпиской»</h2>
           <p className="section-sub">
             Никаких аккаунтов, очередей и файлов, которые лежат на чужом диске месяцами.

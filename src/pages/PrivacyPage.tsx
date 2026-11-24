@@ -16,7 +16,7 @@ const CONTENT: Record<SeoLang, PrivacyCopy> = {
     title: 'Политика конфиденциальности',
     updated: 'Обновлено 23 ноября 2026 года',
     intro:
-      'RekPDF — бесплатный сервис для работы с PDF. Ниже честно описано, какие данные обрабатываются и что с ними происходит.',
+      'Congix Docs — бесплатный сервис для работы с PDF. Ниже честно описано, какие данные обрабатываются и что с ними происходит.',
     sections: [
       {
         title: '1. Обработка и хранение файлов',
@@ -55,7 +55,7 @@ const CONTENT: Record<SeoLang, PrivacyCopy> = {
     title: 'Maxfiylik siyosati',
     updated: '2026-yil 23-noyabrda yangilandi',
     intro:
-      "RekPDF — PDF bilan ishlash uchun bepul xizmat. Quyida qanday ma'lumotlar qayta ishlanishi va ular bilan nima bo'lishi ochiq yozilgan.",
+      "Congix Docs — PDF bilan ishlash uchun bepul xizmat. Quyida qanday ma'lumotlar qayta ishlanishi va ular bilan nima bo'lishi ochiq yozilgan.",
     sections: [
       {
         title: "1. Fayllarni qayta ishlash va saqlash",
@@ -94,7 +94,7 @@ const CONTENT: Record<SeoLang, PrivacyCopy> = {
     title: 'Privacy policy',
     updated: 'Updated on 23 November 2026',
     intro:
-      'RekPDF is a free service for working with PDF files. Below is a plain description of what data is processed and what happens to it.',
+      'Congix Docs is a free service for working with PDF files. Below is a plain description of what data is processed and what happens to it.',
     sections: [
       {
         title: '1. File processing and storage',
@@ -137,7 +137,7 @@ export function PrivacyPage({ lang }: { lang: SeoLang }) {
   return (
     <>
       <section className="page-hero">
-        <span className="eyebrow">RekPDF</span>
+        <span className="eyebrow">Congix Docs</span>
         <h1>{copy.title}</h1>
         <p>{copy.intro}</p>
         <p className="panel-note">{copy.updated}</p>

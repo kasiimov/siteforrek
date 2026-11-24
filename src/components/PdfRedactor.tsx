@@ -1504,10 +1504,10 @@ export function PdfRedactor() {
       />
 
       <header className="ed-top">
-        <Link className="ed-brand" to={ROUTES.tools} aria-label="RekPDF — к инструментам">
-          <span className="ed-brand-mark">R</span>
+        <Link className="ed-brand" to={ROUTES.tools} aria-label="Congix Docs — к инструментам">
+          <span className="ed-brand-mark">C</span>
           <span className="ed-brand-name">
-            RekPDF <small>Редактор</small>
+            Congix Docs <small>Редактор</small>
           </span>
         </Link>
 

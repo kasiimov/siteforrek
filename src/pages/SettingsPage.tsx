@@ -135,7 +135,7 @@ export function SettingsPage() {
         <div className="page-card">
           <h3>О сервисе</h3>
           <ul className="page-list">
-            <li>RekPDF 1.0 — конвертер и редактор PDF в браузере</li>
+            <li>Congix Docs 1.0 — конвертер и редактор PDF в браузере</li>
             <li>pdf.js · pdf-lib · docx — всё считается на вашем устройстве</li>
             <li>Файлы не загружаются на сервер и не хранятся</li>
             <li>Статистика анонимная: инструмент, действие и время, без содержимого документов</li>

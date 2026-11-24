@@ -43,7 +43,7 @@ export const SEO_TOOL_PAGES: SeoToolPage[] = [
       ru: {
         name: 'PDF в Word',
         h1: 'Конвертировать PDF в Word онлайн бесплатно',
-        title: 'Конвертировать PDF в Word онлайн бесплатно — RekPDF',
+        title: 'Конвертировать PDF в Word онлайн бесплатно — Congix Docs',
         description:
           'Переведите PDF в редактируемый Word (.docx) прямо в браузере: текст, шрифты, колонки и таблицы. Бесплатно, без регистрации, файл не загружается на сервер.',
         lead:
@@ -52,7 +52,7 @@ export const SEO_TOOL_PAGES: SeoToolPage[] = [
       uz: {
         name: "PDF ni Word ga o'tkazish",
         h1: "PDF ni Word ga o'tkazish — bepul va onlayn",
-        title: "PDF ni Word ga o'tkazish bepul — RekPDF",
+        title: "PDF ni Word ga o'tkazish bepul — Congix Docs",
         description:
           "PDF ni tahrirlanadigan Word (.docx) faylga aylantiring: matn, shrift va jadvallar saqlanadi. Bepul, ro'yxatdan o'tishsiz, fayl serverga yuklanmaydi.",
         lead:
@@ -61,7 +61,7 @@ export const SEO_TOOL_PAGES: SeoToolPage[] = [
       en: {
         name: 'PDF to Word',
         h1: 'Convert PDF to Word online free',
-        title: 'Convert PDF to Word online free — RekPDF',
+        title: 'Convert PDF to Word online free — Congix Docs',
         description:
           'Turn a PDF into an editable Word (.docx) right in your browser: text, fonts, columns and tables are kept. Free, no sign-up, the file is never uploaded.',
         lead:
@@ -76,7 +76,7 @@ export const SEO_TOOL_PAGES: SeoToolPage[] = [
       ru: {
         name: 'Сжать PDF',
         h1: 'Сжать PDF файл онлайн без потери качества',
-        title: 'Сжать PDF файл онлайн без потери качества — RekPDF',
+        title: 'Сжать PDF файл онлайн без потери качества — Congix Docs',
         description:
           'Уменьшите вес PDF в браузере: выберите масштаб и качество, страницы пересобираются в JPEG, текст остаётся читаемым. Бесплатно и без загрузки на сервер.',
         lead:
@@ -85,7 +85,7 @@ export const SEO_TOOL_PAGES: SeoToolPage[] = [
       uz: {
         name: 'PDF hajmini kichraytirish',
         h1: 'PDF hajmini kichraytirish — bepul va onlayn',
-        title: 'PDF hajmini kichraytirish onlayn — RekPDF',
+        title: 'PDF hajmini kichraytirish onlayn — Congix Docs',
         description:
           "PDF fayl hajmini brauzerda kamaytiring: masshtab va sifatni tanlang, sahifalar JPEG ga qayta yig'iladi, matn o'qiladigan bo'lib qoladi. Bepul va serverga yuklamasdan.",
         lead:
@@ -94,7 +94,7 @@ export const SEO_TOOL_PAGES: SeoToolPage[] = [
       en: {
         name: 'Compress PDF',
         h1: 'Compress PDF file size online',
-        title: 'Compress PDF file size online free — RekPDF',
+        title: 'Compress PDF file size online free — Congix Docs',
         description:
           'Reduce PDF file size in your browser: pick scale and quality, pages are rebuilt as compact JPEGs and stay readable. Free, no upload to a server.',
         lead:
@@ -109,7 +109,7 @@ export const SEO_TOOL_PAGES: SeoToolPage[] = [
       ru: {
         name: 'Объединить PDF',
         h1: 'Объединить PDF файлы в один онлайн',
-        title: 'Объединить PDF файлы в один онлайн — RekPDF',
+        title: 'Объединить PDF файлы в один онлайн — Congix Docs',
         description:
           'Соберите несколько PDF в один документ в нужном порядке прямо в браузере. Бесплатно, без регистрации, файлы не загружаются на сервер.',
         lead:
@@ -118,7 +118,7 @@ export const SEO_TOOL_PAGES: SeoToolPage[] = [
       uz: {
         name: 'PDF fayllarni birlashtirish',
         h1: 'PDF fayllarni birlashtirish — bepul va onlayn',
-        title: 'PDF fayllarni birlashtirish onlayn — RekPDF',
+        title: 'PDF fayllarni birlashtirish onlayn — Congix Docs',
         description:
           "Bir nechta PDF ni kerakli tartibda bitta faylga birlashtiring. Bepul, ro'yxatdan o'tishsiz, fayllar serverga yuklanmaydi.",
         lead:
@@ -127,7 +127,7 @@ export const SEO_TOOL_PAGES: SeoToolPage[] = [
       en: {
         name: 'Merge PDF',
         h1: 'Merge PDF files online',
-        title: 'Merge PDF files online free — RekPDF',
+        title: 'Merge PDF files online free — Congix Docs',
         description:
           'Combine several PDFs into one document in the order you choose, right in the browser. Free, no sign-up, files are not uploaded.',
         lead:
@@ -142,7 +142,7 @@ export const SEO_TOOL_PAGES: SeoToolPage[] = [
       ru: {
         name: 'Разделить PDF',
         h1: 'Разделить PDF на страницы онлайн',
-        title: 'Разделить PDF на страницы онлайн — RekPDF',
+        title: 'Разделить PDF на страницы онлайн — Congix Docs',
         description:
           'Разделите PDF на отдельные страницы или диапазоны и скачайте результат в браузере. Бесплатно, без регистрации, файлы остаются на устройстве.',
         lead:
@@ -151,7 +151,7 @@ export const SEO_TOOL_PAGES: SeoToolPage[] = [
       uz: {
         name: "PDF ni bo'lish",
         h1: "PDF ni bo'lish — sahifalarga ajratish onlayn",
-        title: "PDF ni sahifalarga bo'lish onlayn — RekPDF",
+        title: "PDF ni sahifalarga bo'lish onlayn — Congix Docs",
         description:
           "PDF ni alohida sahifalarga yoki diapazonlarga ajrating va natijani yuklab oling. Bepul, ro'yxatdan o'tishsiz, fayllar qurilmada qoladi.",
         lead:
@@ -160,7 +160,7 @@ export const SEO_TOOL_PAGES: SeoToolPage[] = [
       en: {
         name: 'Split PDF',
         h1: 'Split PDF pages online',
-        title: 'Split PDF pages online free — RekPDF',
+        title: 'Split PDF pages online free — Congix Docs',
         description:
           'Split a PDF into separate pages or ranges and download the result in your browser. Free, no sign-up, files stay on your device.',
         lead:
@@ -175,7 +175,7 @@ export const SEO_TOOL_PAGES: SeoToolPage[] = [
       ru: {
         name: 'JPG в PDF',
         h1: 'Перевести фото (JPG) в PDF онлайн',
-        title: 'Перевести фото JPG в PDF онлайн — RekPDF',
+        title: 'Перевести фото JPG в PDF онлайн — Congix Docs',
         description:
           'Соберите фото JPG и PNG в один PDF: одна картинка — одна страница. Выберите размер страницы и поля, скачайте файл. Бесплатно, без загрузки на сервер.',
         lead:
@@ -184,7 +184,7 @@ export const SEO_TOOL_PAGES: SeoToolPage[] = [
       uz: {
         name: 'Rasmni PDF qilish',
         h1: 'Rasmni PDF qilish (JPG dan PDF ga) — bepul',
-        title: 'Rasmni PDF qilish onlayn — RekPDF',
+        title: 'Rasmni PDF qilish onlayn — Congix Docs',
         description:
           "JPG va PNG rasmlarni bitta PDF ga aylantiring: bitta rasm — bitta sahifa. Sahifa o'lchami va chekkalarni tanlang, faylni yuklab oling. Bepul.",
         lead:
@@ -193,7 +193,7 @@ export const SEO_TOOL_PAGES: SeoToolPage[] = [
       en: {
         name: 'JPG to PDF',
         h1: 'Convert JPG to PDF online',
-        title: 'Convert JPG to PDF online free — RekPDF',
+        title: 'Convert JPG to PDF online free — Congix Docs',
         description:
           'Turn JPG and PNG photos into one PDF: one image per page. Choose page size and margins and download. Free, no upload to a server.',
         lead:
@@ -208,7 +208,7 @@ export const SEO_TOOL_PAGES: SeoToolPage[] = [
       ru: {
         name: 'PDF в JPG',
         h1: 'Конвертировать PDF в JPG высокого качества',
-        title: 'Конвертировать PDF в JPG высокого качества — RekPDF',
+        title: 'Конвертировать PDF в JPG высокого качества — Congix Docs',
         description:
           'Переведите страницы PDF в JPG в выбранном масштабе и качестве. Скачайте архивом, без регистрации и загрузки файла на сервер.',
         lead:
@@ -217,7 +217,7 @@ export const SEO_TOOL_PAGES: SeoToolPage[] = [
       uz: {
         name: 'PDF ni rasmga aylantirish',
         h1: 'PDF ni rasmga aylantirish (JPG) — bepul',
-        title: 'PDF ni JPG ga aylantirish onlayn — RekPDF',
+        title: 'PDF ni JPG ga aylantirish onlayn — Congix Docs',
         description:
           "PDF sahifalarini tanlangan masshtab va sifatda JPG ga aylantiring. Arxiv qilib yuklab oling — ro'yxatdan o'tishsiz va serverga yuklamasdan.",
         lead:
@@ -226,7 +226,7 @@ export const SEO_TOOL_PAGES: SeoToolPage[] = [
       en: {
         name: 'PDF to JPG',
         h1: 'Convert PDF to JPG high quality',
-        title: 'Convert PDF to JPG high quality online — RekPDF',
+        title: 'Convert PDF to JPG high quality online — Congix Docs',
         description:
           'Convert PDF pages to JPG at the scale and quality you choose. Download all images as an archive, free and without uploading the file.',
         lead:
@@ -244,7 +244,7 @@ export const COMMON: Record<SeoLang, CommonCopy> = {
       { title: 'Подождите пару секунд', text: 'Документ обрабатывается прямо в браузере — без очередей и загрузки на сервер.' },
       { title: 'Скачайте результат', text: 'Готовый файл сохраняется сразу. Регистрация, почта и оплата не нужны.' },
     ],
-    whyTitle: 'Почему RekPDF',
+    whyTitle: 'Почему Congix Docs',
     whyLead: 'Инструмент, который держит документы при себе.',
     benefits: [
       { title: 'Скорость', text: 'Никакой отправки файла на сервер и ожидания в очереди — всё считается на вашем устройстве.' },
@@ -270,7 +270,7 @@ export const COMMON: Record<SeoLang, CommonCopy> = {
       { title: "Bir necha soniya kuting", text: "Hujjat brauzerda qayta ishlanadi — navbat va serverga yuklash yo'q." },
       { title: 'Natijani yuklab oling', text: "Tayyor fayl darhol saqlanadi. Ro'yxatdan o'tish, pochta va to'lov kerak emas." },
     ],
-    whyTitle: 'Nega RekPDF',
+    whyTitle: 'Nega Congix Docs',
     whyLead: "Hujjatlaringiz o'zingizda qoladigan vosita.",
     benefits: [
       { title: 'Tezlik', text: "Faylni serverga yuborish va navbatda kutish yo'q — hammasi qurilmangizda hisoblanadi." },
@@ -296,7 +296,7 @@ export const COMMON: Record<SeoLang, CommonCopy> = {
       { title: 'Wait a couple of seconds', text: 'The document is processed right in the browser — no queues and no server upload.' },
       { title: 'Download the result', text: 'The ready file is saved immediately. No account, email or payment required.' },
     ],
-    whyTitle: 'Why RekPDF',
+    whyTitle: 'Why Congix Docs',
     whyLead: 'A tool that keeps your documents to yourself.',
     benefits: [
       { title: 'Speed', text: 'Nothing is sent to a server and nobody queues — everything runs on your device.' },

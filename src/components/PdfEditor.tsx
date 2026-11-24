@@ -96,7 +96,7 @@ export function PdfEditor({ spec }: { spec: ToolSpec }) {
       })
       const outputs = Array.isArray(result) ? result : result.outputs
       const note = Array.isArray(result) ? undefined : result.note
-      const zipName = `${files[0].name.replace(/\.[^.]+$/, '') || 'rekpdf'}-rekpdf.zip`
+      const zipName = `${files[0].name.replace(/\.[^.]+$/, '') || 'document'}-congix-docs.zip`
       await saveOutputs(outputs, zipName)
       track(spec.name, 'done')
       addHistory({
