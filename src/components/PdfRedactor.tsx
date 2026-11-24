@@ -1290,12 +1290,18 @@ export function PdfRedactor() {
       const handwritten = model.objects.filter(
         (object): object is TextObject => object.kind === 'text' && Boolean(object.ocr && object.edited),
       )
-      const handwrittenIds = new Set(handwritten.map((object) => object.id))
-      const handwrittenCovers = (model.covers ?? []).filter((cover) => cover.owner && handwrittenIds.has(cover.owner))
-      const overlapsHandwritten = (line: { x: number; y: number; width: number; height: number }) => {
+      const previousOcr = new Set(
+        model.objects
+          .filter((object) => object.kind === 'text' && object.ocr && !object.edited)
+          .map((object) => object.id),
+      )
+      // Пятна, которые останутся после распознавания: замазка (пятна без хозяина)
+      // и пятна правленых строк. Всё, что человек закрыл, OCR не возвращает обратно.
+      const keptCovers = (model.covers ?? []).filter((cover) => !cover.owner || !previousOcr.has(cover.owner))
+      const coversLine = (line: { x: number; y: number; width: number; height: number }) => {
         const centerX = line.x + line.width / 2
         const centerY = line.y + line.height / 2
-        return handwrittenCovers.some(
+        return keptCovers.some(
           (cover) =>
             centerX >= cover.x &&
             centerX <= cover.x + cover.width &&
@@ -1304,8 +1310,12 @@ export function PdfRedactor() {
         )
       }
 
+      let skipped = 0
       for (const line of lines) {
-        if (overlapsHandwritten(line)) continue
+        if (coversLine(line)) {
+          skipped += 1
+          continue
+        }
         const size = Math.max(6, Math.min(48, Math.round(line.height * 0.78 * 10) / 10))
         const object: TextObject = {
           kind: 'text',
@@ -1331,11 +1341,6 @@ export function PdfRedactor() {
 
       // Повторное распознавание заменяет только нетронутые строки: поправленные
       // руками остаются на своих местах вместе со своими пятнами.
-      const previousOcr = new Set(
-        model.objects
-          .filter((object) => object.kind === 'text' && object.ocr && !object.edited)
-          .map((object) => object.id),
-      )
       mutate((current) =>
         current.map((item, itemIndex) =>
           itemIndex === at
@@ -1356,7 +1361,7 @@ export function PdfRedactor() {
         tone: 'ok',
         text: `Распознано строк: ${objects.length}.${
           handwritten.length ? ` Ваши правки сохранены: ${handwritten.length}.` : ''
-        } Текст стал редактируемым — щёлкните по нему и правьте справа.`,
+        }${skipped ? ` Закрытых областей пропущено: ${skipped}.` : ''} Текст стал редактируемым — щёлкните по нему и правьте справа.`,
       })
       track('Редактор PDF', 'done')
     } catch (error) {
