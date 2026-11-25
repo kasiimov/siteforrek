@@ -26,10 +26,10 @@ const ACTION_LABEL = {
   session: 'новая сессия',
 }
 
-let schemaReady = false
+const schemaReady = new WeakSet()
 
 async function ensureSchema(env) {
-  if (schemaReady) return
+  if (schemaReady.has(env.DB)) return
   await env.DB.prepare(
     `CREATE TABLE IF NOT EXISTS events (
        id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -57,6 +57,12 @@ async function ensureSchema(env) {
     ['country', 'TEXT'],
     ['duration', 'INTEGER'],
     ['meta', 'TEXT'],
+    ['v', 'INTEGER DEFAULT 1'],
+    ['scroll', 'INTEGER'],
+    ['ms', 'INTEGER'],
+    ['kind', 'TEXT'],
+    ['size', 'INTEGER'],
+    ['pages', 'INTEGER'],
   ]
   for (const [name, type] of extra) {
     if (!have.has(name)) {
@@ -88,7 +94,7 @@ async function ensureSchema(env) {
        detail TEXT
      )`,
   ).run()
-  schemaReady = true
+  schemaReady.add(env.DB)
 }
 
 function json(data, status = 200, headers = {}) {
@@ -124,6 +130,12 @@ function cleanId(value) {
 function cleanPath(value) {
   const path = clean(value, '/').split('?')[0]
   return path.startsWith('/') ? path : '/'
+}
+
+function cleanInt(value, min, max) {
+  const number = Number(value)
+  if (!Number.isFinite(number)) return null
+  return Math.max(min, Math.min(max, Math.round(number)))
 }
 
 function now() {
@@ -185,13 +197,21 @@ async function collect(request, env) {
       : clean(body?.meta).slice(0, MAX_META)
 
   const duration = Number(body?.duration)
-  const country = clean(request.cf?.country || body?.country)
+  const rawCountry = request.headers.get('cf-ipcountry') || request.cf?.country || body?.country || ''
+  const country = /^[A-Za-z]{2}$/.test(rawCountry) && !/^(XX|T1)$/i.test(rawCountry)
+    ? rawCountry.toUpperCase()
+    : ''
+  const scroll = cleanInt(body?.scroll, 0, 100)
+  const ms = cleanInt(body?.ms, 0, 86400000)
+  const kind = clean(body?.kind)
+  const size = cleanInt(body?.size, 0, 1024 * 1024 * 1024)
+  const pages = cleanInt(body?.pages, 0, 100000)
 
   await ensureSchema(env)
   await env.DB.prepare(
     `INSERT INTO events
-       (name, action, path, visitor, session, ref, source, medium, campaign, lang, device, browser, os, screen, country, duration, meta, ts)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       (name, action, path, visitor, session, ref, source, medium, campaign, lang, device, browser, os, screen, country, duration, scroll, ms, kind, size, pages, meta, v, ts)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 2, ?)`,
   )
     .bind(
       name,
@@ -210,6 +230,11 @@ async function collect(request, env) {
       clean(body?.screen),
       country,
       Number.isFinite(duration) && duration >= 0 ? Math.min(Math.round(duration), 86400) : null,
+      scroll,
+      ms,
+      kind,
+      size,
+      pages,
       meta,
       now(),
     )
@@ -265,18 +290,23 @@ async function session(request, env) {
 function readDays(url, fallback) {
   const raw = url.searchParams.get('days')
   if (raw === 'all') return 0
+  if (raw === null || raw === '') return fallback
   const days = Number(raw)
-  if (!Number.isFinite(days) || days <= 0) return fallback
+  // days=0 — «всё время»: период не ограничиваем, а не подменяем дефолтом.
+  if (!Number.isFinite(days) || days < 0) return fallback
   return Math.min(MAX_PERIOD, Math.round(days))
 }
 
 async function stats(request, env, url) {
   await ensureSchema(env)
 
-  const days = readDays(url, 14) || 14
+  const days = readDays(url, 14)
   const since = days ? now() - days * 86400000 : 0
-  const periodFilter = since ? ' WHERE ts >= ?' : ''
+  // Для «всего времени» график всё равно ограничиваем годом, чтобы не тянуть тысячи точек.
+  const seriesLimit = days || 365
   const args = since ? [since] : []
+  const periodFilter = since ? ' AND ts >= ?' : ''
+  const periodWhere = since ? ' WHERE ts >= ?' : ''
 
   const totals = await Promise.all([
     env.DB.prepare('SELECT COUNT(*) AS value FROM events').first(),
@@ -287,10 +317,12 @@ async function stats(request, env, url) {
     ).first(),
     env.DB.prepare('SELECT COUNT(*) AS value FROM events WHERE ts >= ?').bind(now() - 7 * 86400000).first(),
     env.DB.prepare('SELECT COUNT(*) AS value FROM events WHERE ts >= ?').bind(now() - 30 * 86400000).first(),
-    env.DB.prepare(`SELECT COUNT(*) AS value FROM events${periodFilter}`).bind(...args).first(),
+    env.DB.prepare(`SELECT COUNT(*) AS value FROM events${periodWhere}`).bind(...args).first(),
     env.DB.prepare('SELECT MAX(ts) AS value FROM events').first(),
     env.DB.prepare("SELECT COUNT(*) AS value FROM events WHERE action = 'error'").first(),
     env.DB.prepare("SELECT AVG(duration) AS value FROM events WHERE action = 'leave' AND duration IS NOT NULL").first(),
+    env.DB.prepare(`SELECT COUNT(DISTINCT visitor) AS value FROM events${periodWhere}`).bind(...args).first(),
+    env.DB.prepare(`SELECT COUNT(DISTINCT session) AS value FROM events${periodWhere}`).bind(...args).first(),
   ])
 
   const series = await env.DB.prepare(
@@ -298,24 +330,51 @@ async function stats(request, env, url) {
             COUNT(*) AS total,
             COUNT(DISTINCT visitor) AS people,
             COUNT(DISTINCT session) AS sessions
-       FROM events
-      ${periodFilter}
+       FROM events${periodWhere}
       GROUP BY day
       ORDER BY day DESC
       LIMIT ?`,
   )
-    .bind(...(since ? [since, days] : [days]))
+    .bind(...(since ? [since, seriesLimit] : [seriesLimit]))
     .all()
+
+  const engagement = await env.DB.prepare(
+    `SELECT COUNT(*) AS sessions,
+            AVG(CASE WHEN seconds > 0 THEN seconds END) AS avg_seconds,
+            AVG(views) AS avg_views
+       FROM (SELECT session,
+                    SUM(CASE WHEN action = 'leave' THEN COALESCE(duration, 0) ELSE 0 END) AS seconds,
+                    SUM(CASE WHEN action = 'view' THEN 1 ELSE 0 END) AS views
+               FROM events WHERE session != ''${periodFilter}
+              GROUP BY session)`,
+  )
+    .bind(...args)
+    .first()
+
+  const bounces = await env.DB.prepare(
+    `SELECT COUNT(*) AS value FROM (
+       SELECT session,
+              SUM(CASE WHEN action = 'view' THEN 1 ELSE 0 END) AS views,
+              SUM(CASE WHEN action IN ('open', 'done') THEN 1 ELSE 0 END) AS acts
+         FROM events WHERE session != ''${periodFilter}
+        GROUP BY session)
+      WHERE views <= 1 AND acts = 0`,
+  )
+    .bind(...args)
+    .first()
 
   const tools = await env.DB.prepare(
     `SELECT name,
             SUM(CASE WHEN action = 'open' THEN 1 ELSE 0 END) AS total,
             SUM(CASE WHEN action = 'done' THEN 1 ELSE 0 END) AS done,
             SUM(CASE WHEN action = 'error' THEN 1 ELSE 0 END) AS errors,
+            COUNT(DISTINCT CASE WHEN action = 'open' THEN session END) AS opened,
+            COUNT(DISTINCT CASE WHEN action = 'done' THEN session END) AS completed,
             COUNT(DISTINCT visitor) AS people,
+            AVG(CASE WHEN action = 'done' THEN ms END) AS avg_ms,
             MAX(ts) AS last
        FROM events
-      WHERE action IN ('open', 'done', 'error')${since ? ' AND ts >= ?' : ''}
+      WHERE action IN ('open', 'done', 'error')${periodFilter}
       GROUP BY name
       ORDER BY total DESC
       LIMIT 60`,
@@ -323,85 +382,196 @@ async function stats(request, env, url) {
     .bind(...args)
     .all()
 
-  const pages = await env.DB.prepare(
-    `SELECT path, COUNT(*) AS total, COUNT(DISTINCT visitor) AS people
-       FROM events
-      WHERE action = 'view'${since ? ' AND ts >= ?' : ''}
-      GROUP BY path ORDER BY total DESC LIMIT 40`,
+  const pageViews = await env.DB.prepare(
+    `SELECT path, COUNT(*) AS views, COUNT(DISTINCT visitor) AS people
+       FROM events WHERE action = 'view'${periodFilter}
+      GROUP BY path ORDER BY views DESC LIMIT 50`,
   )
     .bind(...args)
+    .all()
+
+  const pageTimes = await env.DB.prepare(
+    `SELECT path, COUNT(*) AS leaves, AVG(duration) AS avg_time, AVG(scroll) AS avg_scroll
+       FROM events WHERE action = 'leave' AND duration IS NOT NULL${periodFilter}
+      GROUP BY path`,
+  )
+    .bind(...args)
+    .all()
+
+  const pageEntries = await env.DB.prepare(
+    `SELECT path, COUNT(*) AS entries FROM events
+      WHERE action = 'view' AND id IN (
+        SELECT MIN(id) FROM events WHERE action = 'view' AND session != ''${periodFilter} GROUP BY session
+      )${periodFilter}
+      GROUP BY path ORDER BY entries DESC LIMIT 50`,
+  )
+    .bind(...(since ? [since, since] : []))
+    .all()
+
+  const pageExits = await env.DB.prepare(
+    `SELECT path, COUNT(*) AS exits FROM events
+      WHERE id IN (
+        SELECT MAX(id) FROM events WHERE session != ''${periodFilter} GROUP BY session
+      )${periodFilter}
+      GROUP BY path ORDER BY exits DESC LIMIT 50`,
+  )
+    .bind(...(since ? [since, since] : []))
     .all()
 
   const sources = await env.DB.prepare(
-    `SELECT COALESCE(NULLIF(source, ''), 'direct') AS source, medium,
-            COUNT(*) AS total, COUNT(DISTINCT visitor) AS people
-       FROM events${periodFilter}
-      GROUP BY source, medium ORDER BY total DESC LIMIT 30`,
+    `SELECT COALESCE(NULLIF(source, ''), 'direct') AS source,
+            COALESCE(MAX(CASE WHEN medium IN ('', 'none') THEN '' ELSE medium END), '') AS medium,
+            COUNT(*) AS total,
+            COUNT(DISTINCT visitor) AS people,
+            COUNT(DISTINCT session) AS sessions
+       FROM events${periodWhere}
+      GROUP BY COALESCE(NULLIF(source, ''), 'direct') ORDER BY total DESC LIMIT 30`,
   )
     .bind(...args)
     .all()
 
+  const known = (column) => ` WHERE COALESCE(${column}, '') != ''${periodFilter}`
   const devices = await env.DB.prepare(
-    `SELECT COALESCE(NULLIF(device, ''), 'unknown') AS device, COUNT(*) AS total,
-            COUNT(DISTINCT visitor) AS people
-       FROM events${periodFilter} GROUP BY device ORDER BY total DESC`,
+    `SELECT device, COUNT(*) AS total, COUNT(DISTINCT visitor) AS people
+       FROM events${known('device')} GROUP BY device ORDER BY total DESC`,
   )
     .bind(...args)
     .all()
 
   const browsers = await env.DB.prepare(
-    `SELECT COALESCE(NULLIF(browser, ''), 'unknown') AS browser, COUNT(*) AS total
-       FROM events${periodFilter} GROUP BY browser ORDER BY total DESC LIMIT 12`,
+    `SELECT browser, COUNT(*) AS total, COUNT(DISTINCT visitor) AS people
+       FROM events${known('browser')} GROUP BY browser ORDER BY total DESC LIMIT 12`,
+  )
+    .bind(...args)
+    .all()
+
+  const oses = await env.DB.prepare(
+    `SELECT os, COUNT(*) AS total, COUNT(DISTINCT visitor) AS people
+       FROM events${known('os')} GROUP BY os ORDER BY total DESC LIMIT 12`,
   )
     .bind(...args)
     .all()
 
   const langs = await env.DB.prepare(
-    `SELECT COALESCE(NULLIF(lang, ''), 'unknown') AS lang, COUNT(*) AS total,
-            COUNT(DISTINCT visitor) AS people
-       FROM events${periodFilter} GROUP BY lang ORDER BY total DESC LIMIT 12`,
+    `SELECT lang, COUNT(*) AS total, COUNT(DISTINCT visitor) AS people
+       FROM events${known('lang')} GROUP BY lang ORDER BY total DESC LIMIT 12`,
   )
     .bind(...args)
     .all()
 
   const countries = await env.DB.prepare(
-    `SELECT COALESCE(NULLIF(country, ''), '—') AS country, COUNT(*) AS total
-       FROM events${periodFilter} GROUP BY country ORDER BY total DESC LIMIT 20`,
+    `SELECT country, COUNT(*) AS total, COUNT(DISTINCT visitor) AS people
+       FROM events${known('country')} GROUP BY country ORDER BY total DESC LIMIT 20`,
+  )
+    .bind(...args)
+    .all()
+
+  const coverage = await env.DB.prepare(
+    `SELECT COUNT(*) AS total,
+            SUM(CASE WHEN COALESCE(device, '') != '' THEN 1 ELSE 0 END) AS devices,
+            SUM(CASE WHEN COALESCE(country, '') != '' THEN 1 ELSE 0 END) AS countries,
+            SUM(CASE WHEN COALESCE(duration, 0) > 0 THEN 1 ELSE 0 END) AS timed
+       FROM events${periodWhere}`,
+  )
+    .bind(...args)
+    .first()
+
+  const quality = await env.DB.prepare(
+    `SELECT COUNT(*) AS total,
+            SUM(CASE WHEN v >= 2 THEN 1 ELSE 0 END) AS tracked,
+            MIN(CASE WHEN v >= 2 THEN ts END) AS since
+       FROM events`,
+  ).first()
+
+  const hourly = await env.DB.prepare(
+    `SELECT strftime('%H', ts/1000, 'unixepoch') AS hour,
+            COUNT(*) AS total,
+            COUNT(DISTINCT visitor) AS people
+       FROM events${periodWhere}
+      GROUP BY hour ORDER BY hour`,
   )
     .bind(...args)
     .all()
 
   const actions = await env.DB.prepare(
-    `SELECT action, COUNT(*) AS total FROM events${periodFilter} GROUP BY action ORDER BY total DESC`,
+    `SELECT action, COUNT(*) AS total FROM events${periodWhere} GROUP BY action ORDER BY total DESC`,
   )
     .bind(...args)
     .all()
 
   const errors = await env.DB.prepare(
-    `SELECT ts, path, device, browser, meta FROM events
-      WHERE action = 'error'${since ? ' AND ts >= ?' : ''}
-      ORDER BY id DESC LIMIT 25`,
+    `SELECT ts, name, path, device, browser, meta FROM events
+      WHERE action = 'error'${periodFilter}
+      ORDER BY id DESC LIMIT 50`,
   )
     .bind(...args)
     .all()
 
   const funnel = await env.DB.prepare(
-    `SELECT SUM(CASE WHEN action = 'view' THEN 1 ELSE 0 END) AS views,
-            SUM(CASE WHEN action = 'open' THEN 1 ELSE 0 END) AS opens,
-            SUM(CASE WHEN action = 'done' THEN 1 ELSE 0 END) AS dones
-       FROM events${periodFilter}`,
+    `SELECT COUNT(DISTINCT CASE WHEN action = 'view' THEN session END) AS views,
+            COUNT(DISTINCT CASE WHEN action = 'open' THEN session END) AS opens,
+            COUNT(DISTINCT CASE WHEN action = 'done' THEN session END) AS dones
+       FROM events WHERE session != ''${periodFilter}`,
   )
     .bind(...args)
     .first()
 
+  const timesByPath = new Map((pageTimes.results ?? []).map((row) => [row.path, row]))
+  const entriesByPath = new Map((pageEntries.results ?? []).map((row) => [row.path, row.entries]))
+  const exitsByPath = new Map((pageExits.results ?? []).map((row) => [row.path, row.exits]))
+
+  const pages = (pageViews.results ?? []).map((row) => {
+    const time = timesByPath.get(row.path)
+    return {
+      path: row.path,
+      views: row.views,
+      people: row.people,
+      entries: entriesByPath.get(row.path) ?? 0,
+      exits: exitsByPath.get(row.path) ?? 0,
+      avgTime: Math.round(time?.avg_time ?? 0),
+      avgScroll: Math.round(time?.avg_scroll ?? 0),
+    }
+  })
+
+  const toolRows = (tools.results ?? []).map((row) => {
+    const opened = row.opened || row.total
+    const completed = row.opened ? row.completed : row.done
+    return {
+      ...row,
+      opened,
+      completed,
+      conversion: opened ? Math.round((completed / opened) * 100) : 0,
+      legacy: !row.opened,
+      avgMs: Math.round(row.avg_ms ?? 0),
+    }
+  })
+
+  const errorGroups = []
+  for (const row of errors.results ?? []) {
+    let message = 'Ошибка'
+    try {
+      message = String(JSON.parse(row.meta || '{}')?.message || message).slice(0, 160)
+    } catch {
+      message = String(row.meta || message).slice(0, 160)
+    }
+    const group = errorGroups.find((item) => item.message === message)
+    if (group) {
+      group.count += 1
+    } else {
+      errorGroups.push({ message, count: 1, last: row.ts, path: row.path })
+    }
+  }
+  errorGroups.sort((a, b) => b.count - a.count)
+
   const settings = await readSettings(env)
+  const sessions = totals[11]?.value ?? totals[2]?.value ?? 0
 
   return json({
     days,
     totals: {
       events: totals[0]?.value ?? 0,
       people: totals[1]?.value ?? 0,
-      sessions: totals[2]?.value ?? 0,
+      sessions,
       today: totals[3]?.value ?? 0,
       week: totals[4]?.value ?? 0,
       month: totals[5]?.value ?? 0,
@@ -409,21 +579,41 @@ async function stats(request, env, url) {
       last: totals[7]?.value ?? 0,
       errors: totals[8]?.value ?? 0,
       avgDuration: Math.round(totals[9]?.value ?? 0),
+      peoplePeriod: totals[10]?.value ?? 0,
+      sessionsPeriod: totals[11]?.value ?? 0,
+      avgSessionSeconds: Math.round(engagement?.avg_seconds ?? 0),
+      avgViews: Math.round((engagement?.avg_views ?? 0) * 10) / 10,
+      bounceRate: sessions ? Math.round(((bounces?.value ?? 0) / sessions) * 100) : 0,
     },
     series: (series.results ?? []).reverse(),
-    tools: tools.results ?? [],
-    pages: pages.results ?? [],
+    tools: toolRows,
+    pages,
     sources: sources.results ?? [],
     devices: devices.results ?? [],
     browsers: browsers.results ?? [],
+    os: oses.results ?? [],
     langs: langs.results ?? [],
     countries: countries.results ?? [],
+    hourly: hourly.results ?? [],
     actions: actions.results ?? [],
     errors: errors.results ?? [],
+    errorGroups: errorGroups.slice(0, 8),
     funnel: {
       views: funnel?.views ?? 0,
       opens: funnel?.opens ?? 0,
       dones: funnel?.dones ?? 0,
+    },
+    coverage: {
+      total: coverage?.total ?? 0,
+      devices: coverage?.devices ?? 0,
+      countries: coverage?.countries ?? 0,
+      timed: coverage?.timed ?? 0,
+    },
+    quality: {
+      total: quality?.total ?? 0,
+      tracked: quality?.tracked ?? 0,
+      legacy: (quality?.total ?? 0) - (quality?.tracked ?? 0),
+      since: quality?.since ?? 0,
     },
     settings,
   })
@@ -529,7 +719,7 @@ async function events(request, env, url) {
       .first(),
     env.DB.prepare(
       `SELECT id, ts, name, action, path, visitor, session, ref, source, medium, campaign,
-              lang, device, browser, os, screen, country, duration, meta
+              lang, device, browser, os, screen, country, duration, scroll, ms, kind, size, pages, meta
          FROM events${filters.where} ORDER BY id DESC LIMIT ? OFFSET ?`,
     )
       .bind(...filters.args, limit, offset)
@@ -558,7 +748,7 @@ async function exportCsv(request, env, url) {
   const filters = eventFilters(url)
   const rows = await env.DB.prepare(
     `SELECT ts, name, action, path, source, medium, device, browser, os, lang, country,
-            visitor, session, duration, meta
+            visitor, session, duration, scroll, ms, kind, size, pages, meta
        FROM events${filters.where} ORDER BY id DESC LIMIT 50000`,
   )
     .bind(...filters.args)
@@ -580,6 +770,11 @@ async function exportCsv(request, env, url) {
     'Посетитель',
     'Сессия',
     'Секунд',
+    'Скролл',
+    'мс обработки',
+    'Тип файла',
+    'КБ',
+    'Страниц',
     'Детали',
   ]
   const lines = [head.join(';')]
@@ -602,6 +797,11 @@ async function exportCsv(request, env, url) {
         row.visitor || '',
         row.session || '',
         row.duration ?? '',
+        row.scroll ?? '',
+        row.ms ?? '',
+        row.kind || '',
+        row.size ?? '',
+        row.pages ?? '',
         row.meta || '',
       ]
         .map(csvCell)

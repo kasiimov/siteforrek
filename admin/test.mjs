@@ -160,22 +160,59 @@ check('сводка отдаёт KPI, воронку, разрезы и ошиб
   assert.equal(data.totals.sessions, 2)
   assert.equal(data.totals.errors, 1)
   assert.equal(data.totals.avgDuration, 40)
+  assert.equal(data.totals.avgSessionSeconds, 40)
+  assert.equal(data.totals.avgViews, 0.5)
+  assert.equal(data.totals.bounceRate, 0)
   assert.equal(data.funnel.views, 1)
   assert.equal(data.funnel.opens, 2)
   assert.equal(data.funnel.dones, 1)
   assert.equal(data.tools.length, 2)
-  assert.equal(data.tools.find((tool) => tool.name === 'PDF в Word').done, 1)
+  const word = data.tools.find((tool) => tool.name === 'PDF в Word')
+  assert.equal(word.done, 1)
+  assert.equal(word.opened, 1)
+  assert.equal(word.completed, 1)
+  assert.equal(word.conversion, 100)
   assert.equal(data.pages.length, 1)
+  assert.equal(data.pages[0].views, 1)
+  assert.equal(data.pages[0].entries, 1)
+  assert.equal(data.pages[0].avgTime, 40)
+  assert.ok(data.pages[0].exits >= 1)
   assert.equal(data.devices.length, 2)
   assert.equal(data.langs.length, 2)
   assert.equal(data.countries.length, 2)
   assert.equal(data.sources.length, 3)
+  const google = data.sources.find((row) => row.source === 'google')
+  assert.equal(google.medium, 'organic')
   assert.equal(data.errors.length, 1)
+  assert.equal(data.errorGroups.length, 1)
+  assert.equal(data.errorGroups[0].count, 1)
+  assert.match(data.errorGroups[0].message, /PDF повреждён/)
   assert.match(data.errors[0].meta, /PDF повреждён/)
+  assert.equal(data.coverage.total, 6)
+  assert.equal(data.coverage.devices, 6)
+  assert.equal(data.quality.tracked, 6)
+  assert.equal(data.quality.legacy, 0)
+  assert.ok(data.quality.since > 0)
+  assert.ok(data.hourly.length >= 1)
   assert.ok(data.series.length >= 1)
 
   const empty = await call('/api/stats?days=' + 3650)
   assert.equal(empty.status, 200)
+})
+
+check('страна берётся из заголовка Cloudflare, если её нет в теле', async () => {
+  const otherEnv = { DB: makeD1() }
+  const response = await worker.fetch(new Request(origin + '/api/collect', {
+    method: 'POST',
+    headers: { Origin: siteOrigin, 'content-type': 'application/json', 'cf-ipcountry': 'kz' },
+    body: JSON.stringify({ name: 'Главная', action: 'view', path: '/', visitor: 'visitor-kz', session: 'sess-kz', device: 'mobile' }),
+  }), otherEnv)
+  assert.equal(response.status, 204)
+  const stats = await worker.fetch(new Request(origin + '/api/stats?days=7'), otherEnv)
+  const data = await stats.json()
+  assert.equal(data.countries.length, 1)
+  assert.equal(data.countries[0].country, 'KZ')
+  assert.equal(data.devices[0].device, 'mobile')
 })
 
 check('live показывает людей и последние события за 5 минут', async () => {
@@ -223,6 +260,24 @@ check('журнал фильтруется по действию, устройс
   assert.equal(pagedData.rows.length, 0)
 })
 
+check('журнал хранит скролл, время инструмента и тип файла', async () => {
+  await call('/api/collect', {
+    method: 'POST',
+    headers: { Origin: siteOrigin },
+    body: JSON.stringify({
+      name: 'PDF в Word', action: 'done', path: '/tools', visitor: 'visitor-aaa', session: 'sess-aaa',
+      duration: 3, scroll: 87, ms: 2400, size: 512, pages: 12, kind: 'pdf', device: 'desktop', lang: 'ru',
+    }),
+  })
+  const data = await (await call('/api/events?days=7&action=done&limit=10')).json()
+  const row = data.rows[0]
+  assert.equal(row.scroll, 87)
+  assert.equal(row.ms, 2400)
+  assert.equal(row.size, 512)
+  assert.equal(row.pages, 12)
+  assert.equal(row.kind, 'pdf')
+})
+
 check('CSV выгружается с BOM, новыми колонками и подписями', async () => {
   const response = await call('/api/export.csv?days=7')
   assert.equal(response.status, 200)
@@ -234,14 +289,14 @@ check('CSV выгружается с BOM, новыми колонками и п�
   assert.match(text, /Действие;Инструмент;Страница;Источник/)
   assert.match(text, /получил файл/)
   assert.match(text, /sess-bbb/)
-  assert.equal(text.trim().split('\r\n').length, 7)
+  assert.equal(text.trim().split('\r\n').length, 8)
 })
 
 check('настройки читаются и сохраняются', async () => {
   const before = await call('/api/settings')
   const beforeData = await before.json()
   assert.equal(beforeData.retentionDays, 90)
-  assert.equal(beforeData.events, 6)
+  assert.equal(beforeData.events, 7)
   assert.equal(beforeData.sessions, 2)
   assert.equal(beforeData.people, 2)
 
@@ -271,7 +326,7 @@ check('мутация с чужого Origin отклоняется', async () =
 check('очистка удаляет события и пишет аудит', async () => {
   const response = await call('/api/purge', { method: 'POST', body: JSON.stringify({ days: 0 }) })
   assert.equal(response.status, 200)
-  assert.equal((await response.json()).removed, 6)
+  assert.equal((await response.json()).removed, 7)
 
   const stats = await (await call('/api/stats?days=14')).json()
   assert.equal(stats.totals.events, 0)

@@ -16,6 +16,18 @@ export type ObjectBase = {
 
 export type TextFamily = 'sans' | 'serif' | 'mono'
 
+/** Выравнивание абзаца внутри текстового блока. */
+export type TextAlign = 'left' | 'center' | 'right' | 'justify'
+
+export const DEFAULT_LINE_HEIGHT = 1.3
+
+/** Межстрочный интервал, ограниченный разумными пределами. */
+export function lineHeightOf(object: TextObject): number {
+  const value = object.lineHeight
+  if (!value || !Number.isFinite(value)) return DEFAULT_LINE_HEIGHT
+  return Math.min(3, Math.max(1, value))
+}
+
 export type TextObject = ObjectBase & {
   kind: 'text'
   text: string
@@ -25,6 +37,14 @@ export type TextObject = ObjectBase & {
   width: number
   bold?: boolean
   italic?: boolean
+  /** подчёркнутый текст */
+  underline?: boolean
+  /** зачёркнутый текст */
+  strike?: boolean
+  /** выравнивание абзаца внутри блока */
+  align?: TextAlign
+  /** межстрочный интервал: 1.0–3.0, по умолчанию 1.3 */
+  lineHeight?: number
   /** семейство шрифта: без засечек, с засечками или моноширинный */
   family?: TextFamily
   /** текст пришёл из распознавания: повторный OCR его заменяет, а не дублирует */
@@ -153,9 +173,10 @@ export function wrapTextToWidth(
 }
 
 /** Сколько места занимает объект — нужно и для перетаскивания, и для рамки выделения. */
-export function objectSize(object: EditorObject, lineHeight = 1.3): { width: number; height: number } {
+export function objectSize(object: EditorObject, fallbackLineHeight = DEFAULT_LINE_HEIGHT): { width: number; height: number } {
   if (object.kind === 'image') return { width: object.width, height: object.height }
   if (object.kind === 'mark') return { width: object.width, height: object.height }
+  const lineHeight = lineHeightOf(object) || fallbackLineHeight
   // Ширина символа примерно 0.52 кегля: этого хватает, чтобы оценить перенос строк.
   const perLine = Math.max(1, Math.floor(object.width / Math.max(1, object.size * 0.52)))
   const lines = object.text
@@ -327,15 +348,61 @@ export async function composePdf(options: ComposeOptions): Promise<{ blob: Blob;
       if (!object.text.trim()) return
       const font = await getFont(object.family, object.bold, object.italic)
       const [x, top] = options.toPdf(index, object.x, object.y)
-      const baseline = top - font.heightAtSize(object.size)
-      const lines = wrapTextToWidth(object.text, object.width, (line) => font.widthOfTextAtSize(line, object.size))
-      target.drawText(lines.join('\n'), {
-        x,
-        y: baseline,
-        size: object.size,
-        font,
-        color: hexToRgb(object.color),
-        lineHeight: object.size * 1.3,
+      const color = hexToRgb(object.color)
+      const size = object.size
+      const align = object.align ?? 'left'
+      const step = size * lineHeightOf(object)
+      const lines = wrapTextToWidth(object.text, object.width, (line) => font.widthOfTextAtSize(line, size))
+      const firstBaseline = top - font.heightAtSize(size)
+      const rule = Math.max(0.5, size * 0.055)
+      const underlineOffset = size * 0.12
+      const strikeOffset = size * 0.3
+
+      /** Подчёркивание и зачёркивание рисуем линией под/по строке. */
+      const decorate = (lineX: number, lineWidth: number, baseline: number) => {
+        if (object.underline) {
+          target.drawLine({
+            start: { x: lineX, y: baseline - underlineOffset },
+            end: { x: lineX + lineWidth, y: baseline - underlineOffset },
+            thickness: rule,
+            color,
+          })
+        }
+        if (object.strike) {
+          target.drawLine({
+            start: { x: lineX, y: baseline + strikeOffset },
+            end: { x: lineX + lineWidth, y: baseline + strikeOffset },
+            thickness: rule,
+            color,
+          })
+        }
+      }
+
+      lines.forEach((line, lineIndex) => {
+        const baseline = firstBaseline - lineIndex * step
+        const lineWidth = font.widthOfTextAtSize(line, size)
+        let lineX = x
+        if (align === 'center') lineX = x + Math.max(0, (object.width - lineWidth) / 2)
+        else if (align === 'right') lineX = x + Math.max(0, object.width - lineWidth)
+
+        // «По ширине»: все строки кроме последней раздвигаем пробелами до края блока.
+        if (align === 'justify' && lineIndex < lines.length - 1) {
+          const words = line.split(/\s+/).filter(Boolean)
+          if (words.length > 1) {
+            const wordsWidth = words.reduce((sum, word) => sum + font.widthOfTextAtSize(word, size), 0)
+            const gap = Math.max(0, (object.width - wordsWidth) / (words.length - 1))
+            let cursor = x
+            for (const word of words) {
+              target.drawText(word, { x: cursor, y: baseline, size, font, color })
+              cursor += font.widthOfTextAtSize(word, size) + gap
+            }
+            decorate(x, object.width, baseline)
+            return
+          }
+        }
+
+        target.drawText(line, { x: lineX, y: baseline, size, font, color })
+        decorate(lineX, lineWidth, baseline)
       })
       return
     }

@@ -5313,3 +5313,412 @@ select.field-input option {
   background: rgba(139, 92, 246, 0.22);
   color: #fff;
 }
+
+/* ---------- редактор: лента как в WPS (вкладки, меню, параметры) ---------- */
+
+.ed-tabs {
+  position: relative;
+  z-index: 8;
+  flex: none;
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+  padding: 0 10px;
+  min-height: 38px;
+  background: var(--ed-surface);
+  border-bottom: 1px solid var(--ed-line);
+}
+
+.ed-menu-wrap {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  flex: none;
+}
+
+.ed-menu-btn,
+.ed-settings-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #4b5160;
+  font-size: 0.8rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.ed-menu-btn svg,
+.ed-settings-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.ed-menu-btn:hover,
+.ed-settings-btn:hover,
+.ed-menu-btn.is-active {
+  color: var(--ed-red);
+  background: var(--ed-red-soft);
+}
+
+.ed-menu-caret {
+  width: 11px;
+  height: 11px;
+  opacity: 0.65;
+}
+
+.ed-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 236px;
+  padding: 5px;
+  border: 1px solid var(--ed-line-strong);
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 18px 40px -18px rgba(15, 23, 42, 0.4);
+}
+
+.ed-menu button,
+.ed-menu-link {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--ed-text);
+  font-size: 0.82rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ed-menu button svg,
+.ed-menu-link svg {
+  width: 16px;
+  height: 16px;
+  color: #6b7280;
+}
+
+.ed-menu button:hover:not(:disabled),
+.ed-menu-link:hover {
+  background: #f2f3f6;
+}
+
+.ed-menu button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.ed-menu-sep {
+  height: 1px;
+  margin: 4px 6px;
+  background: var(--ed-line);
+}
+
+.ed-tab-list {
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.ed-tab-list::-webkit-scrollbar {
+  display: none;
+}
+
+.ed-tab {
+  position: relative;
+  flex: none;
+  padding: 0 12px;
+  border: 0;
+  background: transparent;
+  color: #3c4250;
+  font-size: 0.83rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.ed-tab:hover:not(:disabled) {
+  color: var(--ed-red);
+}
+
+.ed-tab.is-active {
+  color: var(--ed-red);
+  font-weight: 600;
+}
+
+.ed-tab.is-active::after {
+  content: '';
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 0;
+  height: 2px;
+  border-radius: 2px 2px 0 0;
+  background: var(--ed-red);
+}
+
+.ed-tab:disabled {
+  color: #b3b8c2;
+  cursor: default;
+}
+
+.ed-settings-btn {
+  margin-left: auto;
+  padding-right: 2px;
+}
+
+/* Компактные поля ленты */
+
+.ed-ribbon .ed-select {
+  max-width: 128px;
+  padding: 4px 6px;
+  font-size: 0.74rem;
+}
+
+.ed-ribbon .ed-font-select {
+  min-width: 128px;
+}
+
+.ed-ribbon .ed-size-input {
+  width: 46px;
+  padding: 4px 6px;
+  border: 1px solid var(--ed-line-strong);
+  border-radius: 6px;
+  background: #fff;
+  font-size: 0.76rem;
+}
+
+.ed-ribbon .ed-size-toggle {
+  width: 24px;
+  border-radius: 6px;
+  border-color: var(--ed-line-strong);
+  background: #fff;
+  color: #6b7280;
+}
+
+.ed-ribbon .ed-size-menu {
+  top: calc(100% + 4px);
+  border-color: var(--ed-line-strong);
+  background: #fff;
+  box-shadow: 0 14px 30px -14px rgba(15, 23, 42, 0.4);
+}
+
+.ed-ribbon .ed-size-option {
+  border-color: var(--ed-line);
+  background: #f6f7f9;
+  color: #3c4250;
+}
+
+.ed-ribbon .ed-size-option.is-active {
+  border-color: rgba(216, 58, 49, 0.5);
+  background: var(--ed-red-soft);
+  color: var(--ed-red);
+}
+
+.ed-font-row {
+  align-items: flex-start;
+}
+
+.ed-step-col {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ed-step {
+  padding: 2px 6px;
+  border: 1px solid var(--ed-line-strong);
+  border-radius: 5px;
+  background: #fff;
+  color: #4b5160;
+  font-size: 0.68rem;
+  line-height: 1.35;
+  cursor: pointer;
+}
+
+.ed-step:hover {
+  border-color: var(--ed-red);
+  color: var(--ed-red);
+}
+
+.ed-format-row {
+  align-items: center;
+  gap: 3px;
+}
+
+.ed-fmt {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: #3c4250;
+  font-size: 0.86rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.ed-fmt svg {
+  width: 16px;
+  height: 16px;
+}
+
+.ed-fmt:hover {
+  background: #f2f3f6;
+  border-color: var(--ed-line);
+}
+
+.ed-fmt.is-active {
+  background: var(--ed-red-soft);
+  border-color: rgba(216, 58, 49, 0.32);
+  color: var(--ed-red);
+}
+
+.ed-color-item {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  margin-left: 4px;
+}
+
+.ed-color-item small {
+  font-size: 0.58rem;
+  color: #8a909c;
+}
+
+.ed-color-item .ed-color-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  width: auto;
+  height: 24px;
+  padding: 0 3px;
+  border: 1px solid var(--ed-line-strong);
+  border-radius: 6px;
+  background: #fff;
+}
+
+.ed-color-item .ed-color-swatch {
+  width: 16px;
+  height: 14px;
+  border-radius: 3px;
+}
+
+.ed-para-row {
+  align-items: center;
+}
+
+.ed-ribbon .ed-spacing {
+  max-width: 150px;
+}
+
+.ed-check {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  max-width: 220px;
+  padding: 4px 2px;
+  font-size: 0.72rem;
+  line-height: 1.3;
+  color: #3c4250;
+  cursor: pointer;
+}
+
+.ed-check input {
+  flex: none;
+  width: 15px;
+  height: 15px;
+  accent-color: var(--ed-red);
+}
+
+.ed-check-row {
+  max-width: none;
+  padding: 6px 2px;
+  font-size: 0.82rem;
+}
+
+.ed-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 6px 4px;
+  font-size: 0.78rem;
+  color: #3c4250;
+  white-space: nowrap;
+}
+
+.ed-info small {
+  font-size: 0.68rem;
+  color: #8a909c;
+}
+
+.ed-flip {
+  display: inline-flex;
+  transform: scaleX(-1);
+}
+
+.ed-tool-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.ed-tool-label svg {
+  width: 19px;
+  height: 19px;
+}
+
+.ed-settings-card {
+  width: min(440px, 100%);
+}
+
+.ed-settings-group {
+  margin: 4px 0 0;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: #8a909c;
+}
+
+.editor-app .ed-settings-card .field-label {
+  color: #8a909c;
+}
+
+@media (max-width: 720px) {
+  .ed-settings-btn span,
+  .ed-menu-btn span {
+    display: none;
+  }
+
+  .ed-tab {
+    padding: 0 9px;
+    font-size: 0.78rem;
+  }
+
+  .ed-ribbon {
+    padding: 5px 6px;
+  }
+
+  .ed-hint {
+    display: none;
+  }
+}

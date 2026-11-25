@@ -9,217 +9,369 @@
 <style>
   :root {
     color-scheme: light;
-    --paper: #efece4;
-    --panel: #faf8f3;
-    --ink: #171512;
-    --ink-soft: #3b3833;
-    --muted: #8a8477;
-    --line: #ddd7c9;
-    --accent: #d4452a;
-    --ok: #3f7a52;
-    --warn: #a4761f;
+    --bg: #f1f2f5;
+    --surface: #ffffff;
+    --surface-2: #f8f9fb;
+    --rail: #0f172a;
+    --rail-2: #0b1220;
+    --ink: #0f172a;
+    --ink-soft: #374151;
+    --muted: #6b7280;
+    --line: #e5e7eb;
+    --line-strong: #d1d5db;
+    --accent: #d6452f;
+    --accent-dark: #b93a26;
+    --accent-soft: #fdecea;
+    --ok: #15803d;
+    --warn: #b45309;
+    --radius: 10px;
     --mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+    --shadow: 0 1px 2px rgba(16, 24, 40, .06), 0 1px 3px rgba(16, 24, 40, .05);
   }
   * { box-sizing: border-box; }
   [hidden] { display: none !important; }
   body {
-    margin: 0; min-height: 100vh; color: var(--ink); background: var(--paper);
-    background-image: linear-gradient(to right, rgba(23,21,18,.035) 1px, transparent 1px);
-    background-size: 76px 100%;
-    font: 14px/1.55 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    margin: 0; min-height: 100vh; background: var(--bg); color: var(--ink);
+    font: 13px/1.5 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
     -webkit-font-smoothing: antialiased;
   }
-  a { color: inherit; }
+  a { color: inherit; text-decoration: none; }
   button, input, select { font: inherit; color: inherit; }
-  ::selection { background: rgba(212,69,42,.18); }
+  ::selection { background: rgba(214, 69, 47, .2); }
 
-  .shell { display: grid; grid-template-columns: 220px minmax(0, 1fr); min-height: 100vh; }
+  /* ── каркас ─────────────────────────────────────────── */
+
+  .shell { display: grid; grid-template-columns: 232px minmax(0, 1fr); min-height: 100vh; }
+
   .rail {
     position: sticky; top: 0; align-self: start; height: 100vh;
-    display: flex; flex-direction: column; gap: 28px; padding: 28px 20px 24px;
-    border-right: 1px solid var(--line); background: rgba(239,236,228,.72); backdrop-filter: blur(6px);
+    display: flex; flex-direction: column; gap: 22px; padding: 18px 14px 16px;
+    background: var(--rail); color: #e5e7eb; border-right: 1px solid #0a0f1c;
   }
-  .brand { display: flex; align-items: center; gap: 11px; text-decoration: none; }
+  .brand { display: flex; align-items: center; gap: 10px; padding: 4px 6px 0; }
   .brand-mark {
-    display: grid; place-items: center; width: 30px; height: 30px;
-    background: var(--ink); color: var(--paper); font: 600 15px/1 var(--mono); border-radius: 3px;
+    display: grid; place-items: center; width: 32px; height: 32px; flex: none;
+    border-radius: 9px; background: var(--accent); color: #fff;
+    font: 700 15px/1 var(--mono);
   }
-  .brand-text b { display: block; font-size: 14px; letter-spacing: -.01em; }
-  .brand-text small { display: block; font: 9px/1.4 var(--mono); letter-spacing: .2em; text-transform: uppercase; color: var(--muted); margin-top: 2px; }
-  .nav { display: flex; flex-direction: column; }
+  .brand-text b { display: block; color: #fff; font-size: 13.5px; letter-spacing: -.01em; }
+  .brand-text small {
+    display: block; margin-top: 1px; color: #8b93a5;
+    font: 9px/1.4 var(--mono); letter-spacing: .16em; text-transform: uppercase;
+  }
+
+  .nav { display: flex; flex-direction: column; gap: 2px; }
+  .nav-label {
+    margin: 12px 8px 5px; color: #6b7280;
+    font: 9px/1 var(--mono); letter-spacing: .16em; text-transform: uppercase;
+  }
+  .nav-label:first-child { margin-top: 0; }
   .nav button {
-    display: flex; align-items: baseline; gap: 10px; width: 100%; padding: 9px 0;
-    background: none; border: 0; border-bottom: 1px solid transparent; text-align: left;
-    font-size: 13px; color: var(--ink-soft); cursor: pointer; transition: color .15s;
+    display: flex; align-items: center; gap: 10px; width: 100%;
+    padding: 8px 9px; border: 0; border-radius: 8px; background: none;
+    color: #aeb6c6; font-size: 12.5px; text-align: left; cursor: pointer;
+    transition: background .12s, color .12s;
   }
-  .nav button i { font: 9px/1 var(--mono); font-style: normal; letter-spacing: .1em; color: var(--muted); min-width: 16px; }
-  .nav button em { margin-left: auto; font: 9.5px/1 var(--mono); font-style: normal; color: var(--accent); }
-  .nav button:hover, .nav button[aria-current="page"] { color: var(--accent); }
-  .nav button:hover i, .nav button[aria-current="page"] i { color: var(--accent); }
-  .rail-foot { margin-top: auto; display: grid; gap: 2px; }
-  .stamp { margin: 0 0 6px; font: 9.5px/1.6 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
-  .ghost {
-    display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 9px 0;
-    background: none; border: 0; border-top: 1px solid var(--line); cursor: pointer; text-align: left;
-    font: 10px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--ink-soft);
+  .nav button i {
+    display: grid; place-items: center; width: 22px; height: 22px; flex: none;
+    border: 1px solid rgba(255,255,255,.12); border-radius: 6px;
+    color: #7d879c; font: 9px/1 var(--mono); font-style: normal;
   }
-  .ghost:hover { color: var(--accent); }
-  .ghost:disabled { opacity: .45; cursor: progress; }
-  .ghost kbd { font: 9px var(--mono); color: var(--muted); border: 1px solid var(--line); padding: 2px 4px; border-radius: 2px; }
+  .nav button em {
+    margin-left: auto; padding: 1px 6px; border-radius: 999px;
+    background: rgba(214, 69, 47, .18); color: #fca69a;
+    font: 9.5px/1.5 var(--mono); font-style: normal;
+  }
+  .nav button:hover { background: rgba(255,255,255,.06); color: #fff; }
+  .nav button[aria-current="page"] { background: rgba(255,255,255,.09); color: #fff; font-weight: 600; }
+  .nav button[aria-current="page"] i { border-color: transparent; background: var(--accent); color: #fff; }
+
+  .rail-foot {
+    margin-top: auto; display: grid; gap: 2px; padding-top: 14px;
+    border-top: 1px solid rgba(255,255,255,.09);
+  }
+  .stamp { margin: 0 0 6px; color: #7d879c; font: 10px/1.5 var(--mono); }
   .open-badge {
     display: inline-flex; align-items: center; gap: 6px; margin-bottom: 8px;
-    font: 9px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--ok);
+    color: #4ade80; font: 9px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase;
   }
-  .open-badge::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 0 3px rgba(63,122,82,.12); }
+  .open-badge::before {
+    content: ''; width: 6px; height: 6px; border-radius: 50%;
+    background: #4ade80; box-shadow: 0 0 0 3px rgba(74, 222, 128, .14);
+  }
+  .ghost {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    padding: 8px 6px; border: 0; border-radius: 6px; background: none;
+    color: #aeb6c6; font-size: 11.5px; text-align: left; cursor: pointer;
+  }
+  .ghost:hover { background: rgba(255,255,255,.06); color: #fff; }
+  .ghost:disabled { opacity: .45; cursor: progress; }
+  .ghost kbd {
+    padding: 1px 5px; border: 1px solid rgba(255,255,255,.16); border-radius: 4px;
+    color: #8b93a5; font: 9px var(--mono);
+  }
 
-  main { padding: 40px 44px 90px; min-width: 0; }
-  .inner { max-width: 1180px; }
-  .eyebrow { display: flex; align-items: center; gap: 9px; margin: 0 0 12px; font: 10px/1 var(--mono); letter-spacing: .22em; text-transform: uppercase; color: var(--muted); }
-  .eyebrow::before { content: ''; width: 6px; height: 6px; background: var(--accent); border-radius: 50%; }
-  h1 { margin: 0; font-size: 44px; font-weight: 500; letter-spacing: -.045em; line-height: 1.03; }
-  h1 em { font-family: Georgia, 'Times New Roman', serif; font-style: italic; font-weight: 400; }
-  .sub { margin: 12px 0 0; font-size: 12.5px; color: var(--muted); }
+  main { min-width: 0; display: flex; flex-direction: column; }
+  .inner { max-width: none; min-width: 0; }
 
-  .strip { display: grid; grid-template-columns: 1.3fr repeat(5, 1fr); margin: 30px 0 20px; border-top: 1px solid var(--ink); border-bottom: 1px solid var(--line); }
-  .cell { padding: 16px 16px 14px; border-right: 1px solid var(--line); min-width: 0; }
-  .cell:first-child { padding-left: 0; }
-  .cell:last-child { border-right: 0; }
-  .cell .label { display: block; margin-bottom: 6px; font: 9px/1.3 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
-  .cell b { display: block; font: 500 28px/1.1 var(--mono); letter-spacing: -.05em; font-variant-numeric: tabular-nums; }
-  .cell.hero b { font-size: 42px; }
-  .cell .note { display: block; margin-top: 6px; font-size: 10.5px; color: var(--muted); }
+  header {
+    position: sticky; top: 0; z-index: 20;
+    display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas:
+      "eyebrow actions"
+      "title actions"
+      "sub actions";
+    align-items: center; gap: 2px 18px;
+    padding: 14px 28px 15px;
+    background: rgba(255,255,255,.94); backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--line);
+  }
+  .head-actions { grid-area: actions; display: flex; align-items: center; gap: 8px; }
+  .eyebrow {
+    grid-area: eyebrow; margin: 0; color: var(--muted);
+    font: 9.5px/1.2 var(--mono); letter-spacing: .14em; text-transform: uppercase;
+  }
+  h1 { grid-area: title; margin: 2px 0 0; font-size: 21px; font-weight: 650; letter-spacing: -.02em; line-height: 1.2; }
+  h1 em { font-style: normal; color: var(--accent); }
+  .sub { grid-area: sub; margin: 3px 0 0; color: var(--muted); font-size: 11.5px; }
 
-  .grid2 { display: grid; grid-template-columns: minmax(0,1.4fr) minmax(0,1fr); gap: 18px; align-items: start; }
-  .grid3 { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 18px; align-items: start; }
-  .panel { background: var(--panel); border: 1px solid var(--line); padding: 18px 20px 16px; margin-bottom: 18px; min-width: 0; }
-  .panel-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
-  .panel-head h2 { margin: 0; font: 10px/1 var(--mono); letter-spacing: .18em; text-transform: uppercase; }
-  .panel-head .hint { margin-left: auto; font-size: 10.5px; color: var(--muted); }
-  .empty { margin: 0; padding: 14px 0; font-size: 12px; color: var(--muted); }
+  .inner > section { padding: 18px 28px 0; }
+  .inner > section:last-child { padding-bottom: 48px; }
 
-  .seg { display: inline-flex; border: 1px solid var(--line); background: var(--paper); margin-left: auto; }
-  .seg button { padding: 6px 10px; border: 0; background: none; cursor: pointer; font: 9px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
-  .seg button + button { border-left: 1px solid var(--line); }
-  .seg button[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
+  /* ── KPI ────────────────────────────────────────────── */
+
+  .strip {
+    display: grid; grid-template-columns: 1.25fr repeat(5, minmax(0, 1fr));
+    gap: 10px; margin: 2px 0 14px;
+  }
+  .cell {
+    min-width: 0; padding: 13px 14px 12px;
+    background: var(--surface); border: 1px solid var(--line);
+    border-radius: var(--radius); box-shadow: var(--shadow);
+  }
+  .cell .label {
+    display: block; margin-bottom: 7px; color: var(--muted);
+    font: 9.5px/1.25 var(--mono); letter-spacing: .1em; text-transform: uppercase;
+  }
+  .cell b {
+    display: block; color: var(--ink);
+    font: 600 25px/1.05 var(--mono); letter-spacing: -.04em; font-variant-numeric: tabular-nums;
+  }
+  .cell .note { display: block; margin-top: 5px; color: var(--muted); font-size: 10.5px; }
+  .cell.hero { border-left: 3px solid var(--accent); }
+  .cell.hero b { font-size: 31px; color: var(--accent); }
+
+  /* ── сетки и панели ─────────────────────────────────── */
+
+  .grid2 { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr); gap: 12px; align-items: start; }
+  .grid3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; align-items: start; }
+  .panel {
+    min-width: 0; margin-bottom: 12px; padding: 15px 16px 14px;
+    background: var(--surface); border: 1px solid var(--line);
+    border-radius: var(--radius); box-shadow: var(--shadow);
+  }
+  .panel-head { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
+  .panel-head h2 {
+    margin: 0; color: var(--ink-soft);
+    font: 600 11px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase;
+  }
+  .panel-head .hint { margin-left: auto; color: var(--muted); font-size: 10.5px; }
+  .empty { margin: 0; padding: 12px 0; color: var(--muted); font-size: 12px; }
+
+  /* ── переключатель периода ──────────────────────────── */
+
+  .seg {
+    display: inline-flex; margin-left: auto; padding: 3px;
+    background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px;
+  }
+  .seg button {
+    padding: 5px 10px; border: 0; border-radius: 6px; background: none;
+    color: var(--muted); font-size: 11px; cursor: pointer; white-space: nowrap;
+  }
+  .seg button:hover { color: var(--ink); }
+  .seg button[aria-pressed="true"] {
+    background: var(--surface); color: var(--accent); font-weight: 600;
+    box-shadow: 0 1px 2px rgba(16,24,40,.12);
+  }
+
+  /* ── графики ────────────────────────────────────────── */
 
   .chart { overflow: visible; }
   .chart svg { display: block; width: 100%; height: auto; }
-  .chart .grid { stroke: rgba(23,21,18,.09); stroke-dasharray: 3 5; }
-  .chart .area { fill: var(--accent); fill-opacity: .1; }
-  .chart .line { fill: none; stroke: var(--ink); stroke-width: 1.6; }
-  .chart .dot { fill: var(--panel); stroke: var(--accent); stroke-width: 1.4; }
+  .chart .grid { stroke: #e5e7eb; stroke-dasharray: 3 5; }
+  .chart .area { fill: var(--accent); fill-opacity: .08; }
+  .chart .line { fill: none; stroke: var(--accent); stroke-width: 1.8; }
+  .chart .dot { fill: #fff; stroke: var(--accent); stroke-width: 1.4; }
   .chart .tick { fill: var(--muted); font: 9px var(--mono); }
-  .chart .bar { fill: rgba(23,21,18,.3); }
+  .chart .bar { fill: #cbd2dd; }
   .chart .bar.is-now { fill: var(--accent); }
 
-  .ranks { display: flex; flex-direction: column; }
-  .row { display: grid; grid-template-columns: 20px minmax(0,1fr) 52px 52px; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px dashed var(--line); }
-  .row.two { grid-template-columns: 20px minmax(0,1fr) 60px; }
-  .row:last-child { border-bottom: 0; }
-  .row .idx { font: 9px/1 var(--mono); color: var(--muted); }
-  .row .name { display: block; font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .row .meter { position: relative; display: block; height: 4px; margin-top: 6px; background: rgba(23,21,18,.07); overflow: hidden; }
-  .row .meter u { position: absolute; inset: 0 auto 0 0; background: var(--accent); }
-  .row .n { text-align: right; }
-  .row .n b { display: block; font: 500 13px/1.2 var(--mono); font-variant-numeric: tabular-nums; }
-  .row .n small { font: 8px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  /* ── списки и рейтинги ──────────────────────────────── */
 
-  .funnel { display: flex; flex-direction: column; gap: 10px; }
-  .funnel-step { display: grid; grid-template-columns: 86px minmax(0,1fr) 72px; gap: 10px; align-items: center; font-size: 12px; }
-  .funnel-step .bar { height: 22px; background: rgba(23,21,18,.06); position: relative; overflow: hidden; }
-  .funnel-step .bar u { position: absolute; inset: 0 auto 0 0; background: var(--ink); }
+  .ranks { display: flex; flex-direction: column; }
+  .row {
+    display: grid; grid-template-columns: 18px minmax(0,1fr) 52px 52px;
+    align-items: center; gap: 10px; padding: 7px 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .row.two { grid-template-columns: 18px minmax(0,1fr) 60px; }
+  .row:last-child { border-bottom: 0; }
+  .row .idx { color: var(--muted); font: 9px/1 var(--mono); }
+  .row .name { display: block; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .row .meter { position: relative; display: block; height: 4px; margin-top: 5px; background: #eef0f4; border-radius: 999px; overflow: hidden; }
+  .row .meter u { position: absolute; inset: 0 auto 0 0; background: var(--accent); border-radius: 999px; }
+  .row .n { text-align: right; }
+  .row .n b { display: block; font: 500 12.5px/1.2 var(--mono); font-variant-numeric: tabular-nums; }
+  .row .n small { color: var(--muted); font: 8px/1 var(--mono); letter-spacing: .06em; text-transform: uppercase; }
+
+  .funnel { display: flex; flex-direction: column; gap: 8px; }
+  .funnel-step { display: grid; grid-template-columns: 96px minmax(0,1fr) 60px; gap: 10px; align-items: center; font-size: 11.5px; }
+  .funnel-step .bar { height: 20px; background: #f1f3f7; border-radius: 5px; position: relative; overflow: hidden; }
+  .funnel-step .bar u { position: absolute; inset: 0 auto 0 0; background: #334155; border-radius: 5px; }
   .funnel-step:nth-child(2) .bar u { background: var(--warn); }
   .funnel-step:nth-child(3) .bar u { background: var(--accent); }
-  .funnel-step b { text-align: right; font: 500 13px/1 var(--mono); }
+  .funnel-step b { text-align: right; font: 500 12px/1 var(--mono); }
 
-  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
-  .chip { display: inline-block; padding: 3px 8px; border: 1px solid var(--line); border-radius: 2px; font: 9px/1.6 var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--ink-soft); white-space: nowrap; }
-  .chip.done { border-color: rgba(63,122,82,.4); color: var(--ok); }
-  .chip.error { border-color: rgba(212,69,42,.4); color: var(--accent); }
+  .chips { display: flex; flex-wrap: wrap; gap: 5px; }
+  .chip {
+    display: inline-block; padding: 2px 8px; border-radius: 999px;
+    background: #f1f3f7; color: var(--ink-soft);
+    font: 9.5px/1.7 var(--mono); letter-spacing: .03em; white-space: nowrap;
+  }
+  .chip.done { background: #e8f5ec; color: var(--ok); }
+  .chip.error { background: var(--accent-soft); color: var(--accent); }
   .chip.muted { color: var(--muted); }
 
-  .errors { display: grid; gap: 9px; max-height: 260px; overflow: auto; }
-  .error-row { display: grid; grid-template-columns: 52px minmax(0,1fr); gap: 9px; font-size: 11.5px; }
-  .error-row time { font: 9.5px/1.7 var(--mono); color: var(--muted); }
-  .error-row b { display: block; font-weight: 500; font-size: 12px; word-break: break-word; }
-  .error-row small { color: var(--muted); font: 9.5px/1.6 var(--mono); }
+  .insights { display: grid; gap: 1px; }
+  .insight {
+    display: grid; grid-template-columns: 8px minmax(0,1fr); gap: 10px; align-items: start;
+    padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 12px;
+  }
+  .insight:last-child { border-bottom: 0; }
+  .insight::before { content: ''; width: 8px; height: 8px; margin-top: 4px; border-radius: 50%; background: var(--muted); }
+  .insight.warn::before { background: var(--warn); }
+  .insight.bad::before { background: var(--accent); }
+  .insight.ok::before { background: var(--ok); }
+  .insight b { font-weight: 550; }
+  .insight small { display: block; margin-top: 1px; color: var(--muted); font-size: 10.5px; }
 
-  .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 9px; margin: 24px 0 12px; }
-  .control { width: 100%; padding: 8px 10px; background: var(--panel); border: 1px solid var(--line); border-radius: 2px; font-size: 12px; outline: none; }
-  .control:focus { border-color: var(--ink); }
-  select.control { cursor: pointer; width: auto; min-width: 120px; }
-  .search-wrap { position: relative; flex: 1 1 230px; }
-  .search-wrap kbd { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); font: 9px var(--mono); color: var(--muted); border: 1px solid var(--line); padding: 1px 4px; background: var(--paper); pointer-events: none; }
-  .btn { padding: 8px 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 2px; cursor: pointer; font: 10px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; }
-  .btn:hover { border-color: var(--ink); }
+  .errors { display: grid; gap: 8px; max-height: 250px; overflow: auto; }
+  .error-row { display: grid; grid-template-columns: 48px minmax(0,1fr); gap: 8px; font-size: 11px; }
+  .error-row time { color: var(--muted); font: 9.5px/1.6 var(--mono); }
+  .error-row b { display: block; font-weight: 500; font-size: 11.5px; word-break: break-word; }
+  .error-row small { color: var(--muted); font: 9.5px/1.5 var(--mono); }
+
+  /* ── фильтры, кнопки, таблицы ───────────────────────── */
+
+  .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 2px 0 12px; }
+  .toolbar-note { color: var(--muted); font: 10.5px/1 var(--mono); }
+  .control {
+    width: 100%; padding: 7px 10px; background: var(--surface);
+    border: 1px solid var(--line-strong); border-radius: 8px; font-size: 12px; outline: none;
+  }
+  .control:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(214,69,47,.12); }
+  select.control { cursor: pointer; width: auto; min-width: 122px; }
+  .search-wrap { position: relative; flex: 1 1 240px; }
+  .search-wrap kbd {
+    position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
+    padding: 1px 5px; border: 1px solid var(--line); border-radius: 4px;
+    background: var(--surface-2); color: var(--muted); font: 9px var(--mono); pointer-events: none;
+  }
+  .btn {
+    padding: 7px 11px; background: var(--surface); border: 1px solid var(--line-strong);
+    border-radius: 8px; color: var(--ink-soft); font-size: 11.5px; cursor: pointer;
+  }
+  .btn:hover { border-color: var(--ink-soft); }
+  .btn[aria-pressed="true"] { background: var(--accent-soft); border-color: rgba(214,69,47,.45); color: var(--accent); font-weight: 600; }
   .btn:disabled { opacity: .45; cursor: progress; }
-  .check { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; color: var(--muted); cursor: pointer; }
+  .check { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 11px; cursor: pointer; }
   .check input { accent-color: var(--accent); }
 
-  .table-wrap { overflow-x: auto; border-top: 1px solid var(--ink); }
-  table { width: 100%; border-collapse: collapse; font-size: 12px; }
-  th { padding: 8px 10px 8px 0; text-align: left; white-space: nowrap; font: 9px/1 var(--mono); letter-spacing: .13em; text-transform: uppercase; color: var(--muted); border-bottom: 1px solid var(--line); }
-  td { padding: 8px 10px 8px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
-  tr:last-child td { border-bottom: 0; }
-  td.time { font: 10px/1.6 var(--mono); color: var(--ink-soft); white-space: nowrap; }
-  td.mono { font: 10px/1.6 var(--mono); color: var(--muted); word-break: break-word; }
-  td.num { text-align: right; font: 11px/1.6 var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; }
+  table { width: 100%; border-collapse: collapse; font-size: 11.5px; }
+  th {
+    padding: 8px 10px; text-align: left; white-space: nowrap;
+    background: var(--surface-2); color: var(--muted);
+    font: 9px/1.2 var(--mono); letter-spacing: .09em; text-transform: uppercase;
+    border-bottom: 1px solid var(--line);
+  }
+  td { padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  tbody tr:last-child td { border-bottom: 0; }
+  tbody tr:hover { background: #fafbfc; }
+  td.time { font: 10px/1.5 var(--mono); color: var(--ink-soft); white-space: nowrap; }
+  td.mono { font: 10px/1.5 var(--mono); color: var(--muted); word-break: break-word; }
+  td.num { text-align: right; font: 11px/1.5 var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
   .pager { display: flex; align-items: center; gap: 8px; padding-top: 12px; }
-  .pager .info { margin-left: auto; font: 10px/1 var(--mono); color: var(--muted); }
+  .pager .info { margin-left: auto; color: var(--muted); font: 10px/1 var(--mono); }
 
-  .settings-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 18px; }
+  /* ── настройки ──────────────────────────────────────── */
+
+  .settings-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 12px; }
   .field { display: grid; gap: 5px; margin-bottom: 12px; }
-  .field > span:first-child { font: 9px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
-  .field .hint { font-size: 10.5px; color: var(--muted); }
-  .solid { padding: 9px 14px; border: 1px solid var(--ink); background: var(--ink); color: var(--paper); border-radius: 2px; cursor: pointer; font: 10px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; }
-  .solid:hover { background: var(--accent); border-color: var(--accent); }
-  .solid.danger { background: transparent; color: var(--accent); border-color: rgba(212,69,42,.5); }
-  .solid.danger:hover { background: var(--accent); color: var(--paper); }
-  .fine { margin: 10px 0 0; font-size: 10.5px; color: var(--muted); }
-  .danger-note { margin: 10px 0 0; font-size: 11px; color: var(--accent); }
-  .audit { display: grid; gap: 7px; }
-  .audit-row { display: grid; grid-template-columns: 118px minmax(0,1fr); gap: 10px; font-size: 11.5px; border-bottom: 1px dashed var(--line); padding-bottom: 7px; }
-  .audit-row time { font: 9.5px/1.7 var(--mono); color: var(--muted); }
-  .audit-row b { font-weight: 500; }
+  .field > span:first-child { color: var(--muted); font: 9px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; }
+  .field .hint { color: var(--muted); font-size: 10.5px; }
+  .solid {
+    padding: 8px 13px; border: 1px solid var(--accent); border-radius: 8px;
+    background: var(--accent); color: #fff; font-size: 11.5px; font-weight: 600; cursor: pointer;
+  }
+  .solid:hover { background: var(--accent-dark); border-color: var(--accent-dark); }
+  .solid.danger { background: transparent; color: var(--accent); border-color: rgba(214,69,47,.45); }
+  .solid.danger:hover { background: var(--accent); color: #fff; }
+  .fine { margin: 9px 0 0; color: var(--muted); font-size: 10.5px; }
+  .danger-note { margin: 9px 0 0; color: var(--accent); font-size: 11px; }
+  .audit { display: grid; gap: 6px; }
+  .audit-row {
+    display: grid; grid-template-columns: 108px minmax(0,1fr); gap: 9px;
+    padding-bottom: 6px; border-bottom: 1px solid var(--line); font-size: 11px;
+  }
+  .audit-row time { color: var(--muted); font: 9.5px/1.6 var(--mono); }
+  .audit-row b { font-weight: 550; }
 
-  .feed { display: grid; gap: 7px; max-height: 420px; overflow: auto; }
-  .feed-row { display: grid; grid-template-columns: 52px 76px minmax(0,1fr); gap: 8px; padding-bottom: 6px; border-bottom: 1px dashed var(--line); font-size: 11.5px; }
-  .feed-row time { font: 9.5px/1.7 var(--mono); color: var(--muted); }
+  .feed { display: grid; gap: 6px; max-height: 400px; overflow: auto; }
+  .feed-row {
+    display: grid; grid-template-columns: 46px 72px minmax(0,1fr); gap: 7px;
+    padding-bottom: 6px; border-bottom: 1px solid var(--line); font-size: 11px;
+  }
+  .feed-row time { color: var(--muted); font: 9.5px/1.6 var(--mono); }
   .feed-row .what { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .feed-row small { display: block; color: var(--muted); font: 9px/1.5 var(--mono); }
+  .feed-row small { display: block; color: var(--muted); font: 9px/1.4 var(--mono); }
 
   .toast {
     position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%);
-    padding: 10px 16px; background: var(--ink); color: var(--paper);
-    font: 11px/1.4 var(--mono); border-radius: 3px; z-index: 40; max-width: min(92vw, 520px);
+    padding: 9px 14px; border-radius: 8px; background: #111827; color: #fff;
+    box-shadow: 0 12px 30px -12px rgba(0,0,0,.5);
+    font-size: 11.5px; z-index: 40; max-width: min(92vw, 520px);
   }
   .toast.bad { background: var(--accent); }
 
-  @media (max-width: 1080px) {
-    .strip { grid-template-columns: repeat(3, 1fr); }
-    .cell:nth-child(3) { border-right: 0; }
-    .cell:nth-child(n + 4) { border-top: 1px solid var(--line); }
+  @media (max-width: 1180px) {
+    .strip { grid-template-columns: repeat(3, minmax(0,1fr)); }
     .grid2, .grid3, .settings-grid { grid-template-columns: 1fr; }
   }
-  @media (max-width: 720px) {
+  @media (max-width: 900px) {
     .shell { grid-template-columns: 1fr; }
-    .rail { position: static; height: auto; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 12px 18px; padding: 14px 16px; border-right: 0; border-bottom: 1px solid var(--line); }
-    .brand { margin-right: auto; }
-    .nav { flex-direction: row; flex-wrap: wrap; gap: 0 14px; }
-    .rail-foot { margin: 0; display: flex; flex-wrap: wrap; gap: 12px; width: 100%; }
-    .rail-foot .stamp, .rail-foot .open-badge { display: none; }
-    .ghost { border-top: 0; padding: 4px 0; }
-    main { padding: 24px 16px 60px; }
-    h1 { font-size: 30px; }
-    .strip { grid-template-columns: repeat(2, 1fr); margin-top: 22px; }
-    .cell { padding: 12px 12px 10px; }
-    .cell:first-child { padding-left: 12px; }
-    .cell:nth-child(2n) { border-right: 0; }
-    .cell:nth-child(n + 3) { border-top: 1px solid var(--line); }
-    .cell.hero b { font-size: 30px; }
-    .cell b { font-size: 24px; }
+    .rail {
+      position: static; height: auto; flex-direction: row; flex-wrap: wrap;
+      align-items: center; gap: 10px 18px; padding: 12px 16px;
+      border-right: 0; border-bottom: 1px solid #0a0f1c;
+    }
+    .brand { margin-right: auto; padding: 0; }
+    .nav { flex-direction: row; flex-wrap: wrap; gap: 2px; width: 100%; }
+    .nav-label { display: none; }
+    .nav button { width: auto; padding: 7px 10px; }
+    .rail-foot { display: none; }
+    header { padding: 12px 16px; }
+    .inner > section { padding: 14px 16px 0; }
+    .head-actions .btn span { display: none; }
+  }
+  @media (max-width: 640px) {
+    h1 { font-size: 18px; }
+    .strip { grid-template-columns: repeat(2, minmax(0,1fr)); }
+    .cell b { font-size: 21px; }
+    .cell.hero b { font-size: 25px; }
+    .panel { padding: 13px 12px 12px; }
     td.hide-m, th.hide-m { display: none; }
-    .funnel-step { grid-template-columns: 70px minmax(0,1fr) 58px; }
+    .funnel-step { grid-template-columns: 78px minmax(0,1fr) 48px; }
+    .seg { margin-left: 0; }
   }
 </style>
 </head>
@@ -232,19 +384,19 @@
     </a>
 
     <nav class="nav" id="nav" aria-label="Разделы админки">
+      <p class="nav-label">Аналитика</p>
       <button type="button" data-tab="overview"><i>01</i>Сводка</button>
       <button type="button" data-tab="live"><i>02</i>Онлайн<em id="navLive">0</em></button>
       <button type="button" data-tab="tools"><i>03</i>Инструменты</button>
       <button type="button" data-tab="audience"><i>04</i>Аудитория</button>
       <button type="button" data-tab="events"><i>05</i>Журнал</button>
+      <p class="nav-label">Система</p>
       <button type="button" data-tab="settings"><i>06</i>Настройки</button>
     </nav>
 
     <div class="rail-foot">
       <span class="open-badge">открытый вход</span>
       <p class="stamp" id="stamp">—</p>
-      <button class="ghost" id="refresh">Обновить <kbd>R</kbd></button>
-      <button class="ghost" id="csv">CSV ↓</button>
     </div>
   </aside>
 
@@ -254,6 +406,10 @@
         <p class="eyebrow" id="eyebrow">обзор · всё сразу</p>
         <h1 id="title">Пульт <em>Congix Docs</em></h1>
         <p class="sub" id="range">—</p>
+        <div class="head-actions">
+          <button class="btn" id="refresh" type="button">Обновить <span>данные</span></button>
+          <button class="btn" id="csv" type="button">CSV ↓</button>
+        </div>
       </header>
 
       <!-- ── сводка ─────────────────────────────────────────── -->
@@ -275,20 +431,28 @@
             <span class="note" id="kSessionsNote">—</span>
           </div>
           <div class="cell">
-            <span class="label">Дошли до файла</span>
+            <span class="label">Конверсия в файл</span>
             <b id="kConv">—</b>
-            <span class="note">open → done</span>
+            <span class="note">сессия → готовый файл</span>
           </div>
           <div class="cell">
-            <span class="label">Среднее на странице</span>
+            <span class="label">Средняя сессия</span>
             <b id="kTime">—</b>
-            <span class="note">по событию leave</span>
+            <span class="note" id="kTimeNote">видимое время</span>
           </div>
           <div class="cell">
-            <span class="label">Ошибок</span>
+            <span class="label">Ошибки</span>
             <b id="kErrors">0</b>
-            <span class="note">за всё время</span>
+            <span class="note" id="kErrorsNote">за период</span>
           </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <h2>Что улучшить</h2>
+            <span class="hint">выводы из текущих данных</span>
+          </div>
+          <div class="insights" id="insights"></div>
         </section>
 
         <section class="panel">
@@ -307,7 +471,7 @@
 
         <div class="grid2">
           <section class="panel">
-            <div class="panel-head"><h2>Воронка</h2><span class="hint">от визита до файла</span></div>
+            <div class="panel-head"><h2>Воронка</h2><span class="hint">по сессиям, от визита до файла</span></div>
             <div class="funnel" id="funnel"></div>
           </section>
           <section class="panel">
@@ -404,6 +568,7 @@
           <button class="btn" data-days-tools="30" type="button">30 дней</button>
           <button class="btn" data-days-tools="90" type="button">90 дней</button>
           <button class="btn" data-days-tools="0" type="button">Всё время</button>
+          <span class="toolbar-note" id="toolsPeriod">за 30 дней</span>
         </div>
         <div class="panel" style="padding-top:0">
           <div class="table-wrap">
@@ -412,25 +577,42 @@
                 <tr>
                   <th>Инструмент</th>
                   <th class="num">Открыли</th>
-                  <th class="num">Получили файл</th>
+                  <th class="num">Дошли до файла</th>
                   <th class="num">Конверсия</th>
                   <th class="num">Ошибки</th>
-                  <th class="num hide-m">Людей</th>
+                  <th class="num hide-m">Ср. время</th>
                   <th class="num hide-m">Последний раз</th>
                 </tr>
               </thead>
               <tbody id="toolBody"></tbody>
             </table>
           </div>
+          <p class="fine" id="toolsNote" hidden></p>
         </div>
       </section>
 
       <!-- ── аудитория ─────────────────────────────────────── -->
       <section id="viewAudience" hidden>
         <div class="grid2">
-          <section class="panel">
-            <div class="panel-head"><h2>Страницы</h2><span class="hint">просмотры и люди</span></div>
-            <div class="ranks" id="audPages"></div>
+          <section class="panel" style="grid-column:1/-1">
+            <div class="panel-head"><h2>Страницы</h2><span class="hint">просмотры, время и скролл</span></div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Страница</th>
+                    <th class="num">Просмотры</th>
+                    <th class="num">Люди</th>
+                    <th class="num">Входы</th>
+                    <th class="num">Выходы</th>
+                    <th class="num">Ср. время</th>
+                    <th class="num">Скролл</th>
+                  </tr>
+                </thead>
+                <tbody id="pageBody"></tbody>
+              </table>
+            </div>
+            <p class="fine" id="audCoverage">—</p>
           </section>
           <section class="panel">
             <div class="panel-head"><h2>Источники</h2><span class="hint">откуда пришли</span></div>
@@ -543,6 +725,7 @@
             <button class="solid danger" id="purge" type="button">Удалить</button>
             <p class="danger-note" id="purgeNote" hidden></p>
             <p class="fine" id="dbStamp">—</p>
+            <p class="fine" id="dataStamp">—</p>
           </section>
         </div>
 
@@ -587,10 +770,14 @@
     overview: ['обзор · всё сразу', 'Пульт <em>Congix Docs</em>'],
     live: ['онлайн · последние 5 минут', 'Что <em>сейчас</em> происходит'],
     tools: ['инструменты · конверсия', 'Чем <em>пользуются</em>'],
-    audience: ['аудитория · откуда и на чём', 'Кто <em>приходит</em>'],
+    audience: ['аудитория · страницы и откуда', 'Кто и <em>где</em>'],
     events: ['журнал · каждое событие', 'Полный <em>журнал</em>'],
     settings: ['настройки · хранение и очистка', 'Служебные <em>настройки</em>'],
   }
+
+  // Номер последнего запроса по каждому разделу: ответ, пришедший позже
+  // нового, не должен затирать свежие данные (иначе период «залипает»).
+  const seq = { overview: 0, live: 0, tools: 0, audience: 0, events: 0 }
 
   const state = {
     tab: 'overview',
@@ -622,6 +809,12 @@
     return sameDay ? time : pad(date.getDate()) + '.' + pad(date.getMonth() + 1) + ' ' + time
   }
 
+  function fmtFull(ts) {
+    if (!ts) return '—'
+    const date = new Date(ts)
+    return pad(date.getDate()) + '.' + pad(date.getMonth() + 1) + ' ' + pad(date.getHours()) + ':' + pad(date.getMinutes())
+  }
+
   function fmtDuration(seconds) {
     const value = Number(seconds) || 0
     if (!value) return '—'
@@ -631,6 +824,29 @@
 
   function fmtNumDays(days) {
     return days === 0 ? 'всё время' : days + ' дн.'
+  }
+
+  /**
+   * Ряд по дням без пропусков: иначе 7 и 90 дней выглядят одинаково, если
+   * события были только в паре дней. Пустые дни — нули, график честно меняется.
+   */
+  function fillSeries(rows, days) {
+    if (!days || days <= 0) return rows
+    const byDay = new Map((rows || []).map((row) => [row.day, row]))
+    const today = new Date()
+    const out = []
+    for (let offset = days - 1; offset >= 0; offset--) {
+      const date = new Date(today.getFullYear(), today.getMonth(), today.getDate() - offset)
+      const key = date.getFullYear() + '-' + pad(date.getMonth() + 1) + '-' + pad(date.getDate())
+      const row = byDay.get(key)
+      out.push({
+        day: key,
+        total: row ? Number(row.total) || 0 : 0,
+        people: row ? Number(row.people) || 0 : 0,
+        sessions: row ? Number(row.sessions) || 0 : 0,
+      })
+    }
+    return out
   }
 
   function metaDetail(row) {
@@ -712,12 +928,17 @@
     const area = line + ' L' + points[points.length - 1][0].toFixed(1) + ' ' + (height - padY) +
       ' L' + points[0][0].toFixed(1) + ' ' + (height - padY) + ' Z'
     const ticks = values.map((value, index) => {
+      // Первую и последнюю подпись прижимаем к краям, иначе они обрезаются.
+      const anchor = index === 0 ? 'start' : index === values.length - 1 ? 'end' : 'middle'
       if (rows.length > 12 && index % Math.ceil(rows.length / 8) !== 0 && index !== rows.length - 1) return ''
       const [x] = point(index, value)
       const label = String(rows[index][labelKey] || '').slice(5)
-      return '<text class="tick" x="' + x.toFixed(1) + '" y="' + (height - 1) + '" text-anchor="middle">' + esc(label) + '</text>'
+      return '<text class="tick" x="' + x.toFixed(1) + '" y="' + (height - 1) + '" text-anchor="' + anchor + '">' + esc(label) + '</text>'
     }).join('')
-    const dots = points.map(([x, y]) => '<circle class="dot" cx="' + x.toFixed(1) + '" cy="' + y.toFixed(1) + '" r="2.4" />').join('')
+    // На длинном периоде точки превращаются в шум — оставляем только линию.
+    const dots = rows.length <= 45
+      ? points.map(([x, y]) => '<circle class="dot" cx="' + x.toFixed(1) + '" cy="' + y.toFixed(1) + '" r="2.4" />').join('')
+      : ''
 
     target.innerHTML = '<svg viewBox="0 0 ' + width + ' ' + height + '" role="img" aria-label="График активности">' +
       '<line class="grid" x1="0" y1="' + (height - padY) + '" x2="' + width + '" y2="' + (height - padY) + '"/>' +
@@ -749,8 +970,10 @@
   /* ── сводка ────────────────────────────────────────── */
 
   async function loadOverview(silent) {
+    const ticket = ++seq.overview
     try {
       const data = await api('/api/stats?days=' + state.days)
+      if (ticket !== seq.overview) return
       renderOverview(data)
       $('stamp').textContent = 'обновлено ' + fmtWhen(Date.now())
     } catch (error) {
@@ -758,32 +981,77 @@
     }
   }
 
+  function renderInsights(data) {
+    const t = data.totals
+    const funnel = data.funnel
+    const conversion = funnel.views ? Math.round(funnel.dones / funnel.views * 100) : 0
+    const items = []
+
+    if (!t.sessions || t.sessions < 5) {
+      items.push({ tone: '', text: 'Мало данных для выводов', note: (t.sessions || 0) + ' сессий за период — нужно хотя бы 5–10.' })
+    }
+    if (t.sessions >= 5 && t.bounceRate >= 60) {
+      items.push({ tone: 'warn', text: t.bounceRate + '% сессий уходят с одной страницы', note: 'Проверьте первый экран и кнопку выбора инструмента.' })
+    }
+    if (funnel.views >= 10 && conversion < 20) {
+      items.push({ tone: 'warn', text: 'До файла доходит ' + conversion + '% сессий (' + funnel.dones + ' из ' + funnel.views + ')', note: 'Путь от главной до загрузки файла слишком длинный.' })
+    }
+    for (const page of data.pages.filter((row) => row.avgTime > 0 && row.avgTime < 15 && row.views >= 3).slice(0, 2)) {
+      items.push({ tone: 'warn', text: page.path + ': ' + page.avgTime + ' с в среднем', note: page.views + ' просмотров — первый экран не удерживает.' })
+    }
+    for (const tool of data.tools.filter((row) => row.total >= 3 && row.conversion < 50).slice(0, 2)) {
+      items.push({ tone: 'bad', text: tool.name + ': ' + tool.done + ' из ' + tool.total + ' открытий дошли до файла', note: 'Проверьте подсказки и сообщения об ошибках на этом инструменте.' })
+    }
+    if (data.errorGroups.length) {
+      const total = data.errorGroups.reduce((sum, group) => sum + group.count, 0)
+      items.push({ tone: 'bad', text: total + ' ошибок за период', note: data.errorGroups[0].message })
+    }
+    if (!items.length) {
+      items.push({ tone: 'ok', text: 'Явных провалов нет', note: 'Конверсия и удержание в норме на текущих данных.' })
+    }
+
+    $('insights').innerHTML = items.map((item) =>
+      '<div class="insight ' + item.tone + '"><span><b>' + esc(item.text) + '</b>' +
+      '<small>' + esc(item.note) + '</small></span></div>').join('')
+  }
+
   function renderOverview(data) {
     const t = data.totals
+    const periodErrors = (data.actions || []).find((row) => row.action === 'error')?.total ?? 0
     $('kToday').textContent = num(t.today)
     $('kTodayNote').textContent = 'за 7 дней: ' + num(t.week) + ' · за 30: ' + num(t.month)
-    $('kPeople').textContent = num(t.people)
-    $('kPeopleNote').textContent = 'всего уникальных'
-    $('kSessions').textContent = num(t.sessions)
-    $('kSessionsNote').textContent = 'за ' + fmtNumDays(data.days)
-    $('kConv').textContent = data.funnel.opens ? Math.round(data.funnel.dones / Math.max(1, data.funnel.opens) * 100) + '%' : '—'
-    $('kTime').textContent = fmtDuration(t.avgDuration)
-    $('kErrors').textContent = num(t.errors)
+    const periodPeople = t.peoplePeriod ?? t.people
+    const periodSessions = t.sessionsPeriod ?? t.sessions
+    $('kPeople').textContent = num(periodPeople)
+    $('kPeopleNote').textContent = 'всего: ' + num(t.people) + ' · за ' + fmtNumDays(data.days)
+    $('kSessions').textContent = num(periodSessions)
+    $('kSessionsNote').textContent = (t.avgViews || 0) + ' стр. за сессию' +
+      (data.quality?.since ? ' · с ' + fmtFull(data.quality.since) : '')
+    $('kConv').textContent = data.funnel.views ? Math.round(data.funnel.dones / Math.max(1, data.funnel.views) * 100) + '%' : '—'
+    $('kTime').textContent = fmtDuration(t.avgSessionSeconds)
+    $('kTimeNote').textContent = 'отказы ' + (t.bounceRate || 0) + '%'
+    $('kErrors').textContent = num(periodErrors)
+    $('kErrorsNote').textContent = data.quality?.since ? 'с ' + fmtFull(data.quality.since) : 'за период'
     $('range').textContent = 'период: ' + fmtNumDays(data.days) + ' · событий в периоде: ' + num(t.period) +
-      ' · последнее: ' + fmtWhen(t.last)
-    chart($('chart'), data.series, 'day', 'total')
+      ' · последнее: ' + fmtWhen(t.last) +
+      (data.quality?.since ? ' · сбор с ' + fmtFull(data.quality.since) : '')
+    renderInsights(data)
+    const series = fillSeries(data.series, data.days)
+    chart($('chart'), series, 'day', 'total')
+    $('chartHint').textContent = 'за ' + fmtNumDays(data.days) + ' · ' + num(t.period) + ' событий' +
+      (periodPeople ? ' · ' + num(periodPeople) + ' людей' : '')
 
     const views = data.funnel.views || 0
     const opens = data.funnel.opens || 0
     const dones = data.funnel.dones || 0
     const base = Math.max(1, views)
     $('funnel').innerHTML = [
-      ['Просмотры', views, views],
-      ['Открыли инструмент', opens, opens],
-      ['Получили файл', dones, dones],
-    ].map(([label, value, width]) =>
+      ['Сессий с просмотром', views],
+      ['Открыли инструмент', opens],
+      ['Получили файл', dones],
+    ].map(([label, value]) =>
       '<div class="funnel-step"><span>' + esc(label) + '</span>' +
-      '<span class="bar"><u style="width:' + Math.max(1, Math.round(Number(width) / base * 100)) + '%"></u></span>' +
+      '<span class="bar"><u style="width:' + Math.max(1, Math.round(Number(value) / base * 100)) + '%"></u></span>' +
       '<b>' + num(value) + '</b></div>').join('')
 
     if (!data.errors.length) {
@@ -796,9 +1064,9 @@
         '</span></div>').join('')
     }
 
-    rankList($('toolList'), data.tools.slice(0, 8), { note: (row) => row.total + ' откр.' })
-    rankList($('pageList'), data.pages.slice(0, 8), { label: 'path' })
-    rankList($('sourceList'), data.sources.slice(0, 6), { label: 'source', note: (row) => row.medium || '' })
+    rankList($('toolList'), data.tools.slice(0, 8), { note: (row) => row.conversion + '%', value: 'total' })
+    rankList($('pageList'), data.pages.slice(0, 8), { label: 'path', value: 'views', note: (row) => row.avgTime ? row.avgTime + ' с' : '' })
+    rankList($('sourceList'), data.sources.slice(0, 6), { label: 'source', note: (row) => row.medium || row.sessions + ' сес.' })
     rankList($('deviceList'), data.devices.slice(0, 4), { label: 'device' })
     rankList($('langList'), data.langs.slice(0, 5), { label: 'lang' })
     chips($('browserChips'), data.browsers, 'browser')
@@ -809,8 +1077,10 @@
   /* ── онлайн ────────────────────────────────────────── */
 
   async function loadLive(silent) {
+    const ticket = ++seq.live
     try {
       const data = await api('/api/live')
+      if (ticket !== seq.live) return
       $('livePeople').textContent = num(data.people)
       $('liveSessions').textContent = num(data.sessions)
       $('liveEvents').textContent = num(data.events)
@@ -837,19 +1107,27 @@
   /* ── инструменты ───────────────────────────────────── */
 
   async function loadTools(silent) {
+    const ticket = ++seq.tools
     try {
-      const data = await api('/api/stats?days=' + (state.toolDays || 3650))
+      const data = await api('/api/stats?days=' + state.toolDays)
+      if (ticket !== seq.tools) return
+      $('toolsPeriod').textContent = 'за ' + fmtNumDays(state.toolDays)
       const rows = (data.tools || []).slice().sort((a, b) => b.total - a.total)
-      $('toolBody').innerHTML = rows.length ? rows.map((row) => {
-        const conversion = row.total ? Math.round(row.done / row.total * 100) : 0
-        return '<tr><td><b>' + esc(row.name) + '</b></td>' +
-          '<td class="num">' + num(row.total) + '</td>' +
-          '<td class="num">' + num(row.done) + '</td>' +
-          '<td class="num">' + (row.total ? conversion + '%' : '—') + '</td>' +
-          '<td class="num">' + num(row.errors) + '</td>' +
-          '<td class="num hide-m">' + num(row.people) + '</td>' +
-          '<td class="num hide-m">' + fmtWhen(row.last) + '</td></tr>'
-      }).join('') : '<tr><td colspan="7"><p class="empty">Нет данных за период.</p></td></tr>'
+      $('toolBody').innerHTML = rows.length ? rows.map((row) =>
+        '<tr><td><b>' + esc(row.name) + '</b></td>' +
+        '<td class="num">' + num(row.total) + '</td>' +
+        '<td class="num">' + num(row.done) + '</td>' +
+        '<td class="num">' + (row.total ? row.conversion + '%' : '—') + '</td>' +
+        '<td class="num">' + num(row.errors) + '</td>' +
+        '<td class="num hide-m">' + (row.avgMs ? fmtDuration(Math.round(row.avgMs / 1000)) : '—') + '</td>' +
+        '<td class="num hide-m">' + fmtWhen(row.last) + '</td></tr>').join('')
+        : '<tr><td colspan="7"><p class="empty">Нет данных за период.</p></td></tr>'
+      const legacy = rows.some((row) => row.legacy)
+      $('toolsNote').hidden = !legacy
+      if (legacy) {
+        $('toolsNote').textContent = 'Открытия до ' + fmtFull(data.quality?.since) +
+          ' писались без сессий: для них конверсия считается по открытиям и готовым файлам.'
+      }
       $('stamp').textContent = 'обновлено ' + fmtWhen(Date.now())
     } catch (error) {
       if (!silent) toast(error.message, true)
@@ -859,10 +1137,24 @@
   /* ── аудитория ─────────────────────────────────────── */
 
   async function loadAudience(silent) {
+    const ticket = ++seq.audience
     try {
       const data = await api('/api/stats?days=' + state.days)
-      rankList($('audPages'), data.pages, { label: 'path' })
-      rankList($('audSources'), data.sources, { label: 'source', note: (row) => row.medium || '' })
+      if (ticket !== seq.audience) return
+      $('pageBody').innerHTML = data.pages.length ? data.pages.map((row) =>
+        '<tr><td class="mono">' + esc(row.path || '/') + '</td>' +
+        '<td class="num">' + num(row.views) + '</td>' +
+        '<td class="num">' + num(row.people) + '</td>' +
+        '<td class="num">' + num(row.entries) + '</td>' +
+        '<td class="num">' + num(row.exits) + '</td>' +
+        '<td class="num">' + fmtDuration(row.avgTime) + '</td>' +
+        '<td class="num">' + (row.avgScroll ? row.avgScroll + '%' : '—') + '</td></tr>').join('')
+        : '<tr><td colspan="7"><p class="empty">Просмотров за период нет.</p></td></tr>'
+      const coverage = data.coverage || { total: 0, devices: 0, countries: 0 }
+      $('audCoverage').textContent = 'Устройство известно у ' + num(coverage.devices) + ' из ' + num(coverage.total) +
+        ' событий, страна — у ' + num(coverage.countries) +
+        '. Старые события писались без этих полей и не искажают разрезы.'
+      rankList($('audSources'), data.sources, { label: 'source', note: (row) => row.medium || row.sessions + ' сес.' })
       rankList($('audDevices'), data.devices, { label: 'device' })
       chips($('audBrowsers'), data.browsers, 'browser')
       chips($('audLangs'), data.langs, 'lang')
@@ -881,8 +1173,10 @@
     if (state.ev.device) query.set('device', state.ev.device)
     if (state.ev.lang) query.set('lang', state.ev.lang)
     if (state.ev.q) query.set('q', state.ev.q)
+    const ticket = ++seq.events
     try {
       const data = await api('/api/events?' + query)
+      if (ticket !== seq.events) return
       state.pages = data.pages
       state.ev.page = data.page
       $('evBody').innerHTML = data.rows.length ? data.rows.map((row) => {
@@ -920,10 +1214,11 @@
 
   async function loadSettings() {
     try {
-      const [settings, log, health] = await Promise.all([
+      const [settings, log, health, stats] = await Promise.all([
         api('/api/settings'),
         api('/api/audit?limit=25'),
         api('/api/health'),
+        api('/api/stats?days=3650'),
       ])
       $('retention').value = settings.retentionDays
       $('purgeDays').value = settings.retentionDays
@@ -931,6 +1226,10 @@
         ' · событий: ' + num(settings.events)
       $('dbStamp').textContent = 'Событий: ' + num(settings.events) +
         ' · сессий: ' + num(settings.sessions) + ' · людей: ' + num(settings.people)
+      const quality = stats.quality || { tracked: 0, legacy: 0, since: 0 }
+      $('dataStamp').textContent = 'Новый сбор: ' + num(quality.tracked) + ' событий' +
+        (quality.since ? ' с ' + fmtFull(quality.since) : '') +
+        ' · старых без устройства и страны: ' + num(quality.legacy)
       $('audit').innerHTML = (log.rows || []).length ? log.rows.map((row) =>
         '<div class="audit-row"><time>' + fmtWhen(row.at) + '</time><span><b>' + esc(row.action) + '</b>' +
         (row.detail ? '<small style="display:block;color:var(--muted)">' + esc(row.detail) + '</small>' : '') + '</span></div>').join('')
@@ -1009,6 +1308,8 @@
     $('viewSettings').hidden = next !== 'settings'
     $('eyebrow').textContent = TITLES[next][0]
     $('title').innerHTML = TITLES[next][1]
+    syncPeriodButtons()
+    syncToolDaysButtons()
     if (push !== false) location.hash = '#/' + next
     if (next === 'live') {
       clearInterval(state.liveTimer)
@@ -1029,6 +1330,12 @@
   $('refresh').addEventListener('click', () => loadActive(false))
   $('csv').addEventListener('click', downloadCsv)
 
+  function syncPeriodButtons() {
+    document.querySelectorAll('#periodSeg button').forEach((button) => {
+      button.setAttribute('aria-pressed', Number(button.dataset.days) === state.days ? 'true' : 'false')
+    })
+  }
+
   document.querySelectorAll('#periodSeg button').forEach((button) => {
     button.addEventListener('click', () => {
       state.days = Number(button.dataset.days)
@@ -1040,12 +1347,16 @@
     })
   })
 
+  function syncToolDaysButtons() {
+    document.querySelectorAll('[data-days-tools]').forEach((button) => {
+      button.setAttribute('aria-pressed', Number(button.dataset.daysTools) === state.toolDays ? 'true' : 'false')
+    })
+  }
+
   document.querySelectorAll('[data-days-tools]').forEach((button) => {
     button.addEventListener('click', () => {
       state.toolDays = Number(button.dataset.daysTools)
-      document.querySelectorAll('[data-days-tools]').forEach((item) => {
-        item.style.borderColor = item === button ? 'var(--ink)' : ''
-      })
+      syncToolDaysButtons()
       loadTools(false)
     })
   })
@@ -1157,9 +1468,8 @@
   function boot() {
     const tab = (location.hash.replace('#/', '') || 'overview').trim()
     const initial = TITLES[tab] ? tab : 'overview'
-    document.querySelectorAll('#periodSeg button').forEach((button) => {
-      button.setAttribute('aria-pressed', Number(button.dataset.days) === state.days ? 'true' : 'false')
-    })
+    syncPeriodButtons()
+    syncToolDaysButtons()
     setTab(initial, false)
     state.timer = setInterval(() => {
       if (state.auto && !document.hidden && state.tab !== 'settings') loadActive(true)

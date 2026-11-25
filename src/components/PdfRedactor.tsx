@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { DragEvent as ReactDragEvent, PointerEvent as ReactPointerEvent } from 'react'
+import type { DragEvent as ReactDragEvent, PointerEvent as ReactPointerEvent, ReactNode } from 'react'
 import type { PDFDocumentProxy, PDFPageProxy } from 'pdfjs-dist'
 import { openPdf } from '../lib/pdf'
 import { baseName, download, formatSize } from '../lib/download'
@@ -17,6 +17,7 @@ import {
   fitImage,
   fontStackFor,
   insertBlankPage,
+  lineHeightOf,
   objectSize,
   pickBackgroundColor,
   rotateEditorPage,
@@ -27,6 +28,7 @@ import type {
   EditorPage,
   ImageObject,
   MarkObject,
+  TextAlign,
   TextFamily,
   TextObject,
   ToPdfPoint,
@@ -48,6 +50,7 @@ import {
 } from '../lib/openDoc'
 import type { DocKind } from '../lib/openDoc'
 import { pagesToDocx, pagesToText } from '../lib/exportDoc'
+import { autoCropDocument } from '../lib/autocrop'
 import { AdMini } from './Ads'
 
 type Tool =
@@ -110,6 +113,16 @@ function pageMargin(width: number): number {
 
 const uid = () => Math.random().toString(36).slice(2, 10)
 
+/** Какие края бумаги пришлось дорисовать — для сообщения пользователю. */
+function paperPadNote(padded: { left: number; top: number; right: number; bottom: number }): string {
+  const sides: string[] = []
+  if (padded.left) sides.push('слева')
+  if (padded.top) sides.push('сверху')
+  if (padded.right) sides.push('справа')
+  if (padded.bottom) sides.push('снизу')
+  return sides.length ? `, бумагу дополнили ${sides.join(', ')}` : ''
+}
+
 const iconStroke = {
   fill: 'none',
   stroke: 'currentColor',
@@ -124,6 +137,120 @@ function Icon({ d }: { d: string }) {
       <path {...iconStroke} d={d} />
     </svg>
   )
+}
+
+/** Группа ленты: кнопки сверху, подпись снизу — как в WPS и Word. */
+function RibbonGroup({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="ed-group">
+      {children}
+      <span className="ed-group-label">{label}</span>
+    </div>
+  )
+}
+
+function RibbonBtn({
+  icon,
+  label,
+  active,
+  disabled,
+  onClick,
+  title,
+}: {
+  icon?: string
+  label: ReactNode
+  active?: boolean
+  disabled?: boolean
+  onClick: () => void
+  title?: string
+}) {
+  return (
+    <button
+      type="button"
+      className={`ed-tool${active ? ' is-active' : ''}`}
+      aria-pressed={active === undefined ? undefined : active}
+      disabled={disabled}
+      onClick={onClick}
+      title={title ?? (typeof label === 'string' ? label : undefined)}
+    >
+      {icon ? <Icon d={icon} /> : null}
+      <span className="ed-tool-label">{label}</span>
+    </button>
+  )
+}
+
+/** Вкладки ленты: как в WPS — Главная, Вставка, Разметка и остальные. */
+type RibbonTab = 'home' | 'insert' | 'layout' | 'review' | 'view' | 'tools'
+
+const RIBBON_TABS: { value: RibbonTab; label: string }[] = [
+  { value: 'home', label: 'Главная' },
+  { value: 'insert', label: 'Вставка' },
+  { value: 'layout', label: 'Разметка страницы' },
+  { value: 'review', label: 'Рецензирование' },
+  { value: 'view', label: 'Вид' },
+  { value: 'tools', label: 'Инструмент' },
+]
+
+/** Что запомнили в «Параметрах»: шрифт нового текста и видимость панелей. */
+type EditorSettings = {
+  fontFamily: TextFamily
+  fontSize: number
+  lineHeight: number
+  showThumbs: boolean
+  showPanel: boolean
+  showHints: boolean
+  /** обрезать бумагу на фото документов при вставке */
+  autoCrop: boolean
+}
+
+const SETTINGS_KEY = 'congix-editor-settings'
+
+const DEFAULT_SETTINGS: EditorSettings = {
+  fontFamily: 'sans',
+  fontSize: 14,
+  lineHeight: 1.3,
+  showThumbs: true,
+  showPanel: true,
+  showHints: true,
+  autoCrop: true,
+}
+
+function loadSettings(): EditorSettings {
+  if (typeof window === 'undefined') return { ...DEFAULT_SETTINGS }
+  try {
+    const raw = window.localStorage.getItem(SETTINGS_KEY)
+    if (!raw) return { ...DEFAULT_SETTINGS }
+    const parsed = JSON.parse(raw) as Partial<EditorSettings>
+    return {
+      fontFamily: parsed.fontFamily === 'serif' || parsed.fontFamily === 'mono' ? parsed.fontFamily : 'sans',
+      fontSize:
+        typeof parsed.fontSize === 'number' && Number.isFinite(parsed.fontSize)
+          ? Math.min(MAX_FONT_SIZE, Math.max(MIN_FONT_SIZE, parsed.fontSize))
+          : DEFAULT_SETTINGS.fontSize,
+      lineHeight:
+        typeof parsed.lineHeight === 'number' && Number.isFinite(parsed.lineHeight)
+          ? Math.min(3, Math.max(1, parsed.lineHeight))
+          : DEFAULT_SETTINGS.lineHeight,
+      showThumbs: parsed.showThumbs !== false,
+      showPanel: parsed.showPanel !== false,
+      showHints: parsed.showHints !== false,
+      autoCrop: parsed.autoCrop !== false,
+    }
+  } catch {
+    return { ...DEFAULT_SETTINGS }
+  }
+}
+
+type TextStyleDefaults = {
+  family: TextFamily
+  size: number
+  color: string
+  bold: boolean
+  italic: boolean
+  underline: boolean
+  strike: boolean
+  align: TextAlign
+  lineHeight: number
 }
 
 const ICONS = {
@@ -156,6 +283,15 @@ const ICONS = {
   word: 'M4 4h16v16H4zM8 8l1.4 8L12 9l2.6 7L16 8',
   txt: 'M5 4h14v16H5zM8 9h8M8 13h8M8 17h5',
   eye: 'M2 12s3.6-6 10-6 10 6 10 6-3.6 6-10 6S2 12 2 12zM12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6',
+  menu: 'M4 7h16M4 12h16M4 17h16',
+  gear: 'M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-2.7 1.1V21a2 2 0 1 1-4 0v-.1A1.6 1.6 0 0 0 7.5 19.4a1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1A1.6 1.6 0 0 0 3 14.5H3a2 2 0 1 1 0-4h.1A1.6 1.6 0 0 0 4.6 7.5a1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1A1.6 1.6 0 0 0 9.5 3H10a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 2.7 1.1l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0 1.1 2.7H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1.3',
+  alignLeft: 'M4 6h16M4 10h10M4 14h16M4 18h10',
+  alignCenter: 'M4 6h16M7 10h10M4 14h16M7 18h10',
+  alignRight: 'M4 6h16M10 10h10M4 14h16M10 18h10',
+  justify: 'M4 6h16M4 10h16M4 14h16M4 18h16',
+  calendar: 'M4 6h16v14H4zM4 10h16M8 4v4M16 4v4',
+  caret: 'M6 9l6 6 6-6',
+  crop: 'M6 3v15h15M3 6h15v15M6 21V6h15',
 }
 
 /**
@@ -268,8 +404,29 @@ export function PdfRedactor() {
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState<Message | null>(null)
   const [dragging, setDragging] = useState(false)
-  const [panelOpen, setPanelOpen] = useState(() => (typeof window === 'undefined' ? true : window.innerWidth > 900))
-  const [thumbsOpen, setThumbsOpen] = useState(true)
+  const [settings, setSettings] = useState<EditorSettings>(() => loadSettings())
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [tab, setTab] = useState<RibbonTab>('home')
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [panelOpen, setPanelOpen] = useState(() => {
+    if (typeof window !== 'undefined' && window.innerWidth <= 900) return false
+    return loadSettings().showPanel
+  })
+  const [thumbsOpen, setThumbsOpen] = useState(() => loadSettings().showThumbs)
+  const [textStyle, setTextStyle] = useState<TextStyleDefaults>(() => {
+    const saved = loadSettings()
+    return {
+      family: saved.fontFamily,
+      size: saved.fontSize,
+      color: TEXT_COLORS[0].value,
+      bold: false,
+      italic: false,
+      underline: false,
+      strike: false,
+      align: 'left',
+      lineHeight: saved.lineHeight,
+    }
+  })
   const [runs, setRuns] = useState<Record<number, TextRun[]>>({})
   const [ocrLang, setOcrLang] = useState<OcrLang>('rus+eng')
   const [ocrBusy, setOcrBusy] = useState(false)
@@ -286,7 +443,7 @@ export function PdfRedactor() {
   const [stampSize, setStampSize] = useState(32)
   const [drawing, setDrawing] = useState<MarkObject | null>(null)
   const [signOpen, setSignOpen] = useState(false)
-  const [shapesOpen, setShapesOpen] = useState(false)
+  const [cropBusy, setCropBusy] = useState(false)
 
   const docRef = useRef<PDFDocumentProxy | null>(null)
   const pageCache = useRef(new Map<number, PDFPageProxy>())
@@ -321,6 +478,21 @@ export function PdfRedactor() {
   const boxWidth = page?.box.width ?? 0
   const scale = fitScale * zoom
   const selectedObject = page?.objects.find((object) => object.id === selected) ?? null
+  const selectedText = selectedObject?.kind === 'text' ? selectedObject : null
+  // Лента показывает стиль выделенного текста, а без выделения — стиль нового текста.
+  const activeStyle: TextStyleDefaults = selectedText
+    ? {
+        family: selectedText.family ?? textStyle.family,
+        size: selectedText.size,
+        color: selectedText.color,
+        bold: Boolean(selectedText.bold),
+        italic: Boolean(selectedText.italic),
+        underline: Boolean(selectedText.underline),
+        strike: Boolean(selectedText.strike),
+        align: selectedText.align ?? 'left',
+        lineHeight: lineHeightOf(selectedText),
+      }
+    : textStyle
   const coverList = page?.covers ?? []
   const selectedCoverRect = selectedCover !== null ? (coverList[selectedCover] ?? null) : null
   const zoomPercent = Math.round(zoom * 100)
@@ -348,6 +520,23 @@ export function PdfRedactor() {
       void docRef.current?.destroy()
     }
   }, [])
+
+  // Меню закрывается щелчком мимо и по Esc, как обычное меню на сайте.
+  useEffect(() => {
+    if (!menuOpen) return
+    const onDown = (event: MouseEvent) => {
+      if (!(event.target as Element | null)?.closest('.ed-menu-wrap')) setMenuOpen(false)
+    }
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setMenuOpen(false)
+    }
+    document.addEventListener('mousedown', onDown)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDown)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [menuOpen])
 
   const loadRuns = useCallback(async (model: EditorPage) => {
     if (model.source === null || runsRef.current[model.source]) return
@@ -593,8 +782,15 @@ export function PdfRedactor() {
       x,
       y,
       text: '',
-      size: 14,
-      color: TEXT_COLORS[0].value,
+      size: textStyle.size,
+      color: textStyle.color,
+      family: textStyle.family,
+      align: textStyle.align,
+      lineHeight: textStyle.lineHeight,
+      bold: textStyle.bold || undefined,
+      italic: textStyle.italic || undefined,
+      underline: textStyle.underline || undefined,
+      strike: textStyle.strike || undefined,
       width: width ?? Math.max(80, Math.min(260, page.box.width - x - 24)),
     }
     addPageObject([object])
@@ -652,7 +848,7 @@ export function PdfRedactor() {
       y: run.y,
       text: run.text,
       size: Math.max(6, Math.min(48, Math.round(run.size * 10) / 10)),
-      color: TEXT_COLORS[0].value,
+      color: textStyle.color,
       width,
     }
     // Пятно принадлежит этому тексту: удалишь текст — уйдёт и пятно.
@@ -684,8 +880,19 @@ export function PdfRedactor() {
     try {
       const bytes = new Uint8Array(await next.arrayBuffer())
       const type = /png/i.test(next.type) || /\.png$/i.test(next.name) ? 'png' : 'jpg'
+      let data: Uint8Array = bytes
+      let crop: Awaited<ReturnType<typeof autoCropDocument>> = null
+      if (settings.autoCrop) {
+        try {
+          crop = await autoCropDocument(bytes, type)
+        } catch (error) {
+          // Не разобрали фото — не страшно, вставим как есть.
+          console.error(error)
+        }
+      }
+      if (crop) data = crop.bytes
       const mime = type === 'png' ? 'image/png' : 'image/jpeg'
-      const bitmap = await createImageBitmap(new Blob([bytes], { type: mime }))
+      const bitmap = await createImageBitmap(new Blob([data as BlobPart], { type: mime }))
       const size = fitImage(page.box, bitmap.width, bitmap.height)
       const position = clampPosition(
         page.box,
@@ -700,17 +907,61 @@ export function PdfRedactor() {
         ...position,
         width: size.width,
         height: size.height,
-        data: bytes,
+        data,
         type,
       }
       bitmap.close()
       addPageObject([object])
       setSelected(object.id)
       setTool('select')
-      setMessage({ tone: 'ok', text: 'Фото добавлено и уже выделено — тащите его по странице или за уголок меняйте размер.' })
+      setMessage({
+        tone: 'ok',
+        text: crop
+          ? `Фото документа обрезано по краю листа${paperPadNote(crop.padded)}. Фото уже выделено — тащите или меняйте размер.`
+          : settings.autoCrop
+            ? 'На фото не нашли лист документа — вставили как есть. Тащите фото или меняйте размер за уголок.'
+            : 'Фото добавлено и уже выделено — тащите его по странице или за уголок меняйте размер.',
+      })
     } catch (error) {
       console.error(error)
       setMessage({ tone: 'error', text: 'Не получилось прочитать картинку. Подойдут PNG и JPG.' })
+    }
+  }
+
+  /** Автообрезка уже вставленного фото: лист найдётся — заменим картинку. */
+  const cropSelectedImage = async (object: ImageObject) => {
+    if (cropBusy) return
+    setCropBusy(true)
+    try {
+      const crop = await autoCropDocument(object.data, object.type)
+      if (!crop) {
+        setMessage({
+          tone: 'info',
+          text: 'На этом фото не нашли лист документа — автообрезка не применена. Она работает только со снимками бумаги.',
+        })
+        return
+      }
+      const bitmap = await createImageBitmap(
+        new Blob([crop.bytes as BlobPart], { type: crop.type === 'png' ? 'image/png' : 'image/jpeg' }),
+      )
+      const ratio = bitmap.height / Math.max(1, bitmap.width)
+      bitmap.close()
+      // Старый URL картинки больше не нужен: объект остался с тем же id.
+      imageUrls.delete(object.id)
+      updateObject(object.id, {
+        data: crop.bytes,
+        type: crop.type,
+        height: Math.max(12, Math.round(object.width * ratio)),
+      })
+      setMessage({
+        tone: 'ok',
+        text: `Обрезали по краю листа${paperPadNote(crop.padded)}. Размер и место на странице сохранили.`,
+      })
+    } catch (error) {
+      console.error(error)
+      setMessage({ tone: 'error', text: 'Не получилось обрезать фото. Попробуйте снимок поровнее и посветлее.' })
+    } finally {
+      setCropBusy(false)
     }
   }
 
@@ -1465,6 +1716,76 @@ export function PdfRedactor() {
     setZoom(Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, Math.round(next * 100) / 100)))
   }
 
+  /** Параметры редактора: применяем сразу и запоминаем в браузере. */
+  const changeSettings = (patch: Partial<EditorSettings>) => {
+    const next = { ...settings, ...patch }
+    setSettings(next)
+    try {
+      window.localStorage.setItem(SETTINGS_KEY, JSON.stringify(next))
+    } catch {
+      // Приватный режим может запрещать хранилище — настройки просто не запомнятся.
+    }
+    if (patch.fontFamily) setTextStyle((current) => ({ ...current, family: patch.fontFamily as TextFamily }))
+    if (patch.fontSize) setTextStyle((current) => ({ ...current, size: patch.fontSize as number }))
+    if (patch.lineHeight) setTextStyle((current) => ({ ...current, lineHeight: patch.lineHeight as number }))
+    if (patch.showThumbs !== undefined) setThumbsOpen(patch.showThumbs)
+    if (patch.showPanel !== undefined) setPanelOpen(patch.showPanel)
+  }
+
+  const toggleThumbs = () => changeSettings({ showThumbs: !thumbsOpen })
+  const togglePanel = () => changeSettings({ showPanel: !panelOpen })
+
+  /** Форматирование: применяем к выделенному тексту и запоминаем как стиль нового. */
+  const applyTextStyle = (patch: Partial<TextObject>) => {
+    setTextStyle((current) => ({ ...current, ...patch }) as TextStyleDefaults)
+    if (selectedText) updateObject(selectedText.id, patch)
+  }
+
+  const stepFontSize = (direction: 1 | -1) => {
+    const sizes = FONT_SIZES as readonly number[]
+    const current = activeStyle.size
+    if (direction > 0) {
+      applyTextStyle({ size: sizes.find((size) => size > current) ?? Math.min(MAX_FONT_SIZE, Math.round(current + 2)) })
+    } else {
+      applyTextStyle({ size: [...sizes].reverse().find((size) => size < current) ?? Math.max(MIN_FONT_SIZE, Math.round(current - 1)) })
+    }
+  }
+
+  /** Дата в документе — обычный текст, без серверов и шаблонов. */
+  const insertDate = () => {
+    if (!page) return
+    const margin = pageMargin(page.box.width)
+    const text = new Date().toLocaleDateString('ru-RU', { day: '2-digit', month: 'long', year: 'numeric' })
+    const object: TextObject = {
+      kind: 'text',
+      id: uid(),
+      x: margin,
+      y: margin,
+      text,
+      size: textStyle.size,
+      color: textStyle.color,
+      family: textStyle.family,
+      align: 'left',
+      lineHeight: textStyle.lineHeight,
+      width: Math.max(120, page.box.width - margin * 2),
+    }
+    addPageObject([object])
+    setSelected(object.id)
+    setTool('select')
+    setPanelOpen(true)
+    setMessage({ tone: 'ok', text: 'Дата вставлена вверху страницы — перетащите или правьте справа.' })
+  }
+
+  const setOrientation = (landscape: boolean) => {
+    if (!page) return
+    const isLandscape = page.box.width > page.box.height
+    if (isLandscape === landscape) {
+      setMessage({ tone: 'info', text: landscape ? 'Страница уже альбомная.' : 'Страница уже книжная.' })
+      return
+    }
+    void rotatePageBy(90)
+  }
+
   const openAnotherFile = () => {
     resetDoc()
     setDocName('')
@@ -1563,264 +1884,739 @@ export function PdfRedactor() {
         </div>
       </header>
 
-      {hasDoc && (
-        <div className="ed-ribbon">
-          <div className="ed-group">
-            <div className="ed-group-row">
-              <button
-                type="button"
-                className={`ed-tool${tool === 'select' ? ' is-active' : ''}`}
-                aria-pressed={tool === 'select'}
-                onClick={() => setTool('select')}
-              >
-                <Icon d={ICONS.cursor} />
-                <span>Выбор</span>
-              </button>
-              <button
-                type="button"
-                className={`ed-tool${tool === 'text' ? ' is-active' : ''}`}
-                aria-pressed={tool === 'text'}
-                aria-label="Правка текста"
-                onClick={() => setTool('text')}
-              >
-                <Icon d={ICONS.text} />
-                <span>Текст</span>
-              </button>
-              <button
-                type="button"
-                className={`ed-tool${tool === 'erase' ? ' is-active' : ''}`}
-                aria-pressed={tool === 'erase'}
-                onClick={() => setTool('erase')}
-              >
-                <Icon d={ICONS.erase} />
-                <span>Замазка</span>
-              </button>
-              <button
-                type="button"
-                className={`ed-tool${signOpen ? ' is-active' : ''}`}
-                aria-pressed={signOpen}
-                onClick={() => {
-                  setTool('select')
-                  setSignOpen(true)
-                }}
-              >
-                <Icon d={ICONS.sign} />
-                <span>Подпись</span>
-              </button>
-              <button
-                type="button"
-                className="ed-tool"
-                onClick={() => {
-                  setTool('select')
-                  imageInputRef.current?.click()
-                }}
-              >
-                <Icon d={ICONS.image} />
-                <span>Фото</span>
-              </button>
-              <button
-                type="button"
-                className={`ed-tool${tool === 'highlight' ? ' is-active' : ''}`}
-                aria-pressed={tool === 'highlight'}
-                onClick={() => setTool('highlight')}
-              >
-                <Icon d={ICONS.marker} />
-                <span>Маркер</span>
-              </button>
-              <button
-                type="button"
-                className={`ed-tool${tool === 'ink' ? ' is-active' : ''}`}
-                aria-pressed={tool === 'ink'}
-                onClick={() => setTool('ink')}
-              >
-                <Icon d={ICONS.pen} />
-                <span>Карандаш</span>
-              </button>
-              <div className="ed-shapes">
-                <button
-                  type="button"
-                  className={`ed-tool${tool === 'rect' || tool === 'line' || tool === 'arrow' ? ' is-active' : ''}`}
-                  aria-expanded={shapesOpen}
-                  aria-haspopup="true"
-                  onClick={() => setShapesOpen((value) => !value)}
-                >
-                  <Icon d={ICONS.rect} />
-                  <span>Фигуры</span>
-                </button>
-                {shapesOpen && (
-                  <div className="ed-shapes-menu" role="menu">
-                    {([
-                      ['rect', 'Рамка', ICONS.rect],
-                      ['line', 'Линия', ICONS.line],
-                      ['arrow', 'Стрелка', ICONS.arrow],
-                    ] as [Tool, string, string][]).map(([value, label, icon]) => (
-                      <button
-                        key={value}
-                        type="button"
-                        className={tool === value ? 'is-active' : ''}
-                        onClick={() => {
-                          setTool(value)
-                          setShapesOpen(false)
-                        }}
-                      >
-                        <Icon d={icon} />
-                        {label}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-              <button
-                type="button"
-                className={`ed-tool${tool === 'check' ? ' is-active' : ''}`}
-                aria-pressed={tool === 'check'}
-                onClick={() => setTool('check')}
-                title="Поставить галочку"
-              >
-                <Icon d={ICONS.check} />
-                <span>✓</span>
-              </button>
-              <button
-                type="button"
-                className={`ed-tool${tool === 'cross' ? ' is-active' : ''}`}
-                aria-pressed={tool === 'cross'}
-                onClick={() => setTool('cross')}
-                title="Поставить крестик"
-              >
-                <Icon d={ICONS.cross} />
-                <span>✕</span>
-              </button>
-            </div>
-            <div className="ed-mode-row" role="group" aria-label="Режим ввода текста">
-              <button
-                type="button"
-                className={`ed-mode${textMode === 'flow' ? ' is-active' : ''}`}
-                aria-pressed={textMode === 'flow'}
-                onClick={() => {
-                  setTextMode('flow')
-                  setTool('text')
-                }}
-                title="Текст идёт по строке и переносится по полям, как в Word"
-              >
-                По линии
-              </button>
-              <button
-                type="button"
-                className={`ed-mode${textMode === 'free' ? ' is-active' : ''}`}
-                aria-pressed={textMode === 'free'}
-                onClick={() => {
-                  setTextMode('free')
-                  setTool('text')
-                }}
-                title="Текст встаёт точно туда, куда щёлкнули, и его можно перетаскивать"
-              >
-                Свободно
-              </button>
-            </div>
-            <span className="ed-group-label">Инструменты</span>
-          </div>
+      <div className="ed-tabs">
+        <div className="ed-menu-wrap">
+          <button
+            type="button"
+            className={`ed-menu-btn${menuOpen ? ' is-active' : ''}`}
+            aria-haspopup="menu"
+            aria-expanded={menuOpen}
+            onClick={() => setMenuOpen((value) => !value)}
+          >
+            <Icon d={ICONS.menu} />
+            <span>Меню</span>
+            <svg className="ed-menu-caret" viewBox="0 0 12 12" aria-hidden="true">
+              <path d="M2 4.5 6 8.5 10 4.5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+            </svg>
+          </button>
 
-          <div className="ed-group">
-            <div className="ed-group-row">
-              <button type="button" className="ed-tool" onClick={undo} disabled={!history.length || busy}>
-                <Icon d={ICONS.undo} />
-                <span>Отменить</span>
-              </button>
-              <button type="button" className="ed-tool" onClick={redo} disabled={!future.length || busy}>
-                <Icon d={ICONS.redo} />
-                <span>Вернуть</span>
-              </button>
-            </div>
-            <span className="ed-group-label">История</span>
-          </div>
-
-          <div className="ed-group">
-            <div className="ed-group-row">
-              <button type="button" className="ed-tool" onClick={openAnotherFile} title="Открыть другой файл">
+          {menuOpen && (
+            <div className="ed-menu" role="menu" aria-label="Меню документа">
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setMenuOpen(false)
+                  openAnotherFile()
+                }}
+              >
                 <Icon d={ICONS.folder} />
-                <span>Открыть</span>
+                <span>Открыть файл…</span>
               </button>
-              <button type="button" className="ed-tool" onClick={() => void saveWord()} disabled={busy}>
+              <button
+                type="button"
+                role="menuitem"
+                disabled={!hasDoc || busy}
+                onClick={() => {
+                  setMenuOpen(false)
+                  void save()
+                }}
+              >
+                <Icon d={ICONS.download} />
+                <span>Скачать PDF</span>
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                disabled={!hasDoc || busy}
+                onClick={() => {
+                  setMenuOpen(false)
+                  void saveWord()
+                }}
+              >
                 <Icon d={ICONS.word} />
-                <span>Word</span>
+                <span>Скачать Word (.docx)</span>
               </button>
-              <button type="button" className="ed-tool" onClick={saveText} disabled={busy} title="Скачать текст">
+              <button
+                type="button"
+                role="menuitem"
+                disabled={!hasDoc || busy}
+                onClick={() => {
+                  setMenuOpen(false)
+                  saveText()
+                }}
+              >
                 <Icon d={ICONS.txt} />
-                <span>TXT</span>
+                <span>Скачать текст (.txt)</span>
               </button>
-            </div>
-            <span className="ed-group-label">Файл</span>
-          </div>
-
-          <div className="ed-group">
-            <div className="ed-group-row">
-              <button type="button" className="ed-tool" onClick={addBlankPage} title="Вставить пустой лист после текущего">
-                <Icon d={ICONS.page} />
-                <span>Лист</span>
-              </button>
-              <button type="button" className="ed-tool" onClick={duplicatePage} title="Скопировать страницу">
-                <Icon d={ICONS.copy} />
-                <span>Копия</span>
-              </button>
-              <button type="button" className="ed-tool" onClick={removePage} disabled={pages.length <= 1} title="Удалить страницу">
-                <Icon d={ICONS.trash} />
-                <span>Удалить</span>
-              </button>
+              <span className="ed-menu-sep" />
               <button
                 type="button"
-                className="ed-tool"
-                onClick={() => void rotatePageBy(-90)}
-                title="Повернуть страницу влево"
+                role="menuitem"
+                onClick={() => {
+                  setMenuOpen(false)
+                  setSettingsOpen(true)
+                }}
               >
-                <span style={{ transform: 'scaleX(-1)' }}>
-                  <Icon d={ICONS.rotate} />
-                </span>
-                <span>Влево</span>
+                <Icon d={ICONS.gear} />
+                <span>Параметры</span>
               </button>
-              <button
-                type="button"
-                className="ed-tool"
-                onClick={() => void rotatePageBy(90)}
-                title="Повернуть страницу вправо"
-              >
-                <Icon d={ICONS.rotate} />
-                <span>Вправо</span>
-              </button>
+              <Link to={ROUTES.tools} className="ed-menu-link" role="menuitem">
+                <Icon d={ICONS.close} />
+                <span>Закрыть редактор</span>
+              </Link>
             </div>
-            <span className="ed-group-label">Страницы</span>
-          </div>
+          )}
+        </div>
 
-          <div className="ed-group">
-            <div className="ed-group-row">
-              <button
-                type="button"
-                className={`ed-tool${ocrBusy ? ' is-active' : ''}`}
-                onClick={() => void recognizePage()}
-                disabled={ocrBusy || loading}
-                title="Распознать текст на странице (OCR)"
-              >
-                <Icon d={ICONS.scan} />
-                <span>{ocrBusy ? ocrLabel : 'Распознать'}</span>
-              </button>
-              <select
-                className="ed-select"
-                value={ocrLang}
-                onChange={(event) => setOcrLang(event.target.value as OcrLang)}
-                aria-label="Язык распознавания"
-              >
-                {OCR_LANGS.map((item) => (
-                  <option key={item.value} value={item.value}>
-                    {item.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <span className="ed-group-label">Распознавание</span>
-          </div>
+        <nav className="ed-tab-list" role="tablist" aria-label="Лента редактора">
+          {RIBBON_TABS.map((item) => (
+            <button
+              key={item.value}
+              type="button"
+              role="tab"
+              aria-selected={tab === item.value}
+              className={`ed-tab${tab === item.value ? ' is-active' : ''}`}
+              disabled={!hasDoc}
+              onClick={() => setTab(item.value)}
+            >
+              {item.label}
+            </button>
+          ))}
+        </nav>
 
-          <p className="ed-hint">
-            {selectedObject?.kind === 'image' ? IMAGE_HINT : tool === 'text' ? TEXT_HINTS[textMode] : HINTS[tool]}
-          </p>
+        <button
+          type="button"
+          className="ed-settings-btn"
+          onClick={() => setSettingsOpen(true)}
+          title="Параметры редактора"
+        >
+          <Icon d={ICONS.gear} />
+          <span>Параметры</span>
+        </button>
+      </div>
+
+      {hasDoc && (
+        <div className="ed-ribbon" role="tabpanel" aria-label={RIBBON_TABS.find((item) => item.value === tab)?.label}>
+          {tab === 'home' && (
+            <>
+              <RibbonGroup label="Шрифт">
+                <div className="ed-group-row ed-font-row">
+                  <select
+                    className="ed-select ed-font-select"
+                    value={activeStyle.family}
+                    onChange={(event) => applyTextStyle({ family: event.target.value as TextFamily })}
+                    aria-label="Шрифт"
+                    title="Шрифт текста"
+                  >
+                    {TEXT_FONTS.map((font) => (
+                      <option key={font.value} value={font.value}>
+                        {font.label}
+                      </option>
+                    ))}
+                  </select>
+                  <FontSizeField value={activeStyle.size} onChange={(size) => applyTextStyle({ size })} />
+                  <div className="ed-step-col">
+                    <button type="button" className="ed-step" onClick={() => stepFontSize(1)} title="Крупнее шрифт">
+                      A+
+                    </button>
+                    <button type="button" className="ed-step" onClick={() => stepFontSize(-1)} title="Мельче шрифт">
+                      A−
+                    </button>
+                  </div>
+                </div>
+                <div className="ed-group-row ed-format-row">
+                  <button
+                    type="button"
+                    className={`ed-fmt${activeStyle.bold ? ' is-active' : ''}`}
+                    aria-pressed={activeStyle.bold}
+                    title="Полужирный"
+                    onClick={() => applyTextStyle({ bold: !activeStyle.bold })}
+                  >
+                    <b>B</b>
+                  </button>
+                  <button
+                    type="button"
+                    className={`ed-fmt${activeStyle.italic ? ' is-active' : ''}`}
+                    aria-pressed={activeStyle.italic}
+                    title="Курсив"
+                    onClick={() => applyTextStyle({ italic: !activeStyle.italic })}
+                  >
+                    <i>I</i>
+                  </button>
+                  <button
+                    type="button"
+                    className={`ed-fmt${activeStyle.underline ? ' is-active' : ''}`}
+                    aria-pressed={activeStyle.underline}
+                    title="Подчёркнутый"
+                    onClick={() => applyTextStyle({ underline: !activeStyle.underline })}
+                  >
+                    <u>U</u>
+                  </button>
+                  <button
+                    type="button"
+                    className={`ed-fmt${activeStyle.strike ? ' is-active' : ''}`}
+                    aria-pressed={activeStyle.strike}
+                    title="Зачёркнутый"
+                    onClick={() => applyTextStyle({ strike: !activeStyle.strike })}
+                  >
+                    <s>S</s>
+                  </button>
+                  <span className="ed-color-item">
+                    <ColorPicker
+                      value={activeStyle.color}
+                      onChange={(color) => applyTextStyle({ color })}
+                      label="Цвет текста"
+                    />
+                    <small>Цвет</small>
+                  </span>
+                  <span className="ed-color-item">
+                    <ColorPicker value={markColor} onChange={setMarkColor} label="Цвет маркера" />
+                    <small>Маркер</small>
+                  </span>
+                </div>
+              </RibbonGroup>
+
+              <RibbonGroup label="Абзац">
+                <div className="ed-group-row">
+                  {(
+                    [
+                      ['left', 'По левому краю', ICONS.alignLeft],
+                      ['center', 'По центру', ICONS.alignCenter],
+                      ['right', 'По правому краю', ICONS.alignRight],
+                      ['justify', 'По ширине', ICONS.justify],
+                    ] as [TextAlign, string, string][]
+                  ).map(([value, label, icon]) => (
+                    <button
+                      key={value}
+                      type="button"
+                      className={`ed-fmt${activeStyle.align === value ? ' is-active' : ''}`}
+                      aria-pressed={activeStyle.align === value}
+                      title={label}
+                      onClick={() => applyTextStyle({ align: value })}
+                    >
+                      <Icon d={icon} />
+                    </button>
+                  ))}
+                </div>
+                <div className="ed-group-row ed-para-row">
+                  <select
+                    className="ed-select ed-spacing"
+                    value={String(activeStyle.lineHeight)}
+                    onChange={(event) => applyTextStyle({ lineHeight: Number(event.target.value) })}
+                    aria-label="Межстрочный интервал"
+                    title="Межстрочный интервал"
+                  >
+                    {[1, 1.15, 1.3, 1.5, 2].map((value) => (
+                      <option key={value} value={String(value)}>
+                        Интервал {value.toFixed(2).replace(/\.?0+$/, '')}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </RibbonGroup>
+
+              <RibbonGroup label="Вставка">
+                <div className="ed-group-row">
+                  <RibbonBtn
+                    icon={ICONS.text}
+                    label="Текст"
+                    active={tool === 'text'}
+                    onClick={() => setTool('text')}
+                  />
+                  <RibbonBtn
+                    icon={ICONS.image}
+                    label="Фото"
+                    onClick={() => {
+                      setTool('select')
+                      imageInputRef.current?.click()
+                    }}
+                  />
+                  <RibbonBtn
+                    icon={ICONS.sign}
+                    label="Подпись"
+                    active={signOpen}
+                    onClick={() => {
+                      setTool('select')
+                      setSignOpen(true)
+                    }}
+                  />
+                </div>
+              </RibbonGroup>
+
+              <RibbonGroup label="Пометки">
+                <div className="ed-group-row">
+                  <RibbonBtn
+                    icon={ICONS.marker}
+                    label="Маркер"
+                    active={tool === 'highlight'}
+                    onClick={() => setTool('highlight')}
+                  />
+                  <RibbonBtn
+                    icon={ICONS.pen}
+                    label="Карандаш"
+                    active={tool === 'ink'}
+                    onClick={() => setTool('ink')}
+                  />
+                  <RibbonBtn
+                    icon={ICONS.erase}
+                    label="Замазка"
+                    active={tool === 'erase'}
+                    onClick={() => setTool('erase')}
+                  />
+                </div>
+              </RibbonGroup>
+
+              <RibbonGroup label="История">
+                <div className="ed-group-row">
+                  <RibbonBtn
+                    icon={ICONS.undo}
+                    label="Отменить"
+                    onClick={undo}
+                    disabled={!history.length || busy}
+                  />
+                  <RibbonBtn icon={ICONS.redo} label="Вернуть" onClick={redo} disabled={!future.length || busy} />
+                </div>
+              </RibbonGroup>
+            </>
+          )}
+
+          {tab === 'insert' && (
+            <>
+              <RibbonGroup label="Объекты">
+                <div className="ed-group-row">
+                  <RibbonBtn
+                    icon={ICONS.text}
+                    label="Текст"
+                    active={tool === 'text'}
+                    onClick={() => setTool('text')}
+                  />
+                  <RibbonBtn
+                    icon={ICONS.image}
+                    label="Фото"
+                    onClick={() => {
+                      setTool('select')
+                      imageInputRef.current?.click()
+                    }}
+                  />
+                  <RibbonBtn
+                    icon={ICONS.sign}
+                    label="Подпись"
+                    active={signOpen}
+                    onClick={() => {
+                      setTool('select')
+                      setSignOpen(true)
+                    }}
+                  />
+                  <RibbonBtn icon={ICONS.calendar} label="Дата" onClick={insertDate} />
+                </div>
+              </RibbonGroup>
+
+              <RibbonGroup label="Фигуры">
+                <div className="ed-group-row">
+                  <RibbonBtn
+                    icon={ICONS.rect}
+                    label="Рамка"
+                    active={tool === 'rect'}
+                    onClick={() => setTool('rect')}
+                  />
+                  <RibbonBtn
+                    icon={ICONS.line}
+                    label="Линия"
+                    active={tool === 'line'}
+                    onClick={() => setTool('line')}
+                  />
+                  <RibbonBtn
+                    icon={ICONS.arrow}
+                    label="Стрелка"
+                    active={tool === 'arrow'}
+                    onClick={() => setTool('arrow')}
+                  />
+                  <RibbonBtn
+                    icon={ICONS.check}
+                    label="Галочка"
+                    active={tool === 'check'}
+                    onClick={() => setTool('check')}
+                  />
+                  <RibbonBtn
+                    icon={ICONS.cross}
+                    label="Крестик"
+                    active={tool === 'cross'}
+                    onClick={() => setTool('cross')}
+                  />
+                </div>
+              </RibbonGroup>
+
+              <RibbonGroup label="Фото документа">
+                <div className="ed-group-row">
+                  <RibbonBtn
+                    icon={ICONS.crop}
+                    label="Автообрезка"
+                    active={settings.autoCrop}
+                    onClick={() => changeSettings({ autoCrop: !settings.autoCrop })}
+                    title="Обрезать бумагу на фото документа при вставке и дорисовать края"
+                  />
+                </div>
+              </RibbonGroup>
+
+              <RibbonGroup label="Пометки">
+                <div className="ed-group-row">
+                  <RibbonBtn
+                    icon={ICONS.marker}
+                    label="Маркер"
+                    active={tool === 'highlight'}
+                    onClick={() => setTool('highlight')}
+                  />
+                  <RibbonBtn
+                    icon={ICONS.pen}
+                    label="Карандаш"
+                    active={tool === 'ink'}
+                    onClick={() => setTool('ink')}
+                  />
+                  <RibbonBtn
+                    icon={ICONS.erase}
+                    label="Замазка"
+                    active={tool === 'erase'}
+                    onClick={() => setTool('erase')}
+                  />
+                </div>
+              </RibbonGroup>
+
+              <RibbonGroup label="Страницы">
+                <div className="ed-group-row">
+                  <RibbonBtn
+                    icon={ICONS.page}
+                    label="Пустой лист"
+                    onClick={addBlankPage}
+                    title="Вставить пустой лист после текущего"
+                  />
+                </div>
+              </RibbonGroup>
+            </>
+          )}
+
+          {tab === 'layout' && (
+            <>
+              <RibbonGroup label="Ориентация">
+                <div className="ed-group-row">
+                  <RibbonBtn
+                    icon={ICONS.page}
+                    label="Книжная"
+                    active={Boolean(page && page.box.width <= page.box.height)}
+                    onClick={() => setOrientation(false)}
+                    title="Вертикальная страница"
+                  />
+                  <RibbonBtn
+                    icon={ICONS.rotate}
+                    label="Альбомная"
+                    active={Boolean(page && page.box.width > page.box.height)}
+                    onClick={() => setOrientation(true)}
+                    title="Горизонтальная страница"
+                  />
+                </div>
+              </RibbonGroup>
+
+              <RibbonGroup label="Поворот">
+                <div className="ed-group-row">
+                  <RibbonBtn
+                    label={
+                      <span className="ed-flip">
+                        <Icon d={ICONS.rotate} />
+                      </span>
+                    }
+                    onClick={() => void rotatePageBy(-90)}
+                    title="Повернуть страницу влево"
+                  />
+                  <RibbonBtn
+                    icon={ICONS.rotate}
+                    label="Вправо"
+                    onClick={() => void rotatePageBy(90)}
+                    title="Повернуть страницу вправо"
+                  />
+                </div>
+              </RibbonGroup>
+
+              <RibbonGroup label="Страницы">
+                <div className="ed-group-row">
+                  <RibbonBtn
+                    icon={ICONS.page}
+                    label="Лист"
+                    onClick={addBlankPage}
+                    title="Вставить пустой лист"
+                  />
+                  <RibbonBtn icon={ICONS.copy} label="Копия" onClick={duplicatePage} title="Скопировать страницу" />
+                  <RibbonBtn
+                    icon={ICONS.trash}
+                    label="Удалить"
+                    onClick={removePage}
+                    disabled={pages.length <= 1}
+                    title="Удалить страницу"
+                  />
+                  <RibbonBtn
+                    icon={ICONS.undo}
+                    label="Выше"
+                    onClick={() => movePage(index, index - 1)}
+                    disabled={index === 0}
+                    title="Поднять страницу выше"
+                  />
+                  <RibbonBtn
+                    icon={ICONS.redo}
+                    label="Ниже"
+                    onClick={() => movePage(index, index + 1)}
+                    disabled={index >= pages.length - 1}
+                    title="Опустить страницу ниже"
+                  />
+                </div>
+              </RibbonGroup>
+
+              <RibbonGroup label="Размер страницы">
+                <p className="ed-info">
+                  {page ? `${Math.round((page.box.width * 25.4) / 72)} × ${Math.round((page.box.height * 25.4) / 72)} мм` : '—'}
+                  <small>Страница {index + 1} из {pages.length}</small>
+                </p>
+              </RibbonGroup>
+            </>
+          )}
+
+          {tab === 'review' && (
+            <>
+              <RibbonGroup label="Распознавание">
+                <div className="ed-group-row">
+                  <RibbonBtn
+                    icon={ICONS.scan}
+                    label={ocrBusy ? ocrLabel : 'Распознать'}
+                    active={ocrBusy}
+                    onClick={() => void recognizePage()}
+                    disabled={ocrBusy || loading}
+                    title="Распознать текст на странице (OCR)"
+                  />
+                  <select
+                    className="ed-select"
+                    value={ocrLang}
+                    onChange={(event) => setOcrLang(event.target.value as OcrLang)}
+                    aria-label="Язык распознавания"
+                  >
+                    {OCR_LANGS.map((item) => (
+                      <option key={item.value} value={item.value}>
+                        {item.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </RibbonGroup>
+
+              <RibbonGroup label="Правки">
+                <div className="ed-group-row">
+                  <RibbonBtn
+                    icon={ICONS.erase}
+                    label="Убрать пятна"
+                    onClick={clearCovers}
+                    disabled={!covers.length}
+                    title="Удалить все белые пятна на странице"
+                  />
+                </div>
+              </RibbonGroup>
+
+              <RibbonGroup label="При сохранении">
+                <label className="ed-check">
+                  <input
+                    type="checkbox"
+                    checked={eraseAnnotations}
+                    onChange={(event) => setEraseAnnotations(event.target.checked)}
+                  />
+                  <span>Убрать пометки и подписи PDF</span>
+                </label>
+              </RibbonGroup>
+            </>
+          )}
+
+          {tab === 'view' && (
+            <>
+              <RibbonGroup label="Масштаб">
+                <div className="ed-group-row">
+                  <RibbonBtn
+                    icon={ICONS.minus}
+                    label="Мельче"
+                    onClick={() => changeZoom(zoom - 0.1)}
+                    disabled={zoom <= ZOOM_MIN}
+                  />
+                  <RibbonBtn
+                    icon={ICONS.plus}
+                    label="Крупнее"
+                    onClick={() => changeZoom(zoom + 0.1)}
+                    disabled={zoom >= ZOOM_MAX}
+                  />
+                  <RibbonBtn
+                    icon={ICONS.eye}
+                    label="По ширине"
+                    active={Math.abs(zoom - 1) < 0.001}
+                    onClick={() => changeZoom(1)}
+                    title="Вся ширина страницы в окне"
+                  />
+                  <RibbonBtn
+                    icon={ICONS.page}
+                    label="100%"
+                    active={Math.abs(zoom - 1 / fitScale) < 0.01}
+                    onClick={() => changeZoom(1 / fitScale)}
+                    title="Настоящий размер страницы"
+                  />
+                </div>
+              </RibbonGroup>
+
+              <RibbonGroup label="Панели">
+                <div className="ed-group-row">
+                  <RibbonBtn
+                    icon={ICONS.pages}
+                    label="Страницы"
+                    active={thumbsOpen}
+                    onClick={toggleThumbs}
+                    title="Показать или скрыть миниатюры"
+                  />
+                  <RibbonBtn
+                    icon={ICONS.panel}
+                    label="Свойства"
+                    active={panelOpen}
+                    onClick={togglePanel}
+                    title="Показать или скрыть панель свойств"
+                  />
+                </div>
+              </RibbonGroup>
+
+              <RibbonGroup label="Подсказки">
+                <label className="ed-check">
+                  <input
+                    type="checkbox"
+                    checked={settings.showHints}
+                    onChange={(event) => changeSettings({ showHints: event.target.checked })}
+                  />
+                  <span>Показывать подсказки под лентой</span>
+                </label>
+              </RibbonGroup>
+            </>
+          )}
+
+          {tab === 'tools' && (
+            <>
+              <RibbonGroup label="Режим">
+                <div className="ed-group-row">
+                  <RibbonBtn
+                    icon={ICONS.cursor}
+                    label="Выбор"
+                    active={tool === 'select'}
+                    onClick={() => setTool('select')}
+                  />
+                  <RibbonBtn
+                    icon={ICONS.text}
+                    label="Текст"
+                    active={tool === 'text'}
+                    onClick={() => setTool('text')}
+                  />
+                  <RibbonBtn
+                    icon={ICONS.erase}
+                    label="Замазка"
+                    active={tool === 'erase'}
+                    onClick={() => setTool('erase')}
+                  />
+                </div>
+                <div className="ed-mode-row" role="group" aria-label="Режим ввода текста">
+                  <button
+                    type="button"
+                    className={`ed-mode${textMode === 'flow' ? ' is-active' : ''}`}
+                    aria-pressed={textMode === 'flow'}
+                    onClick={() => {
+                      setTextMode('flow')
+                      setTool('text')
+                    }}
+                    title="Текст идёт по строке и переносится по полям, как в Word"
+                  >
+                    По линии
+                  </button>
+                  <button
+                    type="button"
+                    className={`ed-mode${textMode === 'free' ? ' is-active' : ''}`}
+                    aria-pressed={textMode === 'free'}
+                    onClick={() => {
+                      setTextMode('free')
+                      setTool('text')
+                    }}
+                    title="Текст встаёт точно туда, куда щёлкнули, и его можно перетаскивать"
+                  >
+                    Свободно
+                  </button>
+                </div>
+              </RibbonGroup>
+
+              <RibbonGroup label="Рисование">
+                <div className="ed-group-row">
+                  <RibbonBtn
+                    icon={ICONS.marker}
+                    label="Маркер"
+                    active={tool === 'highlight'}
+                    onClick={() => setTool('highlight')}
+                  />
+                  <RibbonBtn
+                    icon={ICONS.pen}
+                    label="Карандаш"
+                    active={tool === 'ink'}
+                    onClick={() => setTool('ink')}
+                  />
+                  <RibbonBtn
+                    icon={ICONS.rect}
+                    label="Рамка"
+                    active={tool === 'rect'}
+                    onClick={() => setTool('rect')}
+                  />
+                  <RibbonBtn
+                    icon={ICONS.line}
+                    label="Линия"
+                    active={tool === 'line'}
+                    onClick={() => setTool('line')}
+                  />
+                  <RibbonBtn
+                    icon={ICONS.arrow}
+                    label="Стрелка"
+                    active={tool === 'arrow'}
+                    onClick={() => setTool('arrow')}
+                  />
+                </div>
+              </RibbonGroup>
+
+              <RibbonGroup label="Штампы">
+                <div className="ed-group-row">
+                  <RibbonBtn
+                    icon={ICONS.check}
+                    label="Галочка"
+                    active={tool === 'check'}
+                    onClick={() => setTool('check')}
+                  />
+                  <RibbonBtn
+                    icon={ICONS.cross}
+                    label="Крестик"
+                    active={tool === 'cross'}
+                    onClick={() => setTool('cross')}
+                  />
+                </div>
+              </RibbonGroup>
+
+              <RibbonGroup label="История">
+                <div className="ed-group-row">
+                  <RibbonBtn
+                    icon={ICONS.undo}
+                    label="Отменить"
+                    onClick={undo}
+                    disabled={!history.length || busy}
+                  />
+                  <RibbonBtn icon={ICONS.redo} label="Вернуть" onClick={redo} disabled={!future.length || busy} />
+                </div>
+              </RibbonGroup>
+            </>
+          )}
+
+          {settings.showHints && (
+            <p className="ed-hint">
+              {selectedObject?.kind === 'image' ? IMAGE_HINT : tool === 'text' ? TEXT_HINTS[textMode] : HINTS[tool]}
+            </p>
+          )}
         </div>
       )}
 
@@ -1831,7 +2627,7 @@ export function PdfRedactor() {
             className={`ed-rail-btn ed-rail-pages${hasDoc && thumbsOpen ? ' is-active' : ''}`}
             title={thumbsOpen ? 'Скрыть страницы' : 'Показать страницы'}
             aria-pressed={hasDoc && thumbsOpen}
-            onClick={() => setThumbsOpen((value) => !value)}
+            onClick={toggleThumbs}
             disabled={!hasDoc}
           >
             <Icon d={ICONS.pages} />
@@ -1841,7 +2637,7 @@ export function PdfRedactor() {
             className={`ed-rail-btn ed-rail-end${panelOpen ? ' is-active' : ''}`}
             title="Свойства"
             aria-pressed={panelOpen}
-            onClick={() => setPanelOpen((value) => !value)}
+            onClick={togglePanel}
           >
             <Icon d={ICONS.panel} />
           </button>
@@ -2071,11 +2867,15 @@ export function PdfRedactor() {
                         className={`redactor-text${object.text ? '' : ' is-placeholder'}`}
                         style={{
                           fontSize: Math.max(4, object.size * scale),
-                          lineHeight: 1.3,
+                          lineHeight: lineHeightOf(object),
                           color: `#${object.color}`,
                           fontFamily: fontStackFor(object.family),
                           fontWeight: object.bold ? 700 : 400,
                           fontStyle: object.italic ? 'italic' : 'normal',
+                          textAlign: object.align ?? 'left',
+                          textDecoration: [object.underline ? 'underline' : '', object.strike ? 'line-through' : '']
+                            .filter(Boolean)
+                            .join(' ') || 'none',
                         }}
                       >
                         {object.text || 'Введите текст'}
@@ -2218,7 +3018,7 @@ export function PdfRedactor() {
             <h4 className="panel-title">
               {selectedCoverRect ? 'Белое пятно' : selectedObject ? 'Выбранный объект' : 'Свойства'}
             </h4>
-            <button type="button" className="ed-icon-btn ed-panel-close" onClick={() => setPanelOpen(false)} aria-label="Закрыть свойства">
+            <button type="button" className="ed-icon-btn ed-panel-close" onClick={() => changeSettings({ showPanel: false })} aria-label="Закрыть свойства">
               <Icon d={ICONS.close} />
             </button>
           </div>
@@ -2379,30 +3179,43 @@ export function PdfRedactor() {
                   </div>
                 </>
               ) : (
-                <label className="field">
-                  <span className="field-label">Ширина</span>
-                  <input
-                    className="field-input"
-                    type="range"
-                    min={40}
-                    max={Math.max(
-                      40,
-                      Math.floor(
-                        Math.min(
-                          (page?.box.width ?? 500) - selectedObject.x,
-                          ((page?.box.height ?? 700) - selectedObject.y) / (selectedObject.height / selectedObject.width || 1),
+                <>
+                  <label className="field">
+                    <span className="field-label">Ширина</span>
+                    <input
+                      className="field-input"
+                      type="range"
+                      min={40}
+                      max={Math.max(
+                        40,
+                        Math.floor(
+                          Math.min(
+                            (page?.box.width ?? 500) - selectedObject.x,
+                            ((page?.box.height ?? 700) - selectedObject.y) / (selectedObject.height / selectedObject.width || 1),
+                          ),
                         ),
-                      ),
-                    )}
-                    value={Math.round(selectedObject.width)}
-                    onChange={(event) => {
-                      const width = Number(event.target.value)
-                      const ratio = selectedObject.width ? selectedObject.height / selectedObject.width : 1
-                      updateObject(selectedObject.id, { width, height: Math.round(width * ratio) })
-                    }}
-                  />
-                  <span className="panel-note">{Math.round(selectedObject.width)} pt по ширине страницы</span>
-                </label>
+                      )}
+                      value={Math.round(selectedObject.width)}
+                      onChange={(event) => {
+                        const width = Number(event.target.value)
+                        const ratio = selectedObject.width ? selectedObject.height / selectedObject.width : 1
+                        updateObject(selectedObject.id, { width, height: Math.round(width * ratio) })
+                      }}
+                    />
+                    <span className="panel-note">{Math.round(selectedObject.width)} pt по ширине страницы</span>
+                  </label>
+
+                  <button
+                    type="button"
+                    className="btn btn-quiet"
+                    onClick={() => void cropSelectedImage(selectedObject)}
+                    disabled={cropBusy}
+                    title="Найти лист документа на фото и обрезать поля"
+                  >
+                    <Icon d={ICONS.crop} />
+                    {cropBusy ? 'Ищем лист…' : 'Автообрезка фото'}
+                  </button>
+                </>
               )}
 
               <div className="ed-panel-actions">
@@ -2662,7 +3475,7 @@ export function PdfRedactor() {
               type="button"
               className="ed-panel-toggle ed-pages-toggle"
               aria-pressed={thumbsOpen}
-              onClick={() => setThumbsOpen((value) => !value)}
+              onClick={toggleThumbs}
             >
               <Icon d={ICONS.pages} />
               Страницы
@@ -2672,7 +3485,7 @@ export function PdfRedactor() {
             type="button"
             className="ed-panel-toggle"
             aria-pressed={panelOpen}
-            onClick={() => setPanelOpen((value) => !value)}
+            onClick={togglePanel}
           >
             <Icon d={ICONS.panel} />
             Свойства
@@ -2683,6 +3496,15 @@ export function PdfRedactor() {
 
       {signOpen && (
         <SignatureDialog onClose={() => setSignOpen(false)} onInsert={(bytes) => void insertSignature(bytes)} />
+      )}
+
+      {settingsOpen && (
+        <SettingsDialog
+          settings={settings}
+          onChange={changeSettings}
+          onReset={() => changeSettings({ ...DEFAULT_SETTINGS })}
+          onClose={() => setSettingsOpen(false)}
+        />
       )}
     </div>
   )
@@ -3088,6 +3910,126 @@ function SignatureDialog({ onClose, onInsert }: { onClose: () => void; onInsert:
             </div>
           </>
         )}
+      </div>
+    </div>
+  )
+}
+
+/** Параметры редактора: применяются сразу и запоминаются в браузере. */
+function SettingsDialog({
+  settings,
+  onChange,
+  onReset,
+  onClose,
+}: {
+  settings: EditorSettings
+  onChange: (patch: Partial<EditorSettings>) => void
+  onReset: () => void
+  onClose: () => void
+}) {
+  return (
+    <div className="ed-modal" role="dialog" aria-modal="true" aria-label="Параметры">
+      <div className="ed-modal-card ed-settings-card">
+        <header className="ed-modal-head">
+          <h4>Параметры</h4>
+          <button type="button" className="ed-icon-btn" onClick={onClose} aria-label="Закрыть">
+            <Icon d={ICONS.close} />
+          </button>
+        </header>
+
+        <p className="ed-settings-group">Текст по умолчанию</p>
+
+        <label className="field">
+          <span className="field-label">Шрифт нового текста</span>
+          <select
+            className="field-input"
+            value={settings.fontFamily}
+            onChange={(event) => onChange({ fontFamily: event.target.value as TextFamily })}
+          >
+            {TEXT_FONTS.map((font) => (
+              <option key={font.value} value={font.value}>
+                {font.label} — {font.hint}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="field">
+          <span className="field-label">Размер нового текста</span>
+          <input
+            className="field-input"
+            type="number"
+            min={MIN_FONT_SIZE}
+            max={MAX_FONT_SIZE}
+            value={settings.fontSize}
+            onChange={(event) => {
+              const value = Number(event.target.value)
+              if (!Number.isFinite(value)) return
+              onChange({ fontSize: Math.min(MAX_FONT_SIZE, Math.max(MIN_FONT_SIZE, value)) })
+            }}
+          />
+        </label>
+
+        <label className="field">
+          <span className="field-label">Межстрочный интервал</span>
+          <select
+            className="field-input"
+            value={String(settings.lineHeight)}
+            onChange={(event) => onChange({ lineHeight: Number(event.target.value) })}
+          >
+            {[1, 1.15, 1.3, 1.5, 2].map((value) => (
+              <option key={value} value={String(value)}>
+                {value.toFixed(2).replace(/\.?0+$/, '')}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <p className="ed-settings-group">Экран</p>
+
+        <label className="ed-check ed-check-row">
+          <input
+            type="checkbox"
+            checked={settings.showThumbs}
+            onChange={(event) => onChange({ showThumbs: event.target.checked })}
+          />
+          <span>Панель страниц слева</span>
+        </label>
+        <label className="ed-check ed-check-row">
+          <input
+            type="checkbox"
+            checked={settings.showPanel}
+            onChange={(event) => onChange({ showPanel: event.target.checked })}
+          />
+          <span>Панель свойств справа</span>
+        </label>
+        <label className="ed-check ed-check-row">
+          <input
+            type="checkbox"
+            checked={settings.showHints}
+            onChange={(event) => onChange({ showHints: event.target.checked })}
+          />
+          <span>Подсказки под лентой</span>
+        </label>
+
+        <p className="ed-settings-group">Фото</p>
+        <label className="ed-check ed-check-row">
+          <input
+            type="checkbox"
+            checked={settings.autoCrop}
+            onChange={(event) => onChange({ autoCrop: event.target.checked })}
+          />
+          <span>Автообрезка документа на фото</span>
+        </label>
+
+        <div className="ed-modal-row">
+          <button type="button" className="btn btn-quiet" onClick={onReset}>
+            Сбросить
+          </button>
+          <button type="button" className="ed-primary" onClick={onClose}>
+            Готово
+          </button>
+        </div>
       </div>
     </div>
   )

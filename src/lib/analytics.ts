@@ -3,8 +3,9 @@ import { loadPrefs } from './profile'
 /**
  * Анонимная статистика: уходит название инструмента, действие, путь, случайные
  * id посетителя и сессии, источник перехода, язык, тип устройства, браузер, ОС,
- * размер экрана, страна (определяет Cloudflare) и текст ошибки. Ни файлов, ни имён,
- * ни почты. Отключается в настройках.
+ * размер экрана, страна (определяет Cloudflare), видимое время на странице,
+ * глубина скролла и текст ошибки. Ни файлов, ни имён, ни почты.
+ * Отключается в настройках.
  */
 const ENDPOINT = 'https://rekpdf-admin-pwbv0q.freebuff.site/api/collect'
 const OVERVIEW = 'https://rekpdf-admin-pwbv0q.freebuff.site/api/overview'
@@ -136,8 +137,43 @@ function context(): Record<string, string> {
   return contextCache
 }
 
-let enteredAt = Date.now()
+/* ── видимое время и скролл страницы ─────────────────────────── */
+
+let currentPath = ''
+let visibleMs = 0
+let tickingSince = 0
+let maxScroll = 0
 let leftPath = ''
+
+function scrollDepth(): number {
+  try {
+    const root = document.documentElement
+    const full = Math.max(root.scrollHeight, window.innerHeight)
+    const seen = window.scrollY + window.innerHeight
+    return Math.max(0, Math.min(100, Math.round((seen / full) * 100)))
+  } catch {
+    return 0
+  }
+}
+
+function pauseClock() {
+  if (!tickingSince) return
+  visibleMs += Date.now() - tickingSince
+  tickingSince = 0
+}
+
+function resumeClock() {
+  if (document.visibilityState === 'hidden') return
+  tickingSince = Date.now()
+}
+
+function beginPage() {
+  currentPath = window.location.pathname
+  visibleMs = 0
+  maxScroll = scrollDepth()
+  leftPath = ''
+  tickingSince = document.visibilityState === 'hidden' ? 0 : Date.now()
+}
 
 function send(payload: Record<string, unknown>) {
   try {
@@ -161,26 +197,48 @@ function send(payload: Record<string, unknown>) {
   }
 }
 
+/** Уход со страницы: видимое время и максимальная глубина скролла. */
+function flushLeave() {
+  if (!currentPath) return
+  pauseClock()
+  const seconds = Math.round(visibleMs / 1000)
+  const path = currentPath
+  if (seconds < 2 || leftPath === path) {
+    beginPage()
+    return
+  }
+  leftPath = path
+  send({
+    name: 'страница',
+    action: 'leave',
+    path,
+    duration: seconds,
+    scroll: maxScroll,
+    meta: { seconds, scroll: maxScroll },
+  })
+  beginPage()
+}
+
 /** Отправляет событие не блокируя интерфейс: статистика не должна мешать работе. */
 export function track(name: string, action: TrackAction, meta?: TrackMeta, duration?: number) {
   if (action === 'view') {
-    enteredAt = Date.now()
-    leftPath = ''
+    if (currentPath && currentPath !== window.location.pathname) flushLeave()
+    else beginPage()
+  }
+  const extra: Record<string, unknown> = {}
+  if (meta) {
+    if (typeof meta.kind === 'string') extra.kind = meta.kind
+    if (typeof meta.size === 'number') extra.size = meta.size
+    if (typeof meta.pages === 'number') extra.pages = meta.pages
+    if (typeof meta.ms === 'number') extra.ms = meta.ms
   }
   send({
     name,
     action,
     meta: meta && Object.keys(meta).length ? meta : undefined,
     duration: Number.isFinite(duration) ? duration : undefined,
+    ...extra,
   })
-}
-
-function leavePage() {
-  const seconds = Math.round((Date.now() - enteredAt) / 1000)
-  const path = window.location.pathname
-  if (seconds < 2 || leftPath === path) return
-  leftPath = path
-  track('страница', 'leave', { seconds }, seconds)
 }
 
 let errorCount = 0
@@ -202,11 +260,22 @@ export function initTracking() {
   initialized = true
   if (!analyticsEnabled()) return
 
+  beginPage()
   track('сессия', 'session', { landing: window.location.pathname })
 
-  window.addEventListener('pagehide', leavePage)
+  const onScroll = () => {
+    const depth = scrollDepth()
+    if (depth > maxScroll) maxScroll = depth
+  }
+  window.addEventListener('scroll', onScroll, { passive: true })
+
+  window.addEventListener('pagehide', () => {
+    flushLeave()
+    currentPath = ''
+  })
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'hidden') leavePage()
+    if (document.visibilityState === 'hidden') pauseClock()
+    else resumeClock()
   })
   window.addEventListener('error', (event) => {
     reportError(event.message, event.filename)

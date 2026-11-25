@@ -1,7 +1,10 @@
 node_modules
 dist
+public/tesseract
 .DS_Store
 artifacts
 
 admin/.admin-token
-public/tesseract
+
+.env
+.env.local

@@ -89,6 +89,9 @@ export function PdfEditor({ spec }: { spec: ToolSpec }) {
     setBusy(true)
     setProgress(0)
     setMessage(null)
+    const startedAt = Date.now()
+    const sizeKb = Math.round(files.reduce((sum, file) => sum + file.size, 0) / 1024)
+    const kind = (files[0]?.name.split('.').pop() || 'bin').toLowerCase().slice(0, 8)
 
     try {
       const result = await spec.run(files, values, (done, total) => {
@@ -98,7 +101,7 @@ export function PdfEditor({ spec }: { spec: ToolSpec }) {
       const note = Array.isArray(result) ? undefined : result.note
       const zipName = `${files[0].name.replace(/\.[^.]+$/, '') || 'document'}-congix-docs.zip`
       await saveOutputs(outputs, zipName)
-      track(spec.name, 'done')
+      track(spec.name, 'done', { ms: Date.now() - startedAt, size: sizeKb, kind, files: files.length })
       addHistory({
         tool: spec.name,
         fileName: files.map((file) => file.name).join(', '),
@@ -114,6 +117,8 @@ export function PdfEditor({ spec }: { spec: ToolSpec }) {
       })
     } catch (error) {
       console.error(error)
+      const message = error instanceof Error && error.message ? error.message : 'Не получилось обработать файл'
+      track(spec.name, 'error', { message, ms: Date.now() - startedAt, kind, size: sizeKb })
       setMessage({
         tone: 'error',
         text:

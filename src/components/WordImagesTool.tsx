@@ -213,6 +213,7 @@ export function WordImagesTool({ mode }: { mode: 'word' | 'images' }) {
       setProgress(0)
       setProgressNote('')
       setMessage(null)
+      const startedAt = Date.now()
 
       try {
         if (nextJob === 'word') {
@@ -252,7 +253,12 @@ export function WordImagesTool({ mode }: { mode: 'word' | 'images' }) {
           if (outputs.length === 1) download(outputs[0].blob, outputs[0].name)
           else await saveOutputs(outputs, zipName(items[0].file.name, 'word'))
 
-          track(nextJob === 'word' ? 'PDF → Word' : 'Картинки из PDF', 'done')
+          track(nextJob === 'word' ? 'PDF → Word' : 'Картинки из PDF', 'done', {
+            ms: Date.now() - startedAt,
+            pages: stats.pages,
+            size: Math.round(items.reduce((sum, item) => sum + item.file.size, 0) / 1024),
+            kind: 'pdf',
+          })
           addHistory({
             tool: nextJob === 'word' ? 'PDF → Word' : 'Картинки из PDF',
             fileName: items[0].file.name,
@@ -275,7 +281,11 @@ export function WordImagesTool({ mode }: { mode: 'word' | 'images' }) {
               return
             }
             download(await imagesToZip(images), `${baseName(items[0].file.name)}-images.zip`)
-            track('Картинки из PDF', 'done')
+            track('Картинки из PDF', 'done', {
+              ms: Date.now() - startedAt,
+              size: Math.round(items[0].file.size / 1024),
+              kind: 'pdf',
+            })
             addHistory({
               tool: 'Картинки из PDF',
               fileName: items[0].file.name,
@@ -332,6 +342,12 @@ export function WordImagesTool({ mode }: { mode: 'word' | 'images' }) {
           })
         } else {
           console.error(error)
+          const message = error instanceof Error && error.message ? error.message : 'Не получилось собрать файл'
+          track(nextJob === 'word' ? 'PDF → Word' : 'Картинки из PDF', 'error', {
+            message,
+            ms: Date.now() - startedAt,
+            kind: 'pdf',
+          })
           setMessage({ tone: 'error', text: 'Не получилось собрать файл. Попробуйте другой документ.' })
         }
       } finally {
