@@ -3256,13 +3256,34 @@ select.field-input option {
 }
 
 .ed-hint {
+  flex: 0 0 auto;
+  width: 280px;
   margin: 0 0 0 auto;
   align-self: center;
-  max-width: 330px;
-  padding: 0 8px 0 16px;
-  font-size: 0.76rem;
-  line-height: 1.4;
+  max-width: 290px;
+  padding: 7px 11px;
+  border: 1px solid var(--ed-line);
+  border-radius: 9px;
+  background: #f8f8fa;
+  font-size: 0.72rem;
+  line-height: 1.35;
   color: var(--ed-muted);
+}
+
+/* На ноутбуках подсказка не помещается рядом с группами — убираем её,
+   иначе она сжимается в узкую колонку и раздувает ленту. */
+@media (max-width: 1280px) {
+  .ed-hint {
+    display: none;
+  }
+
+  .ed-group {
+    padding: 0 7px;
+  }
+
+  .ed-tool {
+    min-width: 54px;
+  }
 }
 
 /* рабочая область */
@@ -3492,21 +3513,91 @@ select.field-input option {
 
 .ed-canvas-area {
   position: relative;
+  display: block;
+  min-width: 0;
+  padding: 0;
+  overflow: auto;
+  background-color: #eceef3;
+  background-image:
+    radial-gradient(circle at 1px 1px, rgba(15, 23, 42, 0.09) 1px, transparent 0),
+    radial-gradient(ellipse at 50% 0, rgba(255, 255, 255, 0.85), transparent 65%);
+  background-size: 20px 20px, 100% 100%;
+}
+
+/* Центровка без «прыжка»: при зуме больше ширины окна страница
+   остаётся у левого поля и не обрезается, в покое — по центру. */
+.ed-canvas-inner {
   display: flex;
   align-items: flex-start;
   justify-content: center;
-  gap: 0;
-  min-width: 0;
-  padding: 18px;
-  overflow: auto;
-  background: radial-gradient(ellipse at 50% 0, #f7f8fb, transparent 70%), var(--ed-bg);
+  width: max-content;
+  min-width: 100%;
+  min-height: 100%;
+  padding: 24px;
+  box-sizing: border-box;
 }
 
 .editor-app .redactor-stage {
   flex: none;
-  border-radius: 2px;
+  border-radius: 3px;
   background: #fff;
-  box-shadow: 0 8px 26px -10px rgba(15, 23, 42, 0.4), 0 0 0 1px rgba(15, 23, 42, 0.06);
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.08),
+    0 18px 40px -22px rgba(15, 23, 42, 0.55),
+    0 0 0 1px rgba(15, 23, 42, 0.07);
+}
+
+/* Компактный зум поверх листа — рядом с документом, а не только снизу. */
+.ed-zoom-float {
+  position: absolute;
+  right: 18px;
+  bottom: 18px;
+  z-index: 7;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  border: 1px solid var(--ed-line-strong);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 10px 26px -14px rgba(15, 23, 42, 0.5);
+}
+
+.ed-zoom-float button {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: #3c4250;
+  cursor: pointer;
+}
+
+.ed-zoom-float button:hover:not(:disabled) {
+  background: #f2f3f6;
+}
+
+.ed-zoom-float button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.ed-zoom-float svg {
+  width: 15px;
+  height: 15px;
+}
+
+.ed-zoom-float-value {
+  width: auto !important;
+  min-width: 46px;
+  padding: 0 6px !important;
+  border-radius: 8px !important;
+  font: 600 0.72rem/1 var(--ed-mono, monospace);
+  font-variant-numeric: tabular-nums;
 }
 
 .editor-app .redactor-handle {
@@ -4039,7 +4130,52 @@ select.field-input option {
 
 .ed-status-zoom {
   gap: 2px;
-  margin-left: auto;
+}
+
+/* Реклама между перемоткой страниц и масштабом. */
+.ed-status-ad {
+  flex: 1 1 auto;
+  display: flex;
+  justify-content: center;
+  min-width: 0;
+  padding: 0 10px;
+}
+
+.ed-status-ad .ad-mini {
+  width: 100%;
+  max-width: 340px;
+  gap: 7px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: #fff;
+}
+
+.ed-status-ad .ad-mini-badge {
+  width: 19px;
+  height: 19px;
+  border-radius: 6px;
+  font-size: 0.66rem;
+}
+
+.ed-status-ad .ad-mini-copy {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  overflow: hidden;
+}
+
+.ed-status-ad .ad-mini-copy b {
+  font-size: 0.71rem;
+  white-space: nowrap;
+}
+
+.ed-status-ad .ad-mini-copy small {
+  font-size: 0.66rem;
+}
+
+.ed-status-ad .ad-mini > svg {
+  width: 12px;
+  height: 12px;
 }
 
 .ed-status-right {
@@ -4185,12 +4321,45 @@ select.field-input option {
     display: none;
   }
 
-  .ed-canvas-area {
+  .ed-canvas-inner {
     padding: 12px;
+  }
+
+  .ed-status-ad .ad-mini {
+    max-width: 190px;
+  }
+
+  .ed-status-ad .ad-mini-copy small {
+    display: none;
   }
 }
 
 @media (max-width: 760px) {
+  /* В узком статус-баре остаются только страницы, масштаб и свойства. */
+  .ed-status {
+    gap: 8px;
+    padding: 5px 8px;
+  }
+
+  .ed-status-ad,
+  .ed-status-note,
+  .ed-status-zoom .ed-zoom-range,
+  .editor-app .ed-pages-toggle {
+    display: none;
+  }
+
+  .ed-status-group {
+    gap: 4px;
+  }
+
+  .ed-status-zoom {
+    margin-left: auto;
+  }
+
+  .ed-status-right {
+    gap: 6px;
+  }
+
   .ed-work,
   .editor-app.show-thumbs .ed-work,
   .editor-app.show-panel .ed-work,
@@ -5720,5 +5889,22 @@ select.field-input option {
 
   .ed-hint {
     display: none;
+  }
+}
+
+/* В узком статус-баре кнопки панелей остаются, но без лишней ширины. */
+@media (max-width: 760px) {
+  .editor-app .ed-pages-toggle,
+  .ed-status-note {
+    display: none;
+  }
+
+  .ed-status {
+    gap: 6px;
+  }
+
+  .ed-status .ed-panel-toggle {
+    padding: 3px 7px;
+    font-size: 0.7rem;
   }
 }

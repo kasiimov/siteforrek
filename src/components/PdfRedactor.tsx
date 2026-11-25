@@ -397,7 +397,6 @@ export function PdfRedactor() {
   const [tool, setTool] = useState<Tool>('select')
   const [textMode, setTextMode] = useState<TextMode>('flow')
   const [selected, setSelected] = useState<string | null>(null)
-  const [eraseAnnotations, setEraseAnnotations] = useState(false)
   const [history, setHistory] = useState<EditorPage[][]>([])
   const [future, setFuture] = useState<EditorPage[][]>([])
   const [busy, setBusy] = useState(false)
@@ -681,8 +680,10 @@ export function PdfRedactor() {
     if (!wrap || !boxWidth) return
 
     const fit = () => {
-      const styles = getComputedStyle(wrap)
-      const padding = parseFloat(styles.paddingLeft) + parseFloat(styles.paddingRight)
+      // Поля считаем у внутренней обёртки: на телефоне они меньше.
+      const inner = wrap.firstElementChild
+      const styles = getComputedStyle(inner ?? wrap)
+      const padding = inner ? parseFloat(styles.paddingLeft) + parseFloat(styles.paddingRight) : 0
       const available = wrap.clientWidth - padding - 2
       if (available < 40) return
       setFitScale(Math.min(1.5, Math.max(0.2, available / boxWidth)))
@@ -1665,7 +1666,7 @@ export function PdfRedactor() {
         source: kind === 'pdf' ? file : null,
         pages,
         toPdf: (pageIndex, x, y) => converters[pageIndex](x, y),
-        eraseAnnotations,
+        eraseAnnotations: false,
       })
 
       const name = (docName || 'document').replace(/[\\/:*?"<>|]+/g, '-')
@@ -1870,13 +1871,6 @@ export function PdfRedactor() {
         </div>
 
         <div className="ed-top-actions">
-          {hasDoc && (
-            <button type="button" className="ed-primary" onClick={() => void save()} disabled={busy} aria-label="Скачать PDF">
-              <Icon d={ICONS.download} />
-              <span className="ed-primary-text">{busy ? 'Собираем…' : 'Скачать PDF'}</span>
-            </button>
-          )}
-
           <Link className="ed-close" to={ROUTES.tools}>
             <Icon d={ICONS.close} />
             <span>Закрыть</span>
@@ -2417,16 +2411,6 @@ export function PdfRedactor() {
                 </div>
               </RibbonGroup>
 
-              <RibbonGroup label="При сохранении">
-                <label className="ed-check">
-                  <input
-                    type="checkbox"
-                    checked={eraseAnnotations}
-                    onChange={(event) => setEraseAnnotations(event.target.checked)}
-                  />
-                  <span>Убрать пометки и подписи PDF</span>
-                </label>
-              </RibbonGroup>
             </>
           )}
 
@@ -2771,6 +2755,7 @@ export function PdfRedactor() {
         )}
 
         <div className="ed-canvas-area" ref={stageWrapRef}>
+          <div className="ed-canvas-inner">
           {page ? (
             <div
               className={`redactor-stage tool-${tool}`}
@@ -2998,6 +2983,36 @@ export function PdfRedactor() {
                 </div>
                 <AdMini slot="editor-empty" />
               </div>
+            </div>
+          )}
+          </div>
+
+          {page && (
+            <div className="ed-zoom-float" role="group" aria-label="Масштаб документа">
+              <button
+                type="button"
+                onClick={() => changeZoom(zoom - 0.1)}
+                disabled={zoom <= ZOOM_MIN}
+                aria-label="Уменьшить масштаб"
+              >
+                <Icon d={ICONS.minus} />
+              </button>
+              <button
+                type="button"
+                className="ed-zoom-float-value"
+                onClick={() => changeZoom(1)}
+                title="Сбросить масштаб"
+              >
+                {zoomPercent}%
+              </button>
+              <button
+                type="button"
+                onClick={() => changeZoom(zoom + 0.1)}
+                disabled={zoom >= ZOOM_MAX}
+                aria-label="Увеличить масштаб"
+              >
+                <Icon d={ICONS.plus} />
+              </button>
             </div>
           )}
 
@@ -3270,27 +3285,13 @@ export function PdfRedactor() {
                     </div>
                   </dl>
 
-                  <div className="ed-panel-row">
-                    <button type="button" className="btn btn-quiet" onClick={() => void recognizePage()} disabled={ocrBusy}>
-                      <Icon d={ICONS.scan} />
-                      Распознать текст
-                    </button>
-                    {covers.length > 0 && (
+                  {covers.length > 0 && (
+                    <div className="ed-panel-row">
                       <button type="button" className="btn btn-quiet" onClick={clearCovers}>
                         Убрать белые пятна
                       </button>
-                    )}
-                  </div>
-
-                  <p className="ed-panel-label">Быстро</p>
-                  <div className="ed-panel-row">
-                    <button type="button" className="btn btn-quiet" onClick={addBlankPage}>
-                      Пустой лист
-                    </button>
-                    <button type="button" className="btn btn-quiet" onClick={duplicatePage}>
-                      Копия страницы
-                    </button>
-                  </div>
+                    </div>
+                  )}
 
                   <ul className="ed-keys">
                     <li>
@@ -3384,18 +3385,6 @@ export function PdfRedactor() {
             </div>
           )}
 
-          <label className="toggle">
-            <input
-              type="checkbox"
-              checked={eraseAnnotations}
-              onChange={(event) => setEraseAnnotations(event.target.checked)}
-            />
-            <span>
-              <b>Убрать пометки и подписи</b>
-              <small>Удаляет комментарии, штампы и подписи-аннотации. Сами страницы не меняются.</small>
-            </span>
-          </label>
-
           {hasDoc && (
             <div className="ed-panel-actions">
               <button type="button" className="btn btn-quiet" onClick={resetDoc}>
@@ -3434,6 +3423,12 @@ export function PdfRedactor() {
             →
           </button>
         </div>
+
+        {hasDoc && (
+          <div className="ed-status-ad">
+            <AdMini slot="editor-status" />
+          </div>
+        )}
 
         {hasDoc && (
           <div className="ed-status-group ed-status-zoom">

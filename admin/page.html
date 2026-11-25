@@ -335,6 +335,60 @@
   .feed-row .what { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .feed-row small { display: block; color: var(--muted); font: 9px/1.4 var(--mono); }
 
+  /* ── профиль посетителя ─────────────────────────────── */
+
+  .drawer-backdrop {
+    position: fixed; inset: 0; z-index: 30;
+    background: rgba(15, 23, 42, .38); backdrop-filter: blur(1px);
+  }
+  .drawer {
+    position: fixed; top: 0; right: 0; bottom: 0; z-index: 31;
+    display: flex; flex-direction: column;
+    width: min(560px, 100%); background: var(--surface);
+    border-left: 1px solid var(--line);
+    box-shadow: -24px 0 60px rgba(15, 23, 42, .22);
+  }
+  .drawer-head {
+    display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
+    padding: 16px 18px 13px; border-bottom: 1px solid var(--line);
+  }
+  .drawer-head h2 {
+    margin: 4px 0 0; font: 600 15px/1.3 var(--mono); letter-spacing: -.01em;
+    word-break: break-all;
+  }
+  .drawer-body { flex: 1; overflow: auto; padding: 16px 18px 28px; }
+  .drawer-body h3 {
+    margin: 18px 0 8px; color: var(--ink-soft);
+    font: 600 10px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase;
+  }
+  .drawer-body h3:first-child { margin-top: 0; }
+  .ud-meta { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 4px; }
+  .ud-stats {
+    display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px;
+    margin: 14px 0 4px;
+  }
+  .ud-stat { padding: 9px 10px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px; }
+  .ud-stat span { display: block; color: var(--muted); font: 8.5px/1.3 var(--mono); letter-spacing: .06em; text-transform: uppercase; }
+  .ud-stat b { display: block; margin-top: 3px; font: 600 16px/1.1 var(--mono); font-variant-numeric: tabular-nums; }
+  .ud-note { display: grid; gap: 7px; }
+  .ud-note textarea {
+    width: 100%; min-height: 74px; resize: vertical; padding: 9px 10px;
+    border: 1px solid var(--line-strong); border-radius: 8px; font-size: 12px; outline: none;
+  }
+  .ud-note textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(214,69,47,.12); }
+  .ud-note .row-actions { display: flex; align-items: center; gap: 8px; }
+  .ud-note .row-actions .fine { margin: 0 auto 0 0; }
+  .ud-session { padding: 10px 0; border-bottom: 1px solid var(--line); }
+  .ud-session:last-child { border-bottom: 0; }
+  .ud-session-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 11px; }
+  .ud-session-head time { color: var(--muted); font: 9.5px/1.5 var(--mono); }
+  .ud-session-head .note { margin-left: auto; color: var(--muted); font: 9.5px/1.5 var(--mono); }
+  .ud-steps { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-top: 7px; }
+  .ud-steps .arrow { color: var(--line-strong); font: 10px var(--mono); }
+  .ud-steps .chip { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+  .ud-delete { margin-top: 22px; padding-top: 14px; border-top: 1px solid var(--line); }
+  .ud-delete .solid { width: 100%; margin-top: 8px; }
+
   .toast {
     position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%);
     padding: 9px 14px; border-radius: 8px; background: #111827; color: #fff;
@@ -389,9 +443,10 @@
       <button type="button" data-tab="live"><i>02</i>Онлайн<em id="navLive">0</em></button>
       <button type="button" data-tab="tools"><i>03</i>Инструменты</button>
       <button type="button" data-tab="audience"><i>04</i>Аудитория</button>
-      <button type="button" data-tab="events"><i>05</i>Журнал</button>
+      <button type="button" data-tab="users"><i>05</i>Пользователи</button>
+      <button type="button" data-tab="events"><i>06</i>Журнал</button>
       <p class="nav-label">Система</p>
-      <button type="button" data-tab="settings"><i>06</i>Настройки</button>
+      <button type="button" data-tab="settings"><i>07</i>Настройки</button>
     </nav>
 
     <div class="rail-foot">
@@ -637,6 +692,91 @@
         </div>
       </section>
 
+      <!-- ── пользователи ──────────────────────────────────── -->
+      <section id="viewUsers" hidden>
+        <section class="strip">
+          <div class="cell hero">
+            <span class="label">Всего посетителей</span>
+            <b id="uPeople">0</b>
+            <span class="note">уникальные анонимные ID</span>
+          </div>
+          <div class="cell">
+            <span class="label">Заходили сегодня</span>
+            <b id="uToday">0</b>
+            <span class="note">по времени сервера</span>
+          </div>
+          <div class="cell">
+            <span class="label">За 7 дней</span>
+            <b id="uWeek">0</b>
+            <span class="note">были хоть раз</span>
+          </div>
+          <div class="cell">
+            <span class="label">Новых за неделю</span>
+            <b id="uFresh">0</b>
+            <span class="note">первый визит</span>
+          </div>
+          <div class="cell">
+            <span class="label">Вернувшихся</span>
+            <b id="uReturning">0</b>
+            <span class="note">больше одной сессии</span>
+          </div>
+          <div class="cell">
+            <span class="label">Дошли до файла</span>
+            <b id="uConverted">0</b>
+            <span class="note">хотя бы один готовый файл</span>
+          </div>
+        </section>
+
+        <div class="toolbar">
+          <span class="search-wrap">
+            <input class="control" id="usSearch" type="search" placeholder="ID посетителя, страница, сессия, страна" aria-label="Поиск по посетителям" />
+            <kbd>/</kbd>
+          </span>
+          <div class="seg" id="userFilter" role="group" aria-label="Фильтр посетителей">
+            <button type="button" data-user-filter="all">Все</button>
+            <button type="button" data-user-filter="new">Новые</button>
+            <button type="button" data-user-filter="returning">Вернувшиеся</button>
+            <button type="button" data-user-filter="done">С файлом</button>
+            <button type="button" data-user-filter="error">С ошибкой</button>
+          </div>
+          <select class="control" id="usDays" aria-label="Период активности">
+            <option value="7">7 дней</option>
+            <option value="30" selected>30 дней</option>
+            <option value="90">90 дней</option>
+            <option value="0">Всё время</option>
+          </select>
+          <span class="toolbar-note" id="usCount">—</span>
+        </div>
+
+        <div class="panel" style="padding-top:0">
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Посетитель</th>
+                  <th>Откуда</th>
+                  <th class="hide-m">Устройство</th>
+                  <th class="num">Сессии</th>
+                  <th class="num">Просмотры</th>
+                  <th class="num">Файлы</th>
+                  <th class="num">Ошибки</th>
+                  <th class="hide-m">Первый визит</th>
+                  <th>Последний</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="userBody"></tbody>
+            </table>
+          </div>
+          <div class="pager">
+            <button class="btn" id="usPrev" type="button">← Назад</button>
+            <button class="btn" id="usNext" type="button">Вперёд →</button>
+            <span class="info" id="usInfo">—</span>
+          </div>
+          <p class="fine">Имён и почты здесь нет: сайт не собирает их в аналитику. Посетитель — случайный ID браузера, путь — страницы и инструменты за сессию.</p>
+        </div>
+      </section>
+
       <!-- ── журнал ────────────────────────────────────────── -->
       <section id="viewEvents" hidden>
         <div class="toolbar">
@@ -744,6 +884,18 @@
   </main>
 </div>
 
+<div class="drawer-backdrop" id="userBackdrop" hidden></div>
+<aside class="drawer" id="userDrawer" hidden aria-label="Профиль посетителя">
+  <div class="drawer-head">
+    <div>
+      <p class="eyebrow">посетитель · анонимный ID</p>
+      <h2 id="udId">—</h2>
+    </div>
+    <button class="btn" id="udClose" type="button">Закрыть</button>
+  </div>
+  <div class="drawer-body" id="udBody"></div>
+</aside>
+
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
 <script>
@@ -771,19 +923,22 @@
     live: ['онлайн · последние 5 минут', 'Что <em>сейчас</em> происходит'],
     tools: ['инструменты · конверсия', 'Чем <em>пользуются</em>'],
     audience: ['аудитория · страницы и откуда', 'Кто и <em>где</em>'],
+    users: ['пользователи · путь и заметки', 'Кто <em>приходил</em>'],
     events: ['журнал · каждое событие', 'Полный <em>журнал</em>'],
     settings: ['настройки · хранение и очистка', 'Служебные <em>настройки</em>'],
   }
 
   // Номер последнего запроса по каждому разделу: ответ, пришедший позже
   // нового, не должен затирать свежие данные (иначе период «залипает»).
-  const seq = { overview: 0, live: 0, tools: 0, audience: 0, events: 0 }
+  const seq = { overview: 0, live: 0, tools: 0, audience: 0, users: 0, events: 0 }
 
   const state = {
     tab: 'overview',
     days: 14,
     toolDays: 30,
     ev: { days: '7', action: '', device: '', lang: '', q: '', page: 1 },
+    us: { days: '30', filter: 'all', q: '', page: 1, pages: 1, current: '' },
+    userDeleteArmed: false,
     pages: 1,
     auto: true,
     purgeArmed: false,
@@ -1165,6 +1320,226 @@
     }
   }
 
+  /* ── пользователи ──────────────────────────────────── */
+
+  function fmtVisit(ts) {
+    if (!ts) return '—'
+    const date = new Date(ts)
+    const today = new Date()
+    const time = pad(date.getHours()) + ':' + pad(date.getMinutes())
+    if (date.toDateString() === today.toDateString()) return time
+    const day = pad(date.getDate()) + '.' + pad(date.getMonth() + 1) +
+      (date.getFullYear() !== today.getFullYear() ? '.' + String(date.getFullYear()).slice(2) : '')
+    return day + ' ' + time
+  }
+
+  function syncUserFilterButtons() {
+    document.querySelectorAll('#userFilter button').forEach((button) => {
+      button.setAttribute('aria-pressed', button.dataset.userFilter === state.us.filter ? 'true' : 'false')
+    })
+  }
+
+  async function loadUsers(silent) {
+    const ticket = ++seq.users
+    const query = new URLSearchParams({
+      days: state.us.days,
+      filter: state.us.filter,
+      page: String(state.us.page),
+      limit: '25',
+    })
+    if (state.us.q) query.set('q', state.us.q)
+    try {
+      const data = await api('/api/users?' + query)
+      if (ticket !== seq.users) return
+      renderUsers(data)
+      $('stamp').textContent = 'обновлено ' + fmtWhen(Date.now())
+    } catch (error) {
+      if (!silent) toast(error.message, true)
+    }
+  }
+
+  function renderUsers(data) {
+    const s = data.summary || {}
+    $('uPeople').textContent = num(s.people)
+    $('uToday').textContent = num(s.today)
+    $('uWeek').textContent = num(s.week)
+    $('uFresh').textContent = num(s.fresh)
+    $('uReturning').textContent = num(s.returning)
+    $('uConverted').textContent = num(s.converted)
+    $('usCount').textContent = 'найдено ' + num(data.total) + ' · ' +
+      (data.filter === 'all' ? '' : ({ new: 'новые', returning: 'вернувшиеся', done: 'с файлом', error: 'с ошибкой' })[data.filter] + ' · ') +
+      'активность за ' + fmtNumDays(data.days)
+    $('range').textContent = 'активность за ' + fmtNumDays(data.days) + ' · всего ID: ' + num(s.people) +
+      ' · без имён и почты — только анонимные браузеры'
+    syncUserFilterButtons()
+
+    $('userBody').innerHTML = data.rows.length ? data.rows.map((row) =>
+      '<tr><td><b class="mono" style="color:var(--ink)" title="' + esc(row.visitor) + '">' + esc(String(row.visitor).slice(0, 14)) + '</b>' +
+      (row.note ? '<div class="mono" style="color:var(--ink-soft)">заметка: ' + esc(row.note) + '</div>' : '') + '</td>' +
+      '<td class="mono">' + esc(row.source || '—') + (row.country ? ' · ' + esc(row.country) : '') + '</td>' +
+      '<td class="mono hide-m">' + esc(row.device || '—') + ' · ' + esc(row.browser || '—') + '</td>' +
+      '<td class="num">' + num(row.sessions) + '</td>' +
+      '<td class="num">' + num(row.views) + '</td>' +
+      '<td class="num">' + num(row.dones) + '</td>' +
+      '<td class="num">' + (row.errors ? '<span style="color:var(--accent)">' + num(row.errors) + '</span>' : '0') + '</td>' +
+      '<td class="mono hide-m">' + fmtVisit(row.first) + '</td>' +
+      '<td class="mono">' + fmtVisit(row.last) + '</td>' +
+      '<td><button class="btn" type="button" data-open-user="' + esc(row.visitor) + '">Профиль</button></td></tr>').join('')
+      : '<tr><td colspan="10"><p class="empty">За этими фильтрами посетителей нет.</p></td></tr>'
+
+    $('usInfo').textContent = 'всего ' + num(data.total) + ' · страница ' + data.page + ' из ' + data.pages
+    $('usPrev').disabled = data.page <= 1
+    $('usNext').disabled = data.page >= data.pages
+    state.us.page = data.page
+    state.us.pages = data.pages
+
+    document.querySelectorAll('[data-open-user]').forEach((button) => {
+      button.addEventListener('click', () => openUser(button.dataset.openUser))
+    })
+  }
+
+  function closeUser() {
+    state.us.current = ''
+    state.userDeleteArmed = false
+    $('userDrawer').hidden = true
+    $('userBackdrop').hidden = true
+  }
+
+  async function openUser(visitor) {
+    state.us.current = visitor
+    state.userDeleteArmed = false
+    $('userDrawer').hidden = false
+    $('userBackdrop').hidden = false
+    $('udId').textContent = visitor
+    $('udBody').innerHTML = '<p class="empty">Загружаем профиль…</p>'
+    try {
+      const data = await api('/api/user?visitor=' + encodeURIComponent(visitor))
+      if (state.us.current !== visitor) return
+      renderUser(data)
+    } catch (error) {
+      $('udBody').innerHTML = '<p class="empty">' + esc(error.message) + '</p>'
+    }
+  }
+
+  function renderUser(data) {
+    const profile = data.profile
+    const meta = [
+      profile.country, profile.device, profile.browser, profile.os, profile.lang,
+      profile.screen, profile.source,
+    ].filter(Boolean)
+
+    const bySession = new Map()
+    for (const event of data.events.slice().reverse()) {
+      const key = event.session || ''
+      if (!bySession.has(key)) bySession.set(key, [])
+      bySession.get(key).push(event)
+    }
+
+    const sessionRows = data.sessions.length ? data.sessions.map((session) => {
+      // В путь попадают только осмысленные шаги, без «ушёл со страницы».
+      const walk = (bySession.get(session.session) || [])
+        .filter((event) => ['view', 'open', 'done', 'error'].includes(event.action))
+        .filter((event, index, list) => index === 0 ||
+          event.path !== list[index - 1].path || event.action !== list[index - 1].action)
+      const steps = walk.slice(-24).map((event) => {
+        const done = event.action === 'done'
+        const failed = event.action === 'error'
+        const title = (ACTION_LABEL[event.action] || event.action) + ' · ' + event.name +
+          (event.path ? ' · ' + event.path : '')
+        const label = event.path || event.name || '/'
+        return '<span class="chip' + (done ? ' done' : failed ? ' error' : '') + '" title="' + esc(title) + '">' +
+          esc(label) + (done ? ' ✓' : failed ? ' !' : '') + '</span>'
+      }).join('<span class="arrow">→</span>')
+      return '<div class="ud-session"><div class="ud-session-head">' +
+        '<time>' + fmtVisit(session.start) + ' — ' + fmtVisit(session.end) + '</time>' +
+        '<span class="chip">' + num(session.views) + ' просм.</span>' +
+        (session.dones ? '<span class="chip done">' + num(session.dones) + ' файл</span>' : '') +
+        (session.errors ? '<span class="chip error">' + num(session.errors) + ' ошибок</span>' : '') +
+        '<span class="note">' + (session.seconds ? fmtDuration(session.seconds) + ' · ' : '') +
+        num(session.events) + ' событий</span></div>' +
+        (steps ? '<div class="ud-steps">' + steps + '</div>' : '<p class="fine">Событий в этой сессии нет.</p>') +
+        '</div>'
+    }).join('') : '<p class="empty">Сессий не записано.</p>'
+
+    $('udBody').innerHTML =
+      '<div class="ud-meta">' + (meta.length
+        ? meta.map((value) => '<span class="chip">' + esc(value) + '</span>').join('')
+        : '<span class="chip muted">метаданных нет — старые события</span>') + '</div>' +
+      '<div class="ud-stats">' +
+        '<div class="ud-stat"><span>Сессии</span><b>' + num(profile.sessions) + '</b></div>' +
+        '<div class="ud-stat"><span>Просмотры</span><b>' + num(profile.views) + '</b></div>' +
+        '<div class="ud-stat"><span>Файлы</span><b>' + num(profile.dones) + '</b></div>' +
+        '<div class="ud-stat"><span>Ошибки</span><b>' + num(profile.errors) + '</b></div>' +
+        '<div class="ud-stat"><span>Время</span><b>' + fmtDuration(profile.seconds) + '</b></div>' +
+        '<div class="ud-stat"><span>События</span><b>' + num(profile.events) + '</b></div>' +
+      '</div>' +
+      '<p class="fine">Первый визит: ' + fmtVisit(profile.first) + ' · последний: ' + fmtVisit(profile.last) + '</p>' +
+      '<h3>Заметка</h3>' +
+      '<div class="ud-note">' +
+        '<textarea id="udNote" maxlength="500" placeholder="Например: написал в поддержку, проверить редактор">' + esc(data.note) + '</textarea>' +
+        '<div class="row-actions"><span class="fine" id="udNoteStamp">' +
+          (data.note ? 'сохранена ' + fmtVisit(data.noteUpdated) : 'видна только в админке') + '</span>' +
+          '<button class="btn" type="button" id="udSaveNote">Сохранить</button></div>' +
+      '</div>' +
+      '<h3>Путь по сессиям</h3>' + sessionRows +
+      '<div class="ud-delete">' +
+        '<p class="fine">Удаление стирает все события и заметку этого ID из базы. Отменить нельзя.</p>' +
+        '<button class="solid danger" type="button" id="udDelete">Удалить данные посетителя</button>' +
+        '<p class="danger-note" id="udDeleteNote" hidden></p>' +
+      '</div>'
+
+    $('udSaveNote').addEventListener('click', async () => {
+      const button = $('udSaveNote')
+      const note = $('udNote').value
+      button.disabled = true
+      try {
+        await api('/api/user', {
+          method: 'PUT',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ visitor: profile.visitor, note }),
+        })
+        toast(note.trim() ? 'Заметка сохранена' : 'Заметка очищена')
+        $('udNoteStamp').textContent = note.trim() ? 'сохранена только что' : 'видна только в админке'
+        loadUsers(true)
+      } catch (error) {
+        toast(error.message, true)
+      } finally {
+        button.disabled = false
+      }
+    })
+
+    $('udDelete').addEventListener('click', async () => {
+      if (!state.userDeleteArmed) {
+        state.userDeleteArmed = true
+        $('udDelete').textContent = 'Точно удалить все данные?'
+        $('udDeleteNote').hidden = false
+        $('udDeleteNote').textContent = 'Будут удалены ' + num(profile.events) + ' событий и заметка. Нажмите ещё раз, чтобы подтвердить.'
+        setTimeout(() => {
+          if (!state.userDeleteArmed) return
+          state.userDeleteArmed = false
+          $('udDelete').textContent = 'Удалить данные посетителя'
+          $('udDeleteNote').hidden = true
+        }, 6000)
+        return
+      }
+      state.userDeleteArmed = false
+      $('udDelete').disabled = true
+      try {
+        const result = await api('/api/user', {
+          method: 'DELETE',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ visitor: profile.visitor }),
+        })
+        closeUser()
+        toast('Удалено событий: ' + num(result.removed))
+        await loadUsers(true)
+      } catch (error) {
+        toast(error.message, true)
+        $('udDelete').disabled = false
+      }
+    })
+  }
+
   /* ── журнал ────────────────────────────────────────── */
 
   async function loadEvents(silent) {
@@ -1290,6 +1665,7 @@
     if (state.tab === 'live') return loadLive(silent)
     if (state.tab === 'tools') return loadTools(silent)
     if (state.tab === 'audience') return loadAudience(silent)
+    if (state.tab === 'users') return loadUsers(silent)
     if (state.tab === 'events') return loadEvents(silent)
     return loadSettings()
   }
@@ -1304,6 +1680,7 @@
     $('viewLive').hidden = next !== 'live'
     $('viewTools').hidden = next !== 'tools'
     $('viewAudience').hidden = next !== 'audience'
+    $('viewUsers').hidden = next !== 'users'
     $('viewEvents').hidden = next !== 'events'
     $('viewSettings').hidden = next !== 'settings'
     $('eyebrow').textContent = TITLES[next][0]
@@ -1360,6 +1737,52 @@
       loadTools(false)
     })
   })
+
+  document.querySelectorAll('#userFilter button').forEach((button) => {
+    button.addEventListener('click', () => {
+      state.us.filter = button.dataset.userFilter
+      state.us.page = 1
+      syncUserFilterButtons()
+      loadUsers(false)
+    })
+  })
+
+  $('usDays').addEventListener('change', () => {
+    state.us.days = $('usDays').value
+    state.us.page = 1
+    loadUsers(false)
+  })
+
+  $('usSearch').addEventListener('input', () => {
+    clearTimeout(state.usTimer)
+    state.usTimer = setTimeout(() => {
+      state.us.q = $('usSearch').value.trim()
+      state.us.page = 1
+      loadUsers(false)
+    }, 350)
+  })
+  $('usSearch').addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
+      state.us.q = $('usSearch').value.trim()
+      state.us.page = 1
+      loadUsers(false)
+    }
+    if (event.key === 'Escape') {
+      $('usSearch').value = ''
+      state.us.q = ''
+      state.us.page = 1
+      loadUsers(false)
+    }
+  })
+  $('usPrev').addEventListener('click', () => {
+    if (state.us.page > 1) { state.us.page -= 1; loadUsers(false) }
+  })
+  $('usNext').addEventListener('click', () => {
+    if (state.us.page < state.us.pages) { state.us.page += 1; loadUsers(false) }
+  })
+
+  $('udClose').addEventListener('click', closeUser)
+  $('userBackdrop').addEventListener('click', closeUser)
 
   $('evDays').addEventListener('change', () => { state.ev.days = $('evDays').value; state.ev.page = 1; loadEvents(false) })
   $('evAction').addEventListener('change', () => { state.ev.action = $('evAction').value; state.ev.page = 1; loadEvents(false) })
@@ -1450,9 +1873,14 @@
     const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName)
     if (event.key === '/' && !typing) {
       event.preventDefault()
+      if (state.tab === 'users') {
+        $('usSearch').focus()
+        return
+      }
       if (state.tab !== 'events') setTab('events')
       $('evSearch').focus()
     }
+    if (event.key === 'Escape' && state.us.current) closeUser()
     if ((event.key === 'r' || event.key === 'R') && !typing && !event.metaKey && !event.ctrlKey) {
       loadActive(false)
     }
@@ -1470,6 +1898,7 @@
     const initial = TITLES[tab] ? tab : 'overview'
     syncPeriodButtons()
     syncToolDaysButtons()
+    syncUserFilterButtons()
     setTab(initial, false)
     state.timer = setInterval(() => {
       if (state.auto && !document.hidden && state.tab !== 'settings') loadActive(true)

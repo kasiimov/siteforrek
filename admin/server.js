@@ -94,6 +94,14 @@ async function ensureSchema(env) {
        detail TEXT
      )`,
   ).run()
+  // Заметки владельца о посетителях: только анонимный ID, без имён и почты.
+  await env.DB.prepare(
+    `CREATE TABLE IF NOT EXISTS visitor_notes (
+       visitor TEXT PRIMARY KEY,
+       note TEXT NOT NULL,
+       updated_at INTEGER NOT NULL
+     )`,
+  ).run()
   schemaReady.add(env.DB)
 }
 
@@ -821,6 +829,204 @@ async function exportCsv(request, env, url) {
   })
 }
 
+/* ── посетители: путь, заметки, удаление ─────────────────────── */
+
+const USER_FILTERS = new Set(['all', 'new', 'returning', 'done', 'error'])
+
+const VISITOR_AGG = `visitor,
+      MIN(ts) AS first,
+      MAX(ts) AS last,
+      COUNT(DISTINCT CASE WHEN session != '' THEN session END) AS sessions,
+      COUNT(*) AS events,
+      SUM(CASE WHEN action = 'view' THEN 1 ELSE 0 END) AS views,
+      SUM(CASE WHEN action = 'open' THEN 1 ELSE 0 END) AS opens,
+      SUM(CASE WHEN action = 'done' THEN 1 ELSE 0 END) AS dones,
+      SUM(CASE WHEN action = 'error' THEN 1 ELSE 0 END) AS errors,
+      SUM(CASE WHEN action = 'leave' THEN COALESCE(duration, 0) ELSE 0 END) AS seconds,
+      MAX(NULLIF(country, '')) AS country,
+      MAX(NULLIF(device, '')) AS device,
+      MAX(NULLIF(browser, '')) AS browser,
+      MAX(NULLIF(os, '')) AS os,
+      MAX(NULLIF(lang, '')) AS lang,
+      MAX(NULLIF(source, '')) AS source,
+      MAX(NULLIF(screen, '')) AS screen`
+
+function userListCte() {
+  return `WITH agg AS (SELECT ${VISITOR_AGG} FROM events WHERE visitor != '' GROUP BY visitor),
+    list AS (SELECT agg.*, COALESCE(n.note, '') AS note
+               FROM agg LEFT JOIN visitor_notes n ON n.visitor = agg.visitor)`
+}
+
+/** Список посетителей: агрегат по анонимному ID за период активности. */
+async function users(request, env, url) {
+  if (request.method !== 'GET') return json({ error: 'Только чтение.' }, 405)
+  await ensureSchema(env)
+
+  const nowMs = now()
+  const days = readDays(url, 30)
+  const since = days ? nowMs - days * 86400000 : 0
+  const rawFilter = url.searchParams.get('filter') ?? 'all'
+  const filter = USER_FILTERS.has(rawFilter) ? rawFilter : 'all'
+  const search = (url.searchParams.get('q') ?? '').trim().slice(0, 60)
+  const limit = Math.min(100, Math.max(10, Math.round(Number(url.searchParams.get('limit')) || 25)))
+  const page = Math.max(1, Math.round(Number(url.searchParams.get('page')) || 1))
+  const offset = (page - 1) * limit
+
+  const where = []
+  const args = []
+  if (since) {
+    where.push('last >= ?')
+    args.push(since)
+  }
+  if (filter === 'new' && since) {
+    where.push('first >= ?')
+    args.push(since)
+  }
+  if (filter === 'returning') where.push('sessions > 1')
+  if (filter === 'done') where.push('dones > 0')
+  if (filter === 'error') where.push('errors > 0')
+  if (search) {
+    where.push(
+      "(visitor LIKE ? ESCAPE '\\' OR note LIKE ? ESCAPE '\\' OR COALESCE(country, '') LIKE ? ESCAPE '\\' OR COALESCE(device, '') LIKE ? ESCAPE '\\' OR COALESCE(browser, '') LIKE ? ESCAPE '\\' OR EXISTS (SELECT 1 FROM events e WHERE e.visitor = list.visitor AND (COALESCE(e.session, '') LIKE ? ESCAPE '\\' OR COALESCE(e.path, '') LIKE ? ESCAPE '\\')))",
+    )
+    const pattern = likeQuery(search)
+    args.push(pattern, pattern, pattern, pattern, pattern, pattern, pattern)
+  }
+  const clause = where.length ? ' WHERE ' + where.join(' AND ') : ''
+  const cte = userListCte()
+  const todayStart = Math.floor(nowMs / 86400000) * 86400000
+  const weekSince = nowMs - 7 * 86400000
+
+  const [total, rows, summary] = await Promise.all([
+    env.DB.prepare(`${cte} SELECT COUNT(*) AS value FROM list${clause}`)
+      .bind(...args)
+      .first(),
+    env.DB.prepare(`${cte} SELECT * FROM list${clause} ORDER BY last DESC LIMIT ? OFFSET ?`)
+      .bind(...args, limit, offset)
+      .all(),
+    env.DB.prepare(
+      `WITH agg AS (
+         SELECT visitor, MIN(ts) AS first, MAX(ts) AS last,
+                COUNT(DISTINCT CASE WHEN session != '' THEN session END) AS sessions,
+                SUM(CASE WHEN action = 'done' THEN 1 ELSE 0 END) AS dones
+           FROM events WHERE visitor != '' GROUP BY visitor)
+       SELECT COUNT(*) AS people,
+              SUM(CASE WHEN last >= ? THEN 1 ELSE 0 END) AS today,
+              SUM(CASE WHEN last >= ? THEN 1 ELSE 0 END) AS week,
+              SUM(CASE WHEN first >= ? THEN 1 ELSE 0 END) AS fresh,
+              SUM(CASE WHEN sessions > 1 THEN 1 ELSE 0 END) AS repeats,
+              SUM(CASE WHEN dones > 0 THEN 1 ELSE 0 END) AS converted,
+              MAX(last) AS last
+         FROM agg`,
+    )
+      .bind(todayStart, weekSince, weekSince)
+      .first(),
+  ])
+
+  const count = total?.value ?? 0
+  return json({
+    days,
+    filter,
+    q: search,
+    rows: rows.results ?? [],
+    total: count,
+    page,
+    limit,
+    pages: Math.max(1, Math.ceil(count / limit)),
+    summary: {
+      people: summary?.people ?? 0,
+      today: summary?.today ?? 0,
+      week: summary?.week ?? 0,
+      fresh: summary?.fresh ?? 0,
+      returning: summary?.repeats ?? 0,
+      converted: summary?.converted ?? 0,
+      last: summary?.last ?? 0,
+    },
+  })
+}
+
+/** Профиль посетителя: сводка, сессии, события и заметка. GET / PUT / DELETE. */
+async function user(request, env, url) {
+  await ensureSchema(env)
+
+  if (request.method === 'GET') {
+    const visitor = cleanId(url.searchParams.get('visitor') ?? '')
+    if (!visitor) return json({ error: 'Нужен visitor — анонимный ID посетителя.' }, 400)
+
+    const [profile, sessions, events, noteRow] = await Promise.all([
+      env.DB.prepare(`SELECT ${VISITOR_AGG} FROM events WHERE visitor = ?`).bind(visitor).first(),
+      env.DB.prepare(
+        `SELECT session, MIN(ts) AS start, MAX(ts) AS end, COUNT(*) AS events,
+                SUM(CASE WHEN action = 'view' THEN 1 ELSE 0 END) AS views,
+                SUM(CASE WHEN action = 'open' THEN 1 ELSE 0 END) AS opens,
+                SUM(CASE WHEN action = 'done' THEN 1 ELSE 0 END) AS dones,
+                SUM(CASE WHEN action = 'error' THEN 1 ELSE 0 END) AS errors,
+                SUM(CASE WHEN action = 'leave' THEN COALESCE(duration, 0) ELSE 0 END) AS seconds,
+                MAX(NULLIF(device, '')) AS device,
+                MAX(NULLIF(browser, '')) AS browser,
+                MAX(NULLIF(source, '')) AS source
+           FROM events WHERE visitor = ? AND session != ''
+          GROUP BY session ORDER BY start DESC LIMIT 100`,
+      )
+        .bind(visitor)
+        .all(),
+      env.DB.prepare(
+        `SELECT ts, name, action, path, session, device, browser, os, source, lang,
+                country, duration, scroll, ms, kind, size, pages, meta
+           FROM events WHERE visitor = ? ORDER BY id DESC LIMIT 300`,
+      )
+        .bind(visitor)
+        .all(),
+      env.DB.prepare('SELECT note, updated_at FROM visitor_notes WHERE visitor = ?').bind(visitor).first(),
+    ])
+
+    if (!profile || !profile.events) return json({ error: 'Посетитель не найден.' }, 404)
+    return json({
+      profile,
+      sessions: sessions.results ?? [],
+      events: events.results ?? [],
+      note: noteRow?.note ?? '',
+      noteUpdated: noteRow?.updated_at ?? 0,
+    })
+  }
+
+  if (request.method !== 'PUT' && request.method !== 'DELETE') {
+    return json({ error: 'Метод не поддерживается.' }, 405)
+  }
+
+  let body
+  try {
+    body = await request.json()
+  } catch {
+    return json({ error: 'Нужен JSON с visitor.' }, 400)
+  }
+  const visitor = cleanId(body?.visitor ?? '')
+  if (!visitor) return json({ error: 'Нужен visitor — анонимный ID посетителя.' }, 400)
+
+  if (request.method === 'PUT') {
+    const note = String(body?.note ?? '').replace(/\s+/g, ' ').trim().slice(0, 500)
+    if (note) {
+      await env.DB.prepare(
+        `INSERT INTO visitor_notes (visitor, note, updated_at) VALUES (?, ?, ?)
+         ON CONFLICT(visitor) DO UPDATE SET note = excluded.note, updated_at = excluded.updated_at`,
+      )
+        .bind(visitor, note, now())
+        .run()
+    } else {
+      await env.DB.prepare('DELETE FROM visitor_notes WHERE visitor = ?').bind(visitor).run()
+    }
+    await audit(env, 'заметка о посетителе', visitor + (note ? ': ' + note.slice(0, 80) : ': очищена'))
+    return json({ visitor, note })
+  }
+
+  // DELETE: удаляем только события и заметку этого анонимного ID.
+  const result = await env.DB.prepare('DELETE FROM events WHERE visitor = ?').bind(visitor).run()
+  await env.DB.prepare('DELETE FROM visitor_notes WHERE visitor = ?').bind(visitor).run()
+  const removed = result?.meta?.changes ?? 0
+  await audit(env, 'удаление посетителя', visitor + ': ' + removed + ' событий')
+  return json({ removed, visitor })
+}
+
 /* ── настройки, очистка, аудит ───────────────────────────────── */
 
 async function settings(request, env) {
@@ -928,6 +1134,8 @@ export default {
       '/api/stats': () => stats(request, env, url),
       '/api/live': () => live(request, env),
       '/api/events': () => events(request, env, url),
+      '/api/users': () => users(request, env, url),
+      '/api/user': () => user(request, env, url),
       '/api/export.csv': () => exportCsv(request, env, url),
       '/api/settings': () => settings(request, env),
       '/api/purge': () => purge(request, env),

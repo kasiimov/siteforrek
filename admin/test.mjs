@@ -70,9 +70,11 @@ check('страница панели отдаётся, скрипт цел и б
   assert.equal(scripts.length, 1, 'ожидается один встроенный скрипт')
   new Function(scripts[0])
   assert.ok(!html.includes('ADMIN_TOKEN'), 'на странице нет поля для токена')
-  for (const tab of ['overview', 'live', 'tools', 'audience', 'events', 'settings']) {
+  for (const tab of ['overview', 'live', 'tools', 'audience', 'users', 'events', 'settings']) {
     assert.ok(html.includes('data-tab="' + tab + '"'), 'есть вкладка ' + tab)
   }
+  assert.match(html, /id="userDrawer"/, 'есть панель профиля посетителя')
+  assert.match(html, /data-user-filter="done"/, 'есть фильтр «с файлом»')
 })
 
 check('вход открыт без токена и ключей', async () => {
@@ -278,6 +280,94 @@ check('журнал хранит скролл, время инструмента
   assert.equal(row.kind, 'pdf')
 })
 
+check('пользователи: список, сводка, фильтры и поиск', async () => {
+  const response = await call('/api/users?days=30')
+  assert.equal(response.status, 200)
+  const data = await response.json()
+  assert.equal(data.total, 2)
+  assert.equal(data.rows[0].visitor, 'visitor-aaa')
+  assert.equal(data.summary.people, 2)
+  assert.equal(data.summary.today, 2)
+  assert.equal(data.summary.week, 2)
+  assert.equal(data.summary.fresh, 2)
+  assert.equal(data.summary.returning, 0)
+  assert.equal(data.summary.converted, 1)
+  const aaa = data.rows.find((row) => row.visitor === 'visitor-aaa')
+  assert.equal(aaa.sessions, 1)
+  assert.equal(aaa.dones, 2)
+  assert.equal(aaa.country, 'UZ')
+  assert.equal(aaa.device, 'desktop')
+  assert.ok(aaa.first > 0 && aaa.last >= aaa.first)
+
+  const done = await (await call('/api/users?days=30&filter=done')).json()
+  assert.equal(done.total, 1)
+  assert.equal(done.rows[0].visitor, 'visitor-aaa')
+
+  const failed = await (await call('/api/users?days=30&filter=error')).json()
+  assert.equal(failed.total, 1)
+  assert.equal(failed.rows[0].visitor, 'visitor-bbb')
+
+  const returning = await (await call('/api/users?days=30&filter=returning')).json()
+  assert.equal(returning.total, 0)
+
+  const bySession = await (await call('/api/users?days=30&q=sess-aaa')).json()
+  assert.equal(bySession.total, 1)
+  assert.equal(bySession.rows[0].visitor, 'visitor-aaa')
+
+  const byCountry = await (await call('/api/users?days=30&q=RU')).json()
+  assert.equal(byCountry.total, 1)
+
+  const old = await (await call('/api/users?days=1')).json()
+  assert.ok(old.days === 1)
+})
+
+check('профиль посетителя отдаёт путь по сессиям и события', async () => {
+  const response = await call('/api/user?visitor=visitor-aaa')
+  assert.equal(response.status, 200)
+  const data = await response.json()
+  assert.equal(data.profile.visitor, 'visitor-aaa')
+  assert.equal(data.profile.sessions, 1)
+  assert.equal(data.profile.events, 5)
+  assert.equal(data.profile.views, 1)
+  assert.equal(data.profile.dones, 2)
+  assert.equal(data.profile.seconds, 40)
+  assert.equal(data.sessions.length, 1)
+  assert.equal(data.sessions[0].session, 'sess-aaa')
+  assert.equal(data.sessions[0].dones, 2)
+  assert.equal(data.events.length, 5)
+  assert.ok(data.events.some((row) => row.path === '/' && row.action === 'view'))
+  assert.ok(data.events.some((row) => row.action === 'error') === false)
+  assert.equal(data.note, '')
+
+  const missing = await call('/api/user?visitor=visitor-nope')
+  assert.equal(missing.status, 404)
+  assert.equal((await call('/api/user')).status, 400)
+})
+
+check('заметка о посетителе сохраняется, видна в списке и очищается', async () => {
+  const saved = await call('/api/user', {
+    method: 'PUT',
+    body: JSON.stringify({ visitor: 'visitor-aaa', note: '  писал в поддержку  ' }),
+  })
+  assert.equal(saved.status, 200)
+  assert.equal((await saved.json()).note, 'писал в поддержку')
+
+  const detail = await (await call('/api/user?visitor=visitor-aaa')).json()
+  assert.equal(detail.note, 'писал в поддержку')
+  assert.ok(detail.noteUpdated > 0)
+
+  const list = await (await call('/api/users?days=30&q=' + encodeURIComponent('поддержку'))).json()
+  assert.equal(list.total, 1)
+  assert.equal(list.rows[0].note, 'писал в поддержку')
+
+  const cleared = await call('/api/user', {
+    method: 'PUT',
+    body: JSON.stringify({ visitor: 'visitor-aaa', note: '' }),
+  })
+  assert.equal((await cleared.json()).note, '')
+  assert.equal((await (await call('/api/user?visitor=visitor-aaa')).json()).note, '')
+})
+
 check('CSV выгружается с BOM, новыми колонками и подписями', async () => {
   const response = await call('/api/export.csv?days=7')
   assert.equal(response.status, 200)
@@ -337,6 +427,36 @@ check('очистка удаляет события и пишет аудит', a
   assert.ok(actions.includes('выгрузка CSV'))
   assert.ok(actions.includes('очистка'))
   assert.ok(!actions.includes('вход'))
+})
+
+check('удаление посетителя стирает только его события и пишет аудит', async () => {
+  for (const event of [
+    { name: 'Главная', action: 'view', path: '/', visitor: 'visitor-zzz', session: 'sess-zzz' },
+    { name: 'Редактор PDF', action: 'open', path: '/editor', visitor: 'visitor-zzz', session: 'sess-zzz' },
+  ]) {
+    const response = await call('/api/collect', {
+      method: 'POST',
+      headers: { Origin: siteOrigin },
+      body: JSON.stringify(event),
+    })
+    assert.equal(response.status, 204)
+  }
+
+  const removed = await call('/api/user', {
+    method: 'DELETE',
+    body: JSON.stringify({ visitor: 'visitor-zzz' }),
+  })
+  assert.equal(removed.status, 200)
+  assert.equal((await removed.json()).removed, 2)
+
+  const list = await (await call('/api/users?days=0&q=visitor-zzz')).json()
+  assert.equal(list.total, 0)
+  assert.equal((await call('/api/user?visitor=visitor-zzz')).status, 404)
+
+  const audit = await (await call('/api/audit?limit=10')).json()
+  const actions = audit.rows.map((row) => row.action)
+  assert.ok(actions.includes('удаление посетителя'))
+  assert.ok(actions.includes('заметка о посетителе'))
 })
 
 check('выход не закрывает открытую панель, health сообщает open', async () => {
