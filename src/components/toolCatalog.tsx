@@ -1,5 +1,4 @@
 import { parsePageList, parseRangeGroups } from '../lib/pages'
-import { parsePageOrder } from '../lib/docEditor'
 import type { ToolSpec, Values } from './toolTypes'
 
 /** pdf-lib и fontkit грузятся только когда пользователь запустил инструмент. */
@@ -178,7 +177,7 @@ export const catalog: ToolSpec[] = [
     ],
     run: async (files, values, onProgress) => {
       const total = await pdfFile(files[0])
-      const order = parsePageOrder(values.order, total)
+      const order = (await import('../lib/docEditor')).parsePageOrder(values.order, total)
       return (await loadPdfEdit()).reorderPages(files[0], order, onProgress)
     },
   },

@@ -1,6 +1,5 @@
-import { useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import { HomePage } from './pages/HomePage'
-import { EditorPage } from './pages/EditorPage'
 import { ToolsPage } from './pages/ToolsPage'
 import { ServicesPage } from './pages/ServicesPage'
 import { ProfilePage } from './pages/ProfilePage'
@@ -14,6 +13,11 @@ import { resolvePath } from './lib/seoToolPages'
 import { Link, ROUTES, isKnownRoute, usePath } from './lib/router'
 import { initials, useUser } from './lib/profile'
 import { fetchOverview, track, type Overview } from './lib/analytics'
+
+// Редактор со своими библиотеками грузится только при переходе на /editor.
+const EditorPage = lazy(() =>
+  import('./pages/EditorPage').then((module) => ({ default: module.EditorPage })),
+)
 
 const NAV = [
   { to: ROUTES.home, label: 'Главная' },
@@ -79,7 +83,19 @@ export default function App() {
   }, [])
 
   // Редактор — самостоятельное приложение: без шапки, футера и фонов сайта.
-  if (known && path === ROUTES.editor) return <EditorPage />
+  if (known && path === ROUTES.editor) {
+    return (
+      <Suspense
+        fallback={
+          <section className="page-hero">
+            <p>Загружаем редактор…</p>
+          </section>
+        }
+      >
+        <EditorPage />
+      </Suspense>
+    )
+  }
 
   return (
     <div className="page">

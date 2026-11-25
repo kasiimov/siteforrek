@@ -1,10 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { DragEvent as ReactDragEvent } from 'react'
-import JSZip from 'jszip'
-import { openPdf } from '../lib/pdf'
-import { pdfToDocx } from '../lib/toWord'
 import type { DocxStats } from '../lib/toWord'
-import { extractImages, imagesToZip } from '../lib/images'
 import { baseName, download, formatSize, saveOutputs } from '../lib/download'
 import { addHistory } from '../lib/profile'
 import { track } from '../lib/analytics'
@@ -128,6 +124,7 @@ export function WordImagesTool({ mode }: { mode: 'word' | 'images' }) {
       const failed: string[] = []
 
       try {
+        const { openPdf } = await import('../lib/pdf')
         for (let index = 0; index < fresh.length; index++) {
           const file = fresh[index]
           setLoadingNote(
@@ -219,6 +216,10 @@ export function WordImagesTool({ mode }: { mode: 'word' | 'images' }) {
 
       try {
         if (nextJob === 'word') {
+          const [{ openPdf }, { pdfToDocx }] = await Promise.all([
+            import('../lib/pdf'),
+            import('../lib/toWord'),
+          ])
           const outputs: { name: string; blob: Blob }[] = []
           const taken = new Set<string>()
           const stats: DocxStats = { pages: 0, scanned: 0, tables: 0, images: 0, links: 0 }
@@ -259,6 +260,10 @@ export function WordImagesTool({ mode }: { mode: 'word' | 'images' }) {
           })
           setMessage({ tone: 'ok', text: wordSummary(items, stats) })
         } else if (total === 1) {
+          const [{ openPdf }, { extractImages, imagesToZip }] = await Promise.all([
+            import('../lib/pdf'),
+            import('../lib/images'),
+          ])
           const pdf = await openPdf(items[0].file)
           try {
             const images = await extractImages(pdf, (done, pages) => setProgress(done / Math.max(1, pages)), controller.signal)
@@ -281,6 +286,11 @@ export function WordImagesTool({ mode }: { mode: 'word' | 'images' }) {
             await pdf.destroy()
           }
         } else {
+          const [{ openPdf }, { extractImages }, { default: JSZip }] = await Promise.all([
+            import('../lib/pdf'),
+            import('../lib/images'),
+            import('jszip'),
+          ])
           const zip = new JSZip()
           let count = 0
 

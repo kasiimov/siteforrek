@@ -1,5 +1,3 @@
-import JSZip from 'jszip'
-
 export type Output = { name: string; blob: Blob }
 
 export function formatSize(bytes: number): string {
@@ -29,6 +27,7 @@ export async function saveOutputs(outputs: Output[], zipName: string) {
     download(outputs[0].blob, outputs[0].name)
     return
   }
+  const { default: JSZip } = await import('jszip')
   const zip = new JSZip()
   for (const output of outputs) zip.file(output.name, output.blob)
   const blob = await zip.generateAsync({ type: 'blob', compression: 'STORE' })
