@@ -1,9 +1,9 @@
 /**
- * Админка Congix Docs: D1 с анонимными событиями сайта, журналом событий и настройками.
+ * Админка Congix Docs: D1 с анонимными событиями сайта, журналом, ошибками и настройками.
  *
- * Авторизация: пароль из секрета ADMIN_TOKEN обменивается на подписанную
- * HttpOnly-cookie (HMAC-SHA256, 12 часов). Токен в браузере не хранится.
- * Заголовок `Authorization: Bearer <ADMIN_TOKEN>` тоже принимается — для curl.
+ * Вход пока открытый: без токена, ключей и cookie — это осознанное временное
+ * решение владельца. Изменяющие запросы по-прежнему принимаются только с того же
+ * Origin, а сами события сайта не содержат файлов, имён и почты.
  *
  * Файл — только серверная часть. Страница лежит в page.html и встраивается
  * в worker.js сборщиком: `node admin/build.mjs`.
@@ -11,10 +11,20 @@
 
 const SITE_ORIGIN = 'https://rekpdf-ircn71.freebuff.site'
 const ALLOWED_ORIGINS = new Set([SITE_ORIGIN, 'http://localhost:3000', 'http://127.0.0.1:3000'])
-const MAX_FIELD = 80
-const COOKIE_NAME = 'rekpdf_admin'
-const SESSION_TTL_S = 12 * 60 * 60
+const MAX_FIELD = 120
+const MAX_META = 600
 const MAX_PERIOD = 3650
+const LIVE_WINDOW_MS = 5 * 60 * 1000
+
+const ACTIONS = new Set(['view', 'open', 'done', 'error', 'leave', 'session'])
+const ACTION_LABEL = {
+  view: 'открыл страницу',
+  open: 'открыл инструмент',
+  done: 'получил файл',
+  error: 'ошибка',
+  leave: 'ушёл со страницы',
+  session: 'новая сессия',
+}
 
 let schemaReady = false
 
@@ -30,7 +40,38 @@ async function ensureSchema(env) {
        ts INTEGER NOT NULL
      )`,
   ).run()
+
+  const columns = await env.DB.prepare('PRAGMA table_info(events)').all()
+  const have = new Set((columns.results ?? []).map((column) => column.name))
+  const extra = [
+    ['session', 'TEXT'],
+    ['ref', 'TEXT'],
+    ['source', 'TEXT'],
+    ['medium', 'TEXT'],
+    ['campaign', 'TEXT'],
+    ['lang', 'TEXT'],
+    ['device', 'TEXT'],
+    ['browser', 'TEXT'],
+    ['os', 'TEXT'],
+    ['screen', 'TEXT'],
+    ['country', 'TEXT'],
+    ['duration', 'INTEGER'],
+    ['meta', 'TEXT'],
+  ]
+  for (const [name, type] of extra) {
+    if (!have.has(name)) {
+      try {
+        await env.DB.prepare(`ALTER TABLE events ADD COLUMN ${name} ${type}`).run()
+      } catch {
+        // Колонка уже есть — миграция идемпотентна.
+      }
+    }
+  }
+
   await env.DB.prepare('CREATE INDEX IF NOT EXISTS events_ts ON events (ts)').run()
+  await env.DB.prepare('CREATE INDEX IF NOT EXISTS events_action ON events (action)').run()
+  await env.DB.prepare('CREATE INDEX IF NOT EXISTS events_session ON events (session)').run()
+  await env.DB.prepare('CREATE INDEX IF NOT EXISTS events_path ON events (path)').run()
   await env.DB.prepare(
     `CREATE TABLE IF NOT EXISTS settings (
        key TEXT PRIMARY KEY,
@@ -76,81 +117,21 @@ function clean(value, fallback = '') {
   return typeof value === 'string' ? value.slice(0, MAX_FIELD) : fallback
 }
 
+function cleanId(value) {
+  return typeof value === 'string' ? value.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 64) : ''
+}
+
+function cleanPath(value) {
+  const path = clean(value, '/').split('?')[0]
+  return path.startsWith('/') ? path : '/'
+}
+
 function now() {
   return Date.now()
 }
 
-/* ── авторизация ─────────────────────────────────────────────── */
+/* ── защита от CSRF для изменяющих запросов ──────────────────── */
 
-function timingSafeEqual(a, b) {
-  if (typeof a !== 'string' || typeof b !== 'string') return false
-  const left = a
-  const right = b.length === a.length ? b : a
-  let diff = a.length === b.length ? 0 : 1
-  for (let index = 0; index < Math.min(left.length, right.length); index++) {
-    diff |= left.charCodeAt(index) ^ right.charCodeAt(index)
-  }
-  return diff === 0
-}
-
-function bearer(request) {
-  const header = request.headers.get('Authorization') ?? ''
-  return header.startsWith('Bearer ') ? header.slice(7) : ''
-}
-
-function cookies(request) {
-  const header = request.headers.get('Cookie') ?? ''
-  const found = {}
-  for (const part of header.split(';')) {
-    const index = part.indexOf('=')
-    if (index < 0) continue
-    found[part.slice(0, index).trim()] = part.slice(index + 1).trim()
-  }
-  return found
-}
-
-function base64url(bytes) {
-  let binary = ''
-  for (const byte of new Uint8Array(bytes)) binary += String.fromCharCode(byte)
-  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
-}
-
-async function sign(env, payload) {
-  const key = await crypto.subtle.importKey(
-    'raw',
-    new TextEncoder().encode(env.ADMIN_TOKEN),
-    { name: 'HMAC', hash: 'SHA-256' },
-    false,
-    ['sign'],
-  )
-  const signature = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(payload))
-  return base64url(signature)
-}
-
-/** Проверяет cookie или Bearer-токен. Возвращает true/false. */
-async function authorized(request, env) {
-  if (!env.ADMIN_TOKEN) return false
-  if (timingSafeEqual(bearer(request), env.ADMIN_TOKEN)) return true
-
-  const value = cookies(request)[COOKIE_NAME]
-  if (!value) return false
-  const dot = value.lastIndexOf('.')
-  if (dot < 1) return false
-  const payload = value.slice(0, dot)
-  const signature = value.slice(dot + 1)
-  const expires = Number(payload)
-  if (!Number.isFinite(expires) || expires < now()) return false
-  const expected = await sign(env, payload)
-  return timingSafeEqual(signature, expected)
-}
-
-/** Cookie ставим только по HTTPS: по HTTP браузер её просто не сохранит. */
-function sessionCookie(request, value, maxAge) {
-  const secure = new URL(request.url).protocol === 'https:' ? '; Secure' : ''
-  return `${COOKIE_NAME}=${value}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${maxAge}${secure}`
-}
-
-/** Защита от CSRF для изменяющих запросов с cookie: Origin обязан совпасть. */
 function sameOrigin(request) {
   if (request.method === 'GET' || request.method === 'HEAD') return true
   const origin = request.headers.get('Origin')
@@ -196,11 +177,42 @@ async function collect(request, env) {
 
   const name = clean(body?.name)
   const action = clean(body?.action)
-  if (!name || !action) return cors(request, new Headers(), 400)
+  if (!name || !ACTIONS.has(action)) return cors(request, new Headers(), 400)
+
+  const meta =
+    body?.meta && typeof body.meta === 'object'
+      ? JSON.stringify(body.meta).slice(0, MAX_META)
+      : clean(body?.meta).slice(0, MAX_META)
+
+  const duration = Number(body?.duration)
+  const country = clean(request.cf?.country || body?.country)
 
   await ensureSchema(env)
-  await env.DB.prepare('INSERT INTO events (name, action, path, visitor, ts) VALUES (?, ?, ?, ?, ?)')
-    .bind(name, action, clean(body?.path, '/'), clean(body?.visitor), now())
+  await env.DB.prepare(
+    `INSERT INTO events
+       (name, action, path, visitor, session, ref, source, medium, campaign, lang, device, browser, os, screen, country, duration, meta, ts)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  )
+    .bind(
+      name,
+      action,
+      cleanPath(body?.path),
+      cleanId(body?.visitor),
+      cleanId(body?.session),
+      clean(body?.ref),
+      clean(body?.source, 'direct') || 'direct',
+      clean(body?.medium, 'none') || 'none',
+      clean(body?.campaign),
+      clean(body?.lang),
+      clean(body?.device),
+      clean(body?.browser),
+      clean(body?.os),
+      clean(body?.screen),
+      country,
+      Number.isFinite(duration) && duration >= 0 ? Math.min(Math.round(duration), 86400) : null,
+      meta,
+      now(),
+    )
     .run()
 
   return cors(request, new Headers(), 204)
@@ -233,69 +245,19 @@ async function overview(request, env) {
   return response
 }
 
-/* ── вход и выход ────────────────────────────────────────────── */
+/* ── открытый вход ───────────────────────────────────────────── */
 
-const attempts = new Map()
-const LOGIN_WINDOW_MS = 10 * 60 * 1000
-const LOGIN_LIMIT = 8
-
-function tooManyAttempts(request) {
-  const ip = request.headers.get('CF-Connecting-IP') ?? request.headers.get('X-Forwarded-For') ?? 'local'
-  const stamp = now()
-  const entry = attempts.get(ip)
-  if (!entry || stamp - entry.first > LOGIN_WINDOW_MS) return false
-  return entry.count >= LOGIN_LIMIT
+async function login() {
+  return json({ ok: true, open: true })
 }
 
-function noteAttempt(request) {
-  const ip = request.headers.get('CF-Connecting-IP') ?? request.headers.get('X-Forwarded-For') ?? 'local'
-  const stamp = now()
-  const entry = attempts.get(ip)
-  if (!entry || stamp - entry.first > LOGIN_WINDOW_MS) attempts.set(ip, { first: stamp, count: 1 })
-  else entry.count += 1
-}
-
-async function login(request, env) {
-  if (!env.ADMIN_TOKEN) return json({ error: 'ADMIN_TOKEN не настроен на сервере.' }, 503)
-  if (tooManyAttempts(request)) return json({ error: 'Слишком много попыток. Подождите 10 минут.' }, 429)
-
-  let body
-  try {
-    body = await request.json()
-  } catch {
-    return json({ error: 'Нужен JSON с ключом.' }, 400)
-  }
-
-  const given = typeof body?.token === 'string' ? body.token.trim() : ''
-  if (!given || !timingSafeEqual(given, env.ADMIN_TOKEN)) {
-    noteAttempt(request)
-    await new Promise((resolve) => setTimeout(resolve, 350))
-    return json({ error: 'Неверный ключ доступа.' }, 401)
-  }
-
-  await ensureSchema(env)
-  const expires = now() + SESSION_TTL_S * 1000
-  const payload = String(expires)
-  const value = `${payload}.${await sign(env, payload)}`
-  await audit(env, 'вход', 'новая сессия на 12 часов')
-
-  return json(
-    { ok: true, expiresAt: expires },
-    200,
-    { 'set-cookie': sessionCookie(request, value, SESSION_TTL_S) },
-  )
-}
-
-async function logout(request, env) {
-  const hadSession = await authorized(request, env)
-  if (hadSession) await audit(env, 'выход', '')
-  return json({ ok: true }, 200, { 'set-cookie': sessionCookie(request, '', 0) })
+async function logout() {
+  return json({ ok: true })
 }
 
 async function session(request, env) {
-  if (!env.ADMIN_TOKEN) return json({ error: 'ADMIN_TOKEN не настроен на сервере.' }, 503)
-  const ok = await authorized(request, env)
-  return json({ authenticated: ok }, ok ? 200 : 401)
+  await ensureSchema(env)
+  return json({ authenticated: true, open: true })
 }
 
 /* ── статистика ──────────────────────────────────────────────── */
@@ -308,35 +270,34 @@ function readDays(url, fallback) {
   return Math.min(MAX_PERIOD, Math.round(days))
 }
 
-const ACTION_NAMES = new Set(['view', 'open', 'done'])
-
 async function stats(request, env, url) {
-  if (!env.ADMIN_TOKEN) return json({ error: 'ADMIN_TOKEN не настроен на сервере.' }, 503)
-  if (!(await authorized(request, env))) return json({ error: 'Нужен вход в панель.' }, 401)
-
   await ensureSchema(env)
 
   const days = readDays(url, 14) || 14
   const since = days ? now() - days * 86400000 : 0
   const periodFilter = since ? ' WHERE ts >= ?' : ''
+  const args = since ? [since] : []
 
   const totals = await Promise.all([
     env.DB.prepare('SELECT COUNT(*) AS value FROM events').first(),
     env.DB.prepare('SELECT COUNT(DISTINCT visitor) AS value FROM events').first(),
+    env.DB.prepare('SELECT COUNT(DISTINCT session) AS value FROM events').first(),
     env.DB.prepare(
       "SELECT COUNT(*) AS value FROM events WHERE strftime('%Y-%m-%d', ts/1000, 'unixepoch') = strftime('%Y-%m-%d', 'now')",
     ).first(),
     env.DB.prepare('SELECT COUNT(*) AS value FROM events WHERE ts >= ?').bind(now() - 7 * 86400000).first(),
     env.DB.prepare('SELECT COUNT(*) AS value FROM events WHERE ts >= ?').bind(now() - 30 * 86400000).first(),
-    env.DB.prepare('SELECT COUNT(*) AS value FROM events WHERE ts >= ?').bind(since || 0).first(),
+    env.DB.prepare(`SELECT COUNT(*) AS value FROM events${periodFilter}`).bind(...args).first(),
     env.DB.prepare('SELECT MAX(ts) AS value FROM events').first(),
-    env.DB.prepare('SELECT MIN(ts) AS value FROM events').first(),
+    env.DB.prepare("SELECT COUNT(*) AS value FROM events WHERE action = 'error'").first(),
+    env.DB.prepare("SELECT AVG(duration) AS value FROM events WHERE action = 'leave' AND duration IS NOT NULL").first(),
   ])
 
   const series = await env.DB.prepare(
     `SELECT strftime('%Y-%m-%d', ts/1000, 'unixepoch') AS day,
             COUNT(*) AS total,
-            COUNT(DISTINCT visitor) AS people
+            COUNT(DISTINCT visitor) AS people,
+            COUNT(DISTINCT session) AS sessions
        FROM events
       ${periodFilter}
       GROUP BY day
@@ -350,29 +311,88 @@ async function stats(request, env, url) {
     `SELECT name,
             SUM(CASE WHEN action = 'open' THEN 1 ELSE 0 END) AS total,
             SUM(CASE WHEN action = 'done' THEN 1 ELSE 0 END) AS done,
+            SUM(CASE WHEN action = 'error' THEN 1 ELSE 0 END) AS errors,
             COUNT(DISTINCT visitor) AS people,
             MAX(ts) AS last
        FROM events
-      WHERE action IN ('open', 'done')${since ? ' AND ts >= ?' : ''}
+      WHERE action IN ('open', 'done', 'error')${since ? ' AND ts >= ?' : ''}
       GROUP BY name
       ORDER BY total DESC
-      LIMIT 40`,
+      LIMIT 60`,
   )
-    .bind(...(since ? [since] : []))
-    .all()
-
-  const actions = await env.DB.prepare(
-    `SELECT action, COUNT(*) AS total FROM events${periodFilter} GROUP BY action ORDER BY total DESC LIMIT 20`,
-  )
-    .bind(...(since ? [since] : []))
+    .bind(...args)
     .all()
 
   const pages = await env.DB.prepare(
-    `SELECT path, COUNT(*) AS total FROM events WHERE action = 'view'${since ? ' AND ts >= ?' : ''}
-      GROUP BY path ORDER BY total DESC LIMIT 20`,
+    `SELECT path, COUNT(*) AS total, COUNT(DISTINCT visitor) AS people
+       FROM events
+      WHERE action = 'view'${since ? ' AND ts >= ?' : ''}
+      GROUP BY path ORDER BY total DESC LIMIT 40`,
   )
-    .bind(...(since ? [since] : []))
+    .bind(...args)
     .all()
+
+  const sources = await env.DB.prepare(
+    `SELECT COALESCE(NULLIF(source, ''), 'direct') AS source, medium,
+            COUNT(*) AS total, COUNT(DISTINCT visitor) AS people
+       FROM events${periodFilter}
+      GROUP BY source, medium ORDER BY total DESC LIMIT 30`,
+  )
+    .bind(...args)
+    .all()
+
+  const devices = await env.DB.prepare(
+    `SELECT COALESCE(NULLIF(device, ''), 'unknown') AS device, COUNT(*) AS total,
+            COUNT(DISTINCT visitor) AS people
+       FROM events${periodFilter} GROUP BY device ORDER BY total DESC`,
+  )
+    .bind(...args)
+    .all()
+
+  const browsers = await env.DB.prepare(
+    `SELECT COALESCE(NULLIF(browser, ''), 'unknown') AS browser, COUNT(*) AS total
+       FROM events${periodFilter} GROUP BY browser ORDER BY total DESC LIMIT 12`,
+  )
+    .bind(...args)
+    .all()
+
+  const langs = await env.DB.prepare(
+    `SELECT COALESCE(NULLIF(lang, ''), 'unknown') AS lang, COUNT(*) AS total,
+            COUNT(DISTINCT visitor) AS people
+       FROM events${periodFilter} GROUP BY lang ORDER BY total DESC LIMIT 12`,
+  )
+    .bind(...args)
+    .all()
+
+  const countries = await env.DB.prepare(
+    `SELECT COALESCE(NULLIF(country, ''), '—') AS country, COUNT(*) AS total
+       FROM events${periodFilter} GROUP BY country ORDER BY total DESC LIMIT 20`,
+  )
+    .bind(...args)
+    .all()
+
+  const actions = await env.DB.prepare(
+    `SELECT action, COUNT(*) AS total FROM events${periodFilter} GROUP BY action ORDER BY total DESC`,
+  )
+    .bind(...args)
+    .all()
+
+  const errors = await env.DB.prepare(
+    `SELECT ts, path, device, browser, meta FROM events
+      WHERE action = 'error'${since ? ' AND ts >= ?' : ''}
+      ORDER BY id DESC LIMIT 25`,
+  )
+    .bind(...args)
+    .all()
+
+  const funnel = await env.DB.prepare(
+    `SELECT SUM(CASE WHEN action = 'view' THEN 1 ELSE 0 END) AS views,
+            SUM(CASE WHEN action = 'open' THEN 1 ELSE 0 END) AS opens,
+            SUM(CASE WHEN action = 'done' THEN 1 ELSE 0 END) AS dones
+       FROM events${periodFilter}`,
+  )
+    .bind(...args)
+    .first()
 
   const settings = await readSettings(env)
 
@@ -381,19 +401,79 @@ async function stats(request, env, url) {
     totals: {
       events: totals[0]?.value ?? 0,
       people: totals[1]?.value ?? 0,
-      today: totals[2]?.value ?? 0,
-      week: totals[3]?.value ?? 0,
-      month: totals[4]?.value ?? 0,
-      period: totals[5]?.value ?? 0,
-      last: totals[6]?.value ?? 0,
-      first: totals[7]?.value ?? 0,
+      sessions: totals[2]?.value ?? 0,
+      today: totals[3]?.value ?? 0,
+      week: totals[4]?.value ?? 0,
+      month: totals[5]?.value ?? 0,
+      period: totals[6]?.value ?? 0,
+      last: totals[7]?.value ?? 0,
+      errors: totals[8]?.value ?? 0,
+      avgDuration: Math.round(totals[9]?.value ?? 0),
     },
-    days: (series.results ?? []).reverse(),
+    series: (series.results ?? []).reverse(),
     tools: tools.results ?? [],
-    actions: actions.results ?? [],
     pages: pages.results ?? [],
+    sources: sources.results ?? [],
+    devices: devices.results ?? [],
+    browsers: browsers.results ?? [],
+    langs: langs.results ?? [],
+    countries: countries.results ?? [],
+    actions: actions.results ?? [],
+    errors: errors.results ?? [],
+    funnel: {
+      views: funnel?.views ?? 0,
+      opens: funnel?.opens ?? 0,
+      dones: funnel?.dones ?? 0,
+    },
     settings,
+    now: now(),
     updated: now(),
+  })
+}
+
+/* ── онлайн сейчас ───────────────────────────────────────────── */
+
+async function live(request, env) {
+  await ensureSchema(env)
+  const since = now() - LIVE_WINDOW_MS
+  const minuteSince = now() - 30 * 60 * 1000
+
+  const [people, sessions, events, pages, recent, minutes] = await Promise.all([
+    env.DB.prepare('SELECT COUNT(DISTINCT visitor) AS value FROM events WHERE ts >= ?').bind(since).first(),
+    env.DB.prepare('SELECT COUNT(DISTINCT session) AS value FROM events WHERE ts >= ?').bind(since).first(),
+    env.DB.prepare('SELECT COUNT(*) AS value FROM events WHERE ts >= ?').bind(since).first(),
+    env.DB.prepare(
+      `SELECT path, COUNT(*) AS total, COUNT(DISTINCT visitor) AS people
+         FROM events WHERE ts >= ? AND action IN ('view', 'open', 'done')
+        GROUP BY path ORDER BY total DESC LIMIT 12`,
+    )
+      .bind(since)
+      .all(),
+    env.DB.prepare(
+      `SELECT id, ts, name, action, path, device, browser, source, visitor, session, meta
+         FROM events WHERE ts >= ? ORDER BY id DESC LIMIT 30`,
+    )
+      .bind(since)
+      .all(),
+    env.DB.prepare(
+      `SELECT strftime('%H:%M', ts/1000, 'unixepoch') AS minute,
+              COUNT(*) AS total, COUNT(DISTINCT visitor) AS people
+         FROM events WHERE ts >= ?
+        GROUP BY minute ORDER BY minute ASC`,
+    )
+      .bind(minuteSince)
+      .all(),
+  ])
+
+  return json({
+    windowSeconds: LIVE_WINDOW_MS / 1000,
+    people: people?.value ?? 0,
+    sessions: sessions?.value ?? 0,
+    events: events?.value ?? 0,
+    pages: pages.results ?? [],
+    recent: recent.results ?? [],
+    minutes: minutes.results ?? [],
+    now: now(),
   })
 }
 
@@ -406,6 +486,8 @@ function likeQuery(value) {
 function eventFilters(url) {
   const days = readDays(url, 0)
   const action = url.searchParams.get('action') ?? ''
+  const device = url.searchParams.get('device') ?? ''
+  const lang = url.searchParams.get('lang') ?? ''
   const search = (url.searchParams.get('q') ?? '').trim().slice(0, 60)
   const where = []
   const args = []
@@ -413,23 +495,29 @@ function eventFilters(url) {
     where.push('ts >= ?')
     args.push(now() - days * 86400000)
   }
-  if (ACTION_NAMES.has(action)) {
+  if (ACTIONS.has(action)) {
     where.push('action = ?')
     args.push(action)
   }
-  if (search) {
-    where.push("(name LIKE ? ESCAPE '\\' OR path LIKE ? ESCAPE '\\' OR visitor LIKE ? ESCAPE '\\')")
-    const pattern = likeQuery(search)
-    args.push(pattern, pattern, pattern)
+  if (device) {
+    where.push('device = ?')
+    args.push(device)
   }
-  return { where: where.length ? ' WHERE ' + where.join(' AND ') : '', args, days, action, search }
+  if (lang) {
+    where.push('lang = ?')
+    args.push(lang)
+  }
+  if (search) {
+    where.push(
+      "(name LIKE ? ESCAPE '\\' OR path LIKE ? ESCAPE '\\' OR visitor LIKE ? ESCAPE '\\' OR session LIKE ? ESCAPE '\\' OR COALESCE(source, '') LIKE ? ESCAPE '\\')",
+    )
+    const pattern = likeQuery(search)
+    args.push(pattern, pattern, pattern, pattern, pattern)
+  }
+  return { where: where.length ? ' WHERE ' + where.join(' AND ') : '', args, days, action, device, lang, search }
 }
 
-/** Постраничный журнал: что именно происходило на сайте. */
 async function events(request, env, url) {
-  if (!env.ADMIN_TOKEN) return json({ error: 'ADMIN_TOKEN не настроен на сервере.' }, 503)
-  if (!(await authorized(request, env))) return json({ error: 'Нужен вход в панель.' }, 401)
-
   await ensureSchema(env)
 
   const filters = eventFilters(url)
@@ -441,7 +529,11 @@ async function events(request, env, url) {
     env.DB.prepare(`SELECT COUNT(*) AS value FROM events${filters.where}`)
       .bind(...filters.args)
       .first(),
-    env.DB.prepare(`SELECT id, ts, name, action, path, visitor FROM events${filters.where} ORDER BY id DESC LIMIT ? OFFSET ?`)
+    env.DB.prepare(
+      `SELECT id, ts, name, action, path, visitor, session, ref, source, medium, campaign,
+              lang, device, browser, os, screen, country, duration, meta
+         FROM events${filters.where} ORDER BY id DESC LIMIT ? OFFSET ?`,
+    )
       .bind(...filters.args, limit, offset)
       .all(),
   ])
@@ -453,7 +545,7 @@ async function events(request, env, url) {
     page,
     limit,
     pages: Math.max(1, Math.ceil(count / limit)),
-    filters: { days: filters.days, action: filters.action, q: filters.search },
+    filters: { days: filters.days, action: filters.action, device: filters.device, lang: filters.lang, q: filters.search },
   })
 }
 
@@ -462,26 +554,58 @@ function csvCell(value) {
   return /[";\n\r]/.test(text) ? '"' + text.replace(/"/g, '""') + '"' : text
 }
 
-const ACTION_LABEL = { open: 'открыл инструмент', done: 'получил файл', view: 'открыл страницу' }
-
-/** Выгрузка журнала в CSV: те же фильтры, что и в таблице. */
 async function exportCsv(request, env, url) {
-  if (!env.ADMIN_TOKEN) return json({ error: 'ADMIN_TOKEN не настроен на сервере.' }, 503)
-  if (!(await authorized(request, env))) return json({ error: 'Нужен вход в панель.' }, 401)
-
   await ensureSchema(env)
 
   const filters = eventFilters(url)
-  const rows = await env.DB.prepare(`SELECT ts, name, action, path, visitor FROM events${filters.where} ORDER BY id DESC LIMIT 20000`)
+  const rows = await env.DB.prepare(
+    `SELECT ts, name, action, path, source, medium, device, browser, os, lang, country,
+            visitor, session, duration, meta
+       FROM events${filters.where} ORDER BY id DESC LIMIT 50000`,
+  )
     .bind(...filters.args)
     .all()
 
-  const head = ['Дата (UTC)', 'Время (UTC)', 'Инструмент', 'Действие', 'Страница', 'Посетитель']
+  const head = [
+    'Дата (UTC)',
+    'Время (UTC)',
+    'Действие',
+    'Инструмент',
+    'Страница',
+    'Источник',
+    'Канал',
+    'Устройство',
+    'Браузер',
+    'ОС',
+    'Язык',
+    'Страна',
+    'Посетитель',
+    'Сессия',
+    'Секунд',
+    'Детали',
+  ]
   const lines = [head.join(';')]
   for (const row of rows.results ?? []) {
     const iso = new Date(row.ts).toISOString()
     lines.push(
-      [iso.slice(0, 10), iso.slice(11, 19), row.name, ACTION_LABEL[row.action] ?? row.action, row.path || '/', row.visitor]
+      [
+        iso.slice(0, 10),
+        iso.slice(11, 19),
+        ACTION_LABEL[row.action] ?? row.action,
+        row.name,
+        row.path || '/',
+        row.source || '',
+        row.medium || '',
+        row.device || '',
+        row.browser || '',
+        row.os || '',
+        row.lang || '',
+        row.country || '',
+        row.visitor || '',
+        row.session || '',
+        row.duration ?? '',
+        row.meta || '',
+      ]
         .map(csvCell)
         .join(';'),
     )
@@ -502,16 +626,22 @@ async function exportCsv(request, env, url) {
 /* ── настройки, очистка, аудит ───────────────────────────────── */
 
 async function settings(request, env) {
-  if (!env.ADMIN_TOKEN) return json({ error: 'ADMIN_TOKEN не настроен на сервере.' }, 503)
-  if (!(await authorized(request, env))) return json({ error: 'Нужен вход в панель.' }, 401)
   await ensureSchema(env)
 
   if (request.method === 'GET') {
-    const [current, count] = await Promise.all([
+    const [current, count, sessions, people] = await Promise.all([
       readSettings(env),
       env.DB.prepare('SELECT COUNT(*) AS value FROM events').first(),
+      env.DB.prepare('SELECT COUNT(DISTINCT session) AS value FROM events').first(),
+      env.DB.prepare('SELECT COUNT(DISTINCT visitor) AS value FROM events').first(),
     ])
-    return json({ ...current, events: count?.value ?? 0, updated: now() })
+    return json({
+      ...current,
+      events: count?.value ?? 0,
+      sessions: sessions?.value ?? 0,
+      people: people?.value ?? 0,
+      updated: now(),
+    })
   }
 
   let body
@@ -538,8 +668,6 @@ async function settings(request, env) {
 
 /** Удаляет события старше N дней (N=0 — все). Отмены нет, поэтому есть аудит. */
 async function purge(request, env) {
-  if (!env.ADMIN_TOKEN) return json({ error: 'ADMIN_TOKEN не настроен на сервере.' }, 503)
-  if (!(await authorized(request, env))) return json({ error: 'Нужен вход в панель.' }, 401)
   await ensureSchema(env)
 
   let body
@@ -562,8 +690,6 @@ async function purge(request, env) {
 }
 
 async function auditLog(request, env) {
-  if (!env.ADMIN_TOKEN) return json({ error: 'ADMIN_TOKEN не настроен на сервере.' }, 503)
-  if (!(await authorized(request, env))) return json({ error: 'Нужен вход в панель.' }, 401)
   await ensureSchema(env)
   const limit = Math.min(100, Math.max(1, Math.round(Number(new URL(request.url).searchParams.get('limit')) || 20)))
   const rows = await env.DB.prepare('SELECT at, action, detail FROM audit ORDER BY id DESC LIMIT ?').bind(limit).all()
@@ -571,7 +697,6 @@ async function auditLog(request, env) {
 }
 
 async function health(request, env) {
-  if (!(await authorized(request, env))) return json({ error: 'Нужен вход в панель.' }, 401)
   await ensureSchema(env)
   const [events, auditCount] = await Promise.all([
     env.DB.prepare('SELECT COUNT(*) AS value FROM events').first(),
@@ -581,7 +706,7 @@ async function health(request, env) {
     ok: true,
     events: events?.value ?? 0,
     audit: auditCount?.value ?? 0,
-    token: Boolean(env.ADMIN_TOKEN),
+    auth: 'open',
     now: now(),
   })
 }
@@ -603,6 +728,7 @@ export default {
       '/api/logout': () => logout(request, env),
       '/api/session': () => session(request, env),
       '/api/stats': () => stats(request, env, url),
+      '/api/live': () => live(request, env),
       '/api/events': () => events(request, env, url),
       '/api/export.csv': () => exportCsv(request, env, url),
       '/api/settings': () => settings(request, env),

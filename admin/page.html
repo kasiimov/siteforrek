@@ -17,16 +17,13 @@
     --line: #ddd7c9;
     --accent: #d4452a;
     --ok: #3f7a52;
+    --warn: #a4761f;
     --mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
   }
   * { box-sizing: border-box; }
   [hidden] { display: none !important; }
-  html { scroll-behavior: smooth; }
   body {
-    margin: 0;
-    min-height: 100vh;
-    color: var(--ink);
-    background: var(--paper);
+    margin: 0; min-height: 100vh; color: var(--ink); background: var(--paper);
     background-image: linear-gradient(to right, rgba(23,21,18,.035) 1px, transparent 1px);
     background-size: 76px 100%;
     font: 14px/1.55 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
@@ -37,293 +34,192 @@
   ::selection { background: rgba(212,69,42,.18); }
 
   .shell { display: grid; grid-template-columns: 220px minmax(0, 1fr); min-height: 100vh; }
-
-  /* ── левая рейка ─────────────────────────────── */
   .rail {
     position: sticky; top: 0; align-self: start; height: 100vh;
-    display: flex; flex-direction: column; gap: 30px;
-    padding: 30px 22px 26px;
-    border-right: 1px solid var(--line);
-    background: rgba(239,236,228,.72);
-    backdrop-filter: blur(6px);
+    display: flex; flex-direction: column; gap: 28px; padding: 28px 20px 24px;
+    border-right: 1px solid var(--line); background: rgba(239,236,228,.72); backdrop-filter: blur(6px);
   }
   .brand { display: flex; align-items: center; gap: 11px; text-decoration: none; }
   .brand-mark {
     display: grid; place-items: center; width: 30px; height: 30px;
-    background: var(--ink); color: var(--paper);
-    font: 600 15px/1 var(--mono); border-radius: 3px;
+    background: var(--ink); color: var(--paper); font: 600 15px/1 var(--mono); border-radius: 3px;
   }
   .brand-text b { display: block; font-size: 14px; letter-spacing: -.01em; }
-  .brand-text small {
-    display: block; font: 9px/1.4 var(--mono); letter-spacing: .2em;
-    text-transform: uppercase; color: var(--muted); margin-top: 2px;
-  }
+  .brand-text small { display: block; font: 9px/1.4 var(--mono); letter-spacing: .2em; text-transform: uppercase; color: var(--muted); margin-top: 2px; }
   .nav { display: flex; flex-direction: column; }
   .nav button {
-    display: flex; align-items: baseline; gap: 10px; width: 100%;
-    padding: 9px 0; background: none; border: 0; border-bottom: 1px solid transparent;
-    text-align: left; text-decoration: none; font-size: 13px; color: var(--ink-soft);
-    cursor: pointer; transition: color .15s;
+    display: flex; align-items: baseline; gap: 10px; width: 100%; padding: 9px 0;
+    background: none; border: 0; border-bottom: 1px solid transparent; text-align: left;
+    font-size: 13px; color: var(--ink-soft); cursor: pointer; transition: color .15s;
   }
-  .nav button i {
-    font: 9px/1 var(--mono); font-style: normal; letter-spacing: .1em; color: var(--muted);
-    min-width: 16px; transition: color .15s;
-  }
+  .nav button i { font: 9px/1 var(--mono); font-style: normal; letter-spacing: .1em; color: var(--muted); min-width: 16px; }
+  .nav button em { margin-left: auto; font: 9.5px/1 var(--mono); font-style: normal; color: var(--accent); }
   .nav button:hover, .nav button[aria-current="page"] { color: var(--accent); }
   .nav button:hover i, .nav button[aria-current="page"] i { color: var(--accent); }
-  .nav button em { margin-left: auto; font: 9px/1 var(--mono); color: var(--accent); }
   .rail-foot { margin-top: auto; display: grid; gap: 2px; }
-  .stamp {
-    margin: 0 0 6px; font: 9.5px/1.6 var(--mono); letter-spacing: .1em;
-    text-transform: uppercase; color: var(--muted);
-  }
+  .stamp { margin: 0 0 6px; font: 9.5px/1.6 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
   .ghost {
-    display: flex; align-items: center; justify-content: space-between; gap: 8px;
-    padding: 9px 0; background: none; border: 0; border-top: 1px solid var(--line);
-    cursor: pointer; text-align: left;
+    display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 9px 0;
+    background: none; border: 0; border-top: 1px solid var(--line); cursor: pointer; text-align: left;
     font: 10px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--ink-soft);
-    transition: color .15s;
   }
   .ghost:hover { color: var(--accent); }
   .ghost:disabled { opacity: .45; cursor: progress; }
   .ghost kbd { font: 9px var(--mono); color: var(--muted); border: 1px solid var(--line); padding: 2px 4px; border-radius: 2px; }
-
-  /* ── основная колонка ───────────────────────── */
-  main { padding: 42px 46px 90px; min-width: 0; }
-  .inner { max-width: 1140px; }
-
-  .eyebrow {
-    display: flex; align-items: center; gap: 9px; margin: 0 0 14px;
-    font: 10px/1 var(--mono); letter-spacing: .22em; text-transform: uppercase; color: var(--muted);
+  .open-badge {
+    display: inline-flex; align-items: center; gap: 6px; margin-bottom: 8px;
+    font: 9px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--ok);
   }
+  .open-badge::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 0 3px rgba(63,122,82,.12); }
+
+  main { padding: 40px 44px 90px; min-width: 0; }
+  .inner { max-width: 1180px; }
+  .eyebrow { display: flex; align-items: center; gap: 9px; margin: 0 0 12px; font: 10px/1 var(--mono); letter-spacing: .22em; text-transform: uppercase; color: var(--muted); }
   .eyebrow::before { content: ''; width: 6px; height: 6px; background: var(--accent); border-radius: 50%; }
-  h1 { margin: 0; font-size: 46px; font-weight: 500; letter-spacing: -.045em; line-height: 1.02; }
-  h1 em { font-family: Georgia, 'Times New Roman', serif; font-style: italic; font-weight: 400; letter-spacing: -.02em; }
-  .sub { margin: 14px 0 0; font-size: 12.5px; color: var(--muted); }
-  .sub span { color: var(--ink-soft); }
+  h1 { margin: 0; font-size: 44px; font-weight: 500; letter-spacing: -.045em; line-height: 1.03; }
+  h1 em { font-family: Georgia, 'Times New Roman', serif; font-style: italic; font-weight: 400; }
+  .sub { margin: 12px 0 0; font-size: 12.5px; color: var(--muted); }
 
-  /* ── полоса KPI ──────────────────────────────── */
-  .strip {
-    display: grid; grid-template-columns: 1.25fr 1fr 1fr 1fr;
-    margin: 34px 0 22px; border-top: 1px solid var(--ink); border-bottom: 1px solid var(--line);
-  }
-  .cell { padding: 18px 20px 16px; border-right: 1px solid var(--line); min-width: 0; }
+  .strip { display: grid; grid-template-columns: 1.3fr repeat(5, 1fr); margin: 30px 0 20px; border-top: 1px solid var(--ink); border-bottom: 1px solid var(--line); }
+  .cell { padding: 16px 16px 14px; border-right: 1px solid var(--line); min-width: 0; }
   .cell:first-child { padding-left: 0; }
   .cell:last-child { border-right: 0; }
-  .cell .label {
-    display: block; margin-bottom: 6px;
-    font: 9.5px/1 var(--mono); letter-spacing: .16em; text-transform: uppercase; color: var(--muted);
-  }
-  .cell b {
-    display: block; font: 500 34px/1.1 var(--mono); letter-spacing: -.05em;
-    font-variant-numeric: tabular-nums;
-  }
-  .cell.hero b { font-size: 54px; letter-spacing: -.06em; }
-  .cell .note, .cell .delta { display: block; margin-top: 6px; font-size: 11px; color: var(--muted); }
-  .delta.up { color: var(--accent); }
-  .delta.flat { color: var(--muted); }
+  .cell .label { display: block; margin-bottom: 6px; font: 9px/1.3 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+  .cell b { display: block; font: 500 28px/1.1 var(--mono); letter-spacing: -.05em; font-variant-numeric: tabular-nums; }
+  .cell.hero b { font-size: 42px; }
+  .cell .note { display: block; margin-top: 6px; font-size: 10.5px; color: var(--muted); }
 
-  /* ── панели ─────────────────────────────────── */
-  .panel {
-    background: var(--panel); border: 1px solid var(--line);
-    padding: 20px 22px 18px; margin-bottom: 18px;
-  }
-  .panel-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 16px; }
-  .panel-head h2 {
-    margin: 0; font: 10px/1 var(--mono); letter-spacing: .18em; text-transform: uppercase; color: var(--ink);
-  }
+  .grid2 { display: grid; grid-template-columns: minmax(0,1.4fr) minmax(0,1fr); gap: 18px; align-items: start; }
+  .grid3 { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 18px; align-items: start; }
+  .panel { background: var(--panel); border: 1px solid var(--line); padding: 18px 20px 16px; margin-bottom: 18px; min-width: 0; }
+  .panel-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
+  .panel-head h2 { margin: 0; font: 10px/1 var(--mono); letter-spacing: .18em; text-transform: uppercase; }
   .panel-head .hint { margin-left: auto; font-size: 10.5px; color: var(--muted); }
-  .empty { margin: 0; padding: 18px 0; font-size: 12px; color: var(--muted); }
-  .chart-body svg { display: block; width: 100%; height: auto; overflow: visible; }
-  .chart-body .grid { stroke: rgba(23,21,18,.09); stroke-dasharray: 3 5; }
-  .chart-body .line { fill: none; stroke: var(--ink); stroke-width: 1.6; stroke-linejoin: round; }
-  .chart-body .area { fill: var(--accent); fill-opacity: .1; }
-  .chart-body .dot { fill: var(--panel); stroke: var(--accent); stroke-width: 1.5; }
-  .chart-body .tick { fill: var(--muted); font: 9px var(--mono); }
+  .empty { margin: 0; padding: 14px 0; font-size: 12px; color: var(--muted); }
 
-  .duo { display: grid; grid-template-columns: minmax(0,1.35fr) minmax(0,1fr); gap: 18px; align-items: start; }
-  .duo .panel { margin-bottom: 18px; }
-
-  .ranks { display: flex; flex-direction: column; }
-  .row {
-    display: grid; grid-template-columns: 22px minmax(0,1fr) 46px 46px;
-    align-items: center; gap: 12px; padding: 9px 0;
-    border-bottom: 1px dashed var(--line);
-  }
-  .row.two { grid-template-columns: 22px minmax(0,1fr) 46px; }
-  .row:last-child { border-bottom: 0; }
-  .row .idx { font: 9.5px/1 var(--mono); color: var(--muted); }
-  .row .name { display: block; font-size: 13px; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .row .meter { position: relative; display: block; height: 4px; margin-top: 7px; background: rgba(23,21,18,.07); overflow: hidden; }
-  .row .meter u, .row .meter i { position: absolute; left: 0; top: 0; bottom: 0; transition: width .3s ease; }
-  .row .meter u { background: rgba(23,21,18,.3); }
-  .row .meter i { background: var(--accent); }
-  .row .n { text-align: right; }
-  .row .n b { display: block; font: 500 14px/1.2 var(--mono); font-variant-numeric: tabular-nums; }
-  .row .n small { font: 8.5px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
-
-  .actions { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 0; margin-top: 16px; border-top: 1px solid var(--ink); }
-  .action { padding: 12px 12px 2px 0; }
-  .action span { display: block; font: 9px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
-  .action b { display: block; margin-top: 6px; font: 500 22px/1 var(--mono); font-variant-numeric: tabular-nums; }
-  .action small { display: block; margin-top: 4px; font-size: 10.5px; color: var(--muted); }
-
-  /* ── сегменты периода ───────────────────────── */
-  .seg { display: inline-flex; border: 1px solid var(--line); background: var(--paper); }
-  .seg button {
-    padding: 7px 11px; border: 0; background: none; cursor: pointer;
-    font: 9.5px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--muted);
-    transition: background .15s, color .15s;
-  }
+  .seg { display: inline-flex; border: 1px solid var(--line); background: var(--paper); margin-left: auto; }
+  .seg button { padding: 6px 10px; border: 0; background: none; cursor: pointer; font: 9px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
   .seg button + button { border-left: 1px solid var(--line); }
-  .seg button:hover { color: var(--ink); }
   .seg button[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
 
-  /* ── журнал событий ─────────────────────────── */
-  .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 26px 0 14px; }
-  .toolbar .grow { flex: 1 1 200px; }
-  .control {
-    width: 100%; padding: 9px 11px; background: var(--panel);
-    border: 1px solid var(--line); border-radius: 2px; font-size: 12.5px; outline: none;
-    transition: border-color .15s;
-  }
-  .control:focus { border-color: var(--ink); }
-  .control[type="search"] { font-family: var(--mono); font-size: 11.5px; }
-  select.control { cursor: pointer; max-width: 190px; }
-  .search-wrap { position: relative; flex: 1 1 240px; }
-  .search-wrap .control { padding-right: 52px; }
-  .search-wrap kbd {
-    position: absolute; right: 9px; top: 50%; transform: translateY(-50%);
-    font: 9px var(--mono); color: var(--muted); border: 1px solid var(--line);
-    padding: 2px 5px; border-radius: 2px; background: var(--paper); pointer-events: none;
-  }
-  .check { display: inline-flex; align-items: center; gap: 7px; font-size: 11.5px; color: var(--muted); cursor: pointer; user-select: none; }
-  .check input { accent-color: var(--accent); }
-  .table-wrap { overflow-x: auto; border-top: 1px solid var(--ink); }
-  table.log { width: 100%; border-collapse: collapse; font-size: 12.5px; }
-  table.log th {
-    padding: 8px 10px 8px 0; text-align: left; white-space: nowrap;
-    font: 9px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--muted);
-    border-bottom: 1px solid var(--line);
-  }
-  table.log td { padding: 9px 10px 9px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
-  table.log tr:last-child td { border-bottom: 0; }
-  table.log td.time { font: 10.5px/1.6 var(--mono); color: var(--ink-soft); white-space: nowrap; }
-  table.log td.path, table.log td.visitor { font: 10.5px/1.6 var(--mono); color: var(--muted); word-break: break-all; }
-  table.log td.tool { font-weight: 500; }
-  .chip {
-    display: inline-block; padding: 2px 7px; border: 1px solid var(--line); border-radius: 2px;
-    font: 8.5px/1.6 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--ink-soft);
-    white-space: nowrap;
-  }
+  .chart { overflow: visible; }
+  .chart svg { display: block; width: 100%; height: auto; }
+  .chart .grid { stroke: rgba(23,21,18,.09); stroke-dasharray: 3 5; }
+  .chart .area { fill: var(--accent); fill-opacity: .1; }
+  .chart .line { fill: none; stroke: var(--ink); stroke-width: 1.6; }
+  .chart .dot { fill: var(--panel); stroke: var(--accent); stroke-width: 1.4; }
+  .chart .tick { fill: var(--muted); font: 9px var(--mono); }
+  .chart .bar { fill: rgba(23,21,18,.3); }
+  .chart .bar.is-now { fill: var(--accent); }
+
+  .ranks { display: flex; flex-direction: column; }
+  .row { display: grid; grid-template-columns: 20px minmax(0,1fr) 52px 52px; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px dashed var(--line); }
+  .row.two { grid-template-columns: 20px minmax(0,1fr) 60px; }
+  .row:last-child { border-bottom: 0; }
+  .row .idx { font: 9px/1 var(--mono); color: var(--muted); }
+  .row .name { display: block; font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .row .meter { position: relative; display: block; height: 4px; margin-top: 6px; background: rgba(23,21,18,.07); overflow: hidden; }
+  .row .meter u { position: absolute; inset: 0 auto 0 0; background: var(--accent); }
+  .row .n { text-align: right; }
+  .row .n b { display: block; font: 500 13px/1.2 var(--mono); font-variant-numeric: tabular-nums; }
+  .row .n small { font: 8px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+
+  .funnel { display: flex; flex-direction: column; gap: 10px; }
+  .funnel-step { display: grid; grid-template-columns: 86px minmax(0,1fr) 72px; gap: 10px; align-items: center; font-size: 12px; }
+  .funnel-step .bar { height: 22px; background: rgba(23,21,18,.06); position: relative; overflow: hidden; }
+  .funnel-step .bar u { position: absolute; inset: 0 auto 0 0; background: var(--ink); }
+  .funnel-step:nth-child(2) .bar u { background: var(--warn); }
+  .funnel-step:nth-child(3) .bar u { background: var(--accent); }
+  .funnel-step b { text-align: right; font: 500 13px/1 var(--mono); }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { display: inline-block; padding: 3px 8px; border: 1px solid var(--line); border-radius: 2px; font: 9px/1.6 var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--ink-soft); white-space: nowrap; }
   .chip.done { border-color: rgba(63,122,82,.4); color: var(--ok); }
-  .chip.open { border-color: rgba(212,69,42,.35); color: var(--accent); }
-  .pager { display: flex; align-items: center; gap: 12px; margin-top: 16px; flex-wrap: wrap; }
-  .pager .info { font: 10px/1 var(--mono); letter-spacing: .08em; color: var(--muted); }
-  .pager .btn {
-    padding: 8px 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 2px;
-    cursor: pointer; font: 9.5px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--ink-soft);
-    transition: border-color .15s, color .15s;
-  }
-  .pager .btn:hover:not(:disabled) { border-color: var(--ink); color: var(--ink); }
-  .pager .btn:disabled { opacity: .4; cursor: default; }
-  .pager .spacer { flex: 1; }
+  .chip.error { border-color: rgba(212,69,42,.4); color: var(--accent); }
+  .chip.muted { color: var(--muted); }
 
-  /* ── настройки ──────────────────────────────── */
-  .settings-grid { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 18px; align-items: start; }
-  .field { display: grid; gap: 7px; margin-bottom: 14px; }
-  .field span { font: 9.5px/1 var(--mono); letter-spacing: .16em; text-transform: uppercase; color: var(--muted); }
-  .field .hint { font-size: 11px; line-height: 1.5; color: var(--muted); letter-spacing: 0; text-transform: none; }
-  .field input {
-    width: 100%; padding: 11px 12px; background: var(--paper);
-    border: 1px solid var(--line); border-radius: 2px; font-family: var(--mono); font-size: 13px;
-    outline: none; transition: border-color .15s;
-  }
-  .field input:focus { border-color: var(--ink); }
-  .solid {
-    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-    padding: 12px 18px; border: 0; border-radius: 2px; cursor: pointer;
-    background: var(--ink); color: var(--paper);
-    font: 10px/1 var(--mono); letter-spacing: .18em; text-transform: uppercase;
-    transition: background .15s;
-  }
-  .solid:hover { background: var(--accent); }
-  .solid:disabled { opacity: .5; cursor: progress; }
-  .solid.danger { background: var(--accent); }
-  .solid.danger:hover { background: #b2341d; }
-  .danger-note { margin: 10px 0 0; font-size: 11.5px; line-height: 1.6; color: var(--accent); }
-  .audit { display: flex; flex-direction: column; }
-  .audit-row { display: grid; grid-template-columns: 86px minmax(0,1fr); gap: 10px; padding: 8px 0; border-bottom: 1px dashed var(--line); font-size: 12px; }
-  .audit-row:last-child { border-bottom: 0; }
-  .audit-row time { font: 10px/1.7 var(--mono); color: var(--muted); }
+  .errors { display: grid; gap: 9px; max-height: 260px; overflow: auto; }
+  .error-row { display: grid; grid-template-columns: 52px minmax(0,1fr); gap: 9px; font-size: 11.5px; }
+  .error-row time { font: 9.5px/1.7 var(--mono); color: var(--muted); }
+  .error-row b { display: block; font-weight: 500; font-size: 12px; word-break: break-word; }
+  .error-row small { color: var(--muted); font: 9.5px/1.6 var(--mono); }
+
+  .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 9px; margin: 24px 0 12px; }
+  .control { width: 100%; padding: 8px 10px; background: var(--panel); border: 1px solid var(--line); border-radius: 2px; font-size: 12px; outline: none; }
+  .control:focus { border-color: var(--ink); }
+  select.control { cursor: pointer; width: auto; min-width: 120px; }
+  .search-wrap { position: relative; flex: 1 1 230px; }
+  .search-wrap kbd { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); font: 9px var(--mono); color: var(--muted); border: 1px solid var(--line); padding: 1px 4px; background: var(--paper); pointer-events: none; }
+  .btn { padding: 8px 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 2px; cursor: pointer; font: 10px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; }
+  .btn:hover { border-color: var(--ink); }
+  .btn:disabled { opacity: .45; cursor: progress; }
+  .check { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; color: var(--muted); cursor: pointer; }
+  .check input { accent-color: var(--accent); }
+
+  .table-wrap { overflow-x: auto; border-top: 1px solid var(--ink); }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th { padding: 8px 10px 8px 0; text-align: left; white-space: nowrap; font: 9px/1 var(--mono); letter-spacing: .13em; text-transform: uppercase; color: var(--muted); border-bottom: 1px solid var(--line); }
+  td { padding: 8px 10px 8px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+  tr:last-child td { border-bottom: 0; }
+  td.time { font: 10px/1.6 var(--mono); color: var(--ink-soft); white-space: nowrap; }
+  td.mono { font: 10px/1.6 var(--mono); color: var(--muted); word-break: break-word; }
+  td.num { text-align: right; font: 11px/1.6 var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .pager { display: flex; align-items: center; gap: 8px; padding-top: 12px; }
+  .pager .info { margin-left: auto; font: 10px/1 var(--mono); color: var(--muted); }
+
+  .settings-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 18px; }
+  .field { display: grid; gap: 5px; margin-bottom: 12px; }
+  .field > span:first-child { font: 9px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+  .field .hint { font-size: 10.5px; color: var(--muted); }
+  .solid { padding: 9px 14px; border: 1px solid var(--ink); background: var(--ink); color: var(--paper); border-radius: 2px; cursor: pointer; font: 10px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; }
+  .solid:hover { background: var(--accent); border-color: var(--accent); }
+  .solid.danger { background: transparent; color: var(--accent); border-color: rgba(212,69,42,.5); }
+  .solid.danger:hover { background: var(--accent); color: var(--paper); }
+  .fine { margin: 10px 0 0; font-size: 10.5px; color: var(--muted); }
+  .danger-note { margin: 10px 0 0; font-size: 11px; color: var(--accent); }
+  .audit { display: grid; gap: 7px; }
+  .audit-row { display: grid; grid-template-columns: 118px minmax(0,1fr); gap: 10px; font-size: 11.5px; border-bottom: 1px dashed var(--line); padding-bottom: 7px; }
+  .audit-row time { font: 9.5px/1.7 var(--mono); color: var(--muted); }
   .audit-row b { font-weight: 500; }
-  .audit-row small { display: block; color: var(--muted); font-size: 11px; }
 
-  /* ── вход ───────────────────────────────────── */
-  .gate { max-width: 400px; margin: 7vh 0 0; }
-  .gate h1 { font-size: 34px; }
-  .gate .panel { padding: 22px; margin-top: 24px; }
-  .fine { margin: 14px 0 0; font-size: 11px; line-height: 1.6; color: var(--muted); }
-  .error { margin: 12px 0 0; font-size: 12px; color: var(--accent); }
+  .feed { display: grid; gap: 7px; max-height: 420px; overflow: auto; }
+  .feed-row { display: grid; grid-template-columns: 52px 76px minmax(0,1fr); gap: 8px; padding-bottom: 6px; border-bottom: 1px dashed var(--line); font-size: 11.5px; }
+  .feed-row time { font: 9.5px/1.7 var(--mono); color: var(--muted); }
+  .feed-row .what { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .feed-row small { display: block; color: var(--muted); font: 9px/1.5 var(--mono); }
 
-  /* ── тост ───────────────────────────────────── */
   .toast {
-    position: fixed; left: 50%; bottom: 26px; transform: translateX(-50%);
-    z-index: 40; max-width: min(440px, calc(100vw - 32px));
-    padding: 11px 16px; border-radius: 3px;
-    background: var(--ink); color: var(--paper);
-    font: 11px/1.5 var(--mono); letter-spacing: .04em;
-    box-shadow: 0 8px 26px rgba(23,21,18,.18);
+    position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%);
+    padding: 10px 16px; background: var(--ink); color: var(--paper);
+    font: 11px/1.4 var(--mono); border-radius: 3px; z-index: 40; max-width: min(92vw, 520px);
   }
   .toast.bad { background: var(--accent); }
 
-  @media (max-width: 1024px) {
-    .shell { grid-template-columns: 1fr; }
-    .rail {
-      position: static; height: auto; flex-direction: row; align-items: center; gap: 18px;
-      padding: 14px 18px; border-right: 0; border-bottom: 1px solid var(--line);
-    }
-    .brand-text small { display: none; }
-    .nav { flex-direction: row; gap: 16px; margin-left: auto; overflow-x: auto; }
-    .nav button { border-bottom: 0; padding: 0; white-space: nowrap; width: auto; }
-    .nav button i { display: none; }
-    .rail-foot { margin: 0; display: flex; gap: 14px; align-items: center; }
-    .stamp, .rail-foot .desktop-only { display: none; }
-    .ghost { border-top: 0; padding: 0; white-space: nowrap; }
-    main { padding: 30px 22px 70px; }
-    h1 { font-size: 34px; }
-    .strip { grid-template-columns: 1fr 1fr; }
-    .cell { padding: 16px 16px 14px; }
-    .cell:nth-child(2n) { border-right: 0; }
-    .cell:first-child { padding-left: 16px; }
-    .cell.hero b { font-size: 40px; }
-    .duo, .settings-grid { grid-template-columns: 1fr; }
+  @media (max-width: 1080px) {
+    .strip { grid-template-columns: repeat(3, 1fr); }
+    .cell:nth-child(3) { border-right: 0; }
+    .cell:nth-child(n + 4) { border-top: 1px solid var(--line); }
+    .grid2, .grid3, .settings-grid { grid-template-columns: 1fr; }
   }
-  @media (max-width: 680px) {
-    .rail { justify-content: space-between; flex-wrap: wrap; gap: 10px 14px; padding: 13px 16px; }
-    .nav { margin-left: 0; gap: 12px; width: 100%; order: 3; }
-    .nav button { font-size: 12px; }
-    .rail-foot { gap: 12px; }
-    .ghost { font-size: 9px; letter-spacing: .08em; }
+  @media (max-width: 720px) {
+    .shell { grid-template-columns: 1fr; }
+    .rail { position: static; height: auto; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 12px 18px; padding: 14px 16px; border-right: 0; border-bottom: 1px solid var(--line); }
+    .brand { margin-right: auto; }
+    .nav { flex-direction: row; flex-wrap: wrap; gap: 0 14px; }
+    .rail-foot { margin: 0; display: flex; flex-wrap: wrap; gap: 12px; width: 100%; }
+    .rail-foot .stamp, .rail-foot .open-badge { display: none; }
+    .ghost { border-top: 0; padding: 4px 0; }
     main { padding: 24px 16px 60px; }
     h1 { font-size: 30px; }
-    .sub { font-size: 12px; }
-    .strip { margin: 24px 0 18px; }
-    .cell { padding: 14px 12px 12px; }
+    .strip { grid-template-columns: repeat(2, 1fr); margin-top: 22px; }
+    .cell { padding: 12px 12px 10px; }
     .cell:first-child { padding-left: 12px; }
-    .cell b { font-size: 27px; }
-    .cell.hero b { font-size: 36px; }
+    .cell:nth-child(2n) { border-right: 0; }
     .cell:nth-child(n + 3) { border-top: 1px solid var(--line); }
-    .panel { padding: 16px 14px 12px; }
-    .panel-head { flex-wrap: wrap; gap: 4px 10px; }
-    .panel-head .hint { margin-left: 0; }
-    .row { grid-template-columns: 18px minmax(0,1fr) 40px 40px; gap: 9px; }
-    .row.two { grid-template-columns: 18px minmax(0,1fr) 40px; }
-    .action { padding-right: 8px; }
-    .action b { font-size: 19px; }
-    select.control { max-width: none; flex: 1 1 130px; }
-    table.log th.hide-m, table.log td.hide-m { display: none; }
-    .toast { bottom: 16px; }
+    .cell.hero b { font-size: 30px; }
+    .cell b { font-size: 24px; }
+    td.hide-m, th.hide-m { display: none; }
+    .funnel-step { grid-template-columns: 70px minmax(0,1fr) 58px; }
   }
 </style>
 </head>
@@ -335,179 +231,332 @@
       <span class="brand-text"><b>Congix Docs</b><small>админка</small></span>
     </a>
 
-    <nav class="nav" id="nav" hidden aria-label="Разделы админки">
+    <nav class="nav" id="nav" aria-label="Разделы админки">
       <button type="button" data-tab="overview"><i>01</i>Сводка</button>
-      <button type="button" data-tab="events"><i>02</i>События</button>
-      <button type="button" data-tab="settings"><i>03</i>Настройки</button>
+      <button type="button" data-tab="live"><i>02</i>Онлайн<em id="navLive">0</em></button>
+      <button type="button" data-tab="tools"><i>03</i>Инструменты</button>
+      <button type="button" data-tab="audience"><i>04</i>Аудитория</button>
+      <button type="button" data-tab="events"><i>05</i>Журнал</button>
+      <button type="button" data-tab="settings"><i>06</i>Настройки</button>
     </nav>
 
     <div class="rail-foot">
-      <p class="stamp" id="stamp" hidden>—</p>
-      <button class="ghost desktop-only" id="refresh" hidden>Обновить <kbd>R</kbd></button>
-      <button class="ghost" id="csv" hidden>CSV ↓</button>
-      <button class="ghost" id="logout" hidden>Выйти</button>
+      <span class="open-badge">открытый вход</span>
+      <p class="stamp" id="stamp">—</p>
+      <button class="ghost" id="refresh">Обновить <kbd>R</kbd></button>
+      <button class="ghost" id="csv">CSV ↓</button>
     </div>
   </aside>
 
   <main>
     <div class="inner">
-      <section class="gate" id="login">
-        <p class="eyebrow">вход · только для владельца</p>
-        <h1>Служебный<br /><em>доступ</em></h1>
-        <form class="panel" id="loginForm" novalidate>
-          <label class="field">
-            <span>Ключ доступа</span>
-            <input id="token" type="password" placeholder="ADMIN_TOKEN" autocomplete="current-password" spellcheck="false" />
-          </label>
-          <button class="solid" id="enter" type="submit" style="width:100%">Открыть панель</button>
-          <p class="error" id="loginError" hidden></p>
-          <p class="fine">Ключ живёт в секрете <span style="font-family:var(--mono)">ADMIN_TOKEN</span>. После входа браузер получает закрытую сессию на 12 часов — сам ключ в нём не хранится.</p>
-        </form>
+      <header>
+        <p class="eyebrow" id="eyebrow">обзор · всё сразу</p>
+        <h1 id="title">Пульт <em>Congix Docs</em></h1>
+        <p class="sub" id="range">—</p>
+      </header>
+
+      <!-- ── сводка ─────────────────────────────────────────── -->
+      <section id="viewOverview">
+        <section class="strip">
+          <div class="cell hero">
+            <span class="label">Событий сегодня</span>
+            <b id="kToday">0</b>
+            <span class="note" id="kTodayNote">—</span>
+          </div>
+          <div class="cell">
+            <span class="label">Людей</span>
+            <b id="kPeople">0</b>
+            <span class="note" id="kPeopleNote">—</span>
+          </div>
+          <div class="cell">
+            <span class="label">Сессий</span>
+            <b id="kSessions">0</b>
+            <span class="note" id="kSessionsNote">—</span>
+          </div>
+          <div class="cell">
+            <span class="label">Дошли до файла</span>
+            <b id="kConv">—</b>
+            <span class="note">open → done</span>
+          </div>
+          <div class="cell">
+            <span class="label">Среднее на странице</span>
+            <b id="kTime">—</b>
+            <span class="note">по событию leave</span>
+          </div>
+          <div class="cell">
+            <span class="label">Ошибок</span>
+            <b id="kErrors">0</b>
+            <span class="note">за всё время</span>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <h2>Активность</h2>
+            <div class="seg" id="periodSeg" role="group" aria-label="Период графика">
+              <button type="button" data-days="7">7 дней</button>
+              <button type="button" data-days="14">14 дней</button>
+              <button type="button" data-days="30">30 дней</button>
+              <button type="button" data-days="90">90 дней</button>
+            </div>
+            <span class="hint" id="chartHint">события по дням</span>
+          </div>
+          <div class="chart" id="chart"></div>
+        </section>
+
+        <div class="grid2">
+          <section class="panel">
+            <div class="panel-head"><h2>Воронка</h2><span class="hint">от визита до файла</span></div>
+            <div class="funnel" id="funnel"></div>
+          </section>
+          <section class="panel">
+            <div class="panel-head"><h2>Ошибки</h2><span class="hint">последние 25</span></div>
+            <div class="errors" id="errors"></div>
+          </section>
+        </div>
+
+        <div class="grid2">
+          <section class="panel">
+            <div class="panel-head"><h2>Инструменты</h2><span class="hint" id="toolsHint">кто чем пользуется</span></div>
+            <div class="ranks" id="toolList"></div>
+          </section>
+          <section class="panel">
+            <div class="panel-head"><h2>Страницы</h2><span class="hint">просмотры</span></div>
+            <div class="ranks" id="pageList"></div>
+          </section>
+        </div>
+
+        <div class="grid3">
+          <section class="panel">
+            <div class="panel-head"><h2>Источники</h2></div>
+            <div class="ranks" id="sourceList"></div>
+          </section>
+          <section class="panel">
+            <div class="panel-head"><h2>Устройства</h2></div>
+            <div class="ranks" id="deviceList"></div>
+            <div class="chips" id="browserChips" style="margin-top:12px"></div>
+          </section>
+          <section class="panel">
+            <div class="panel-head"><h2>Языки</h2></div>
+            <div class="ranks" id="langList"></div>
+            <div class="chips" id="countryChips" style="margin-top:12px"></div>
+          </section>
+        </div>
       </section>
 
-      <div id="app" hidden>
-        <header>
-          <p class="eyebrow" id="eyebrow">обзор · сегодня</p>
-          <h1 id="title">Пульт <em>Congix Docs</em></h1>
-          <p class="sub" id="range">—</p>
-        </header>
+      <!-- ── онлайн ────────────────────────────────────────── -->
+      <section id="viewLive" hidden>
+        <section class="strip">
+          <div class="cell hero">
+            <span class="label">Сейчас на сайте</span>
+            <b id="livePeople">0</b>
+            <span class="note">уникальных за 5 минут</span>
+          </div>
+          <div class="cell">
+            <span class="label">Сессий</span>
+            <b id="liveSessions">0</b>
+            <span class="note">за 5 минут</span>
+          </div>
+          <div class="cell">
+            <span class="label">Событий</span>
+            <b id="liveEvents">0</b>
+            <span class="note">за 5 минут</span>
+          </div>
+          <div class="cell">
+            <span class="label">Активных страниц</span>
+            <b id="livePages">0</b>
+            <span class="note">за 5 минут</span>
+          </div>
+          <div class="cell">
+            <span class="label">Обновление</span>
+            <b style="font-size:18px">10 с</b>
+            <span class="note">пока вкладка открыта</span>
+          </div>
+          <div class="cell">
+            <span class="label">Последнее событие</span>
+            <b id="liveLast" style="font-size:18px">—</b>
+            <span class="note">по времени сервера</span>
+          </div>
+        </section>
 
-        <!-- ── сводка ───────────────────────────── -->
-        <section id="viewOverview">
-          <section class="strip">
-            <div class="cell hero">
-              <span class="label">Событий сегодня</span>
-              <b id="kToday">0</b>
-              <span class="delta flat" id="kDelta">—</span>
-            </div>
-            <div class="cell">
-              <span class="label">Людей всего</span>
-              <b id="kPeople">0</b>
-              <span class="note">по уникальным посетителям</span>
-            </div>
-            <div class="cell">
-              <span class="label">За 7 дней</span>
-              <b id="kWeek">0</b>
-              <span class="note" id="kAvg">—</span>
-            </div>
-            <div class="cell">
-              <span class="label">Дошли до файла</span>
-              <b id="kConv">—</b>
-              <span class="note">открыл инструмент → сохранил</span>
-            </div>
+        <section class="panel">
+          <div class="panel-head"><h2>Последние 30 минут</h2><span class="hint">события по минутам</span></div>
+          <div class="chart" id="liveChart"></div>
+        </section>
+
+        <div class="grid2">
+          <section class="panel">
+            <div class="panel-head"><h2>Где сейчас люди</h2><span class="hint">страницы за 5 минут</span></div>
+            <div class="ranks" id="livePageList"></div>
+          </section>
+          <section class="panel">
+            <div class="panel-head"><h2>Поток</h2><span class="hint">последние 30 событий</span></div>
+            <div class="feed" id="liveFeed"></div>
+          </section>
+        </div>
+      </section>
+
+      <!-- ── инструменты ───────────────────────────────────── -->
+      <section id="viewTools" hidden>
+        <div class="toolbar">
+          <button class="btn" data-days-tools="7" type="button">7 дней</button>
+          <button class="btn" data-days-tools="30" type="button">30 дней</button>
+          <button class="btn" data-days-tools="90" type="button">90 дней</button>
+          <button class="btn" data-days-tools="0" type="button">Всё время</button>
+        </div>
+        <div class="panel" style="padding-top:0">
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Инструмент</th>
+                  <th class="num">Открыли</th>
+                  <th class="num">Получили файл</th>
+                  <th class="num">Конверсия</th>
+                  <th class="num">Ошибки</th>
+                  <th class="num hide-m">Людей</th>
+                  <th class="num hide-m">Последний раз</th>
+                </tr>
+              </thead>
+              <tbody id="toolBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── аудитория ─────────────────────────────────────── -->
+      <section id="viewAudience" hidden>
+        <div class="grid2">
+          <section class="panel">
+            <div class="panel-head"><h2>Страницы</h2><span class="hint">просмотры и люди</span></div>
+            <div class="ranks" id="audPages"></div>
+          </section>
+          <section class="panel">
+            <div class="panel-head"><h2>Источники</h2><span class="hint">откуда пришли</span></div>
+            <div class="ranks" id="audSources"></div>
+          </section>
+        </div>
+        <div class="grid3">
+          <section class="panel">
+            <div class="panel-head"><h2>Устройства</h2></div>
+            <div class="ranks" id="audDevices"></div>
+          </section>
+          <section class="panel">
+            <div class="panel-head"><h2>Браузеры</h2></div>
+            <div class="chips" id="audBrowsers"></div>
+            <h2 style="margin:18px 0 10px;font:10px/1 var(--mono);letter-spacing:.18em;text-transform:uppercase">Языки</h2>
+            <div class="chips" id="audLangs"></div>
+          </section>
+          <section class="panel">
+            <div class="panel-head"><h2>Страны</h2><span class="hint">по Cloudflare</span></div>
+            <div class="chips" id="audCountries"></div>
+          </section>
+        </div>
+      </section>
+
+      <!-- ── журнал ────────────────────────────────────────── -->
+      <section id="viewEvents" hidden>
+        <div class="toolbar">
+          <select class="control" id="evDays" aria-label="Период">
+            <option value="1">Сутки</option>
+            <option value="7" selected>7 дней</option>
+            <option value="30">30 дней</option>
+            <option value="90">90 дней</option>
+            <option value="0">Всё время</option>
+          </select>
+          <select class="control" id="evAction" aria-label="Действие">
+            <option value="">Все действия</option>
+            <option value="view">Открыл страницу</option>
+            <option value="open">Открыл инструмент</option>
+            <option value="done">Получил файл</option>
+            <option value="error">Ошибка</option>
+            <option value="leave">Ушёл со страницы</option>
+            <option value="session">Новая сессия</option>
+          </select>
+          <select class="control" id="evDevice" aria-label="Устройство">
+            <option value="">Все устройства</option>
+            <option value="desktop">Компьютер</option>
+            <option value="mobile">Телефон</option>
+            <option value="tablet">Планшет</option>
+          </select>
+          <select class="control" id="evLang" aria-label="Язык">
+            <option value="">Все языки</option>
+            <option value="ru">ru</option>
+            <option value="uz">uz</option>
+            <option value="en">en</option>
+          </select>
+          <span class="search-wrap">
+            <input class="control" id="evSearch" type="search" placeholder="инструмент, страница, источник, сессия" aria-label="Поиск по журналу" />
+            <kbd>/</kbd>
+          </span>
+          <button class="btn" id="evReset" type="button">Сбросить</button>
+          <label class="check"><input type="checkbox" id="autoRefresh" checked /> автообновление</label>
+        </div>
+
+        <div class="panel" style="padding-top:0">
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th style="width:92px">Время</th>
+                  <th style="width:132px">Действие</th>
+                  <th>Инструмент / детали</th>
+                  <th class="hide-m">Страница</th>
+                  <th class="hide-m">Откуда</th>
+                  <th class="hide-m">Устройство</th>
+                  <th class="hide-m">Сессия</th>
+                </tr>
+              </thead>
+              <tbody id="evBody"></tbody>
+            </table>
+          </div>
+          <div class="pager">
+            <button class="btn" id="evPrev" type="button">← Назад</button>
+            <button class="btn" id="evNext" type="button">Вперёд →</button>
+            <span class="info" id="evInfo">—</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── настройки ─────────────────────────────────────── -->
+      <section id="viewSettings" hidden>
+        <div class="settings-grid">
+          <section class="panel">
+            <div class="panel-head"><h2>Хранение событий</h2><span class="hint">сколько держим статистику</span></div>
+            <label class="field">
+              <span>Дней</span>
+              <input class="control" id="retention" type="number" min="0" max="3650" step="1" inputmode="numeric" />
+              <span class="hint">0 — хранить всё время. По умолчанию 90 дней.</span>
+            </label>
+            <button class="solid" id="saveSettings" type="button">Сохранить</button>
+            <p class="fine" id="settingsStamp">—</p>
           </section>
 
           <section class="panel">
-            <div class="panel-head">
-              <h2>Активность</h2>
-              <div class="seg" id="periodSeg" role="group" aria-label="Период графика">
-                <button type="button" data-days="7">7 дней</button>
-                <button type="button" data-days="14">14 дней</button>
-                <button type="button" data-days="30">30 дней</button>
-                <button type="button" data-days="90">90 дней</button>
-              </div>
-              <span class="hint" id="chartHint">события по дням</span>
-            </div>
-            <div class="chart-body" id="chart"></div>
+            <div class="panel-head"><h2>Очистка</h2><span class="hint">необратимо</span></div>
+            <label class="field">
+              <span>Удалить события старше</span>
+              <input class="control" id="purgeDays" type="number" min="0" max="3650" step="1" inputmode="numeric" />
+              <span class="hint">0 — удалить всю статистику. Журнал действий останется.</span>
+            </label>
+            <button class="solid danger" id="purge" type="button">Удалить</button>
+            <p class="danger-note" id="purgeNote" hidden></p>
+            <p class="fine" id="dbStamp">—</p>
           </section>
+        </div>
 
-          <div class="duo">
-            <section class="panel" id="tools">
-              <div class="panel-head"><h2>Инструменты</h2><span class="hint" id="toolsHint">кто чем пользуется</span></div>
-              <div class="ranks" id="toolList"></div>
-            </section>
-
-            <div>
-              <section class="panel" id="audience">
-                <div class="panel-head"><h2>Страницы</h2><span class="hint">просмотры</span></div>
-                <div class="ranks" id="pageList"></div>
-                <div class="actions" id="actionList"></div>
-              </section>
-            </div>
-          </div>
-        </section>
-
-        <!-- ── события ──────────────────────────── -->
-        <section id="viewEvents" hidden>
-          <div class="toolbar">
-            <select class="control" id="evDays" aria-label="Период событий">
-              <option value="1">Сутки</option>
-              <option value="7" selected>7 дней</option>
-              <option value="30">30 дней</option>
-              <option value="90">90 дней</option>
-              <option value="0">Всё время</option>
-            </select>
-            <select class="control" id="evAction" aria-label="Действие">
-              <option value="">Все действия</option>
-              <option value="view">Открыл страницу</option>
-              <option value="open">Открыл инструмент</option>
-              <option value="done">Получил файл</option>
-            </select>
-            <span class="search-wrap">
-              <input class="control" id="evSearch" type="search" placeholder="инструмент, страница или посетитель" aria-label="Поиск по журналу" />
-              <kbd>/</kbd>
-            </span>
-            <button class="pager btn" id="evReset" type="button" style="padding:9px 12px">Сбросить</button>
-            <label class="check"><input type="checkbox" id="autoRefresh" checked /> автообновление</label>
-          </div>
-
-          <div class="panel" style="padding-top:0">
-            <div class="table-wrap">
-              <table class="log">
-                <thead>
-                  <tr>
-                    <th style="width:96px">Время</th>
-                    <th style="width:150px">Действие</th>
-                    <th>Инструмент</th>
-                    <th class="hide-m">Страница</th>
-                    <th class="hide-m" style="width:96px">Посетитель</th>
-                  </tr>
-                </thead>
-                <tbody id="evBody"></tbody>
-              </table>
-            </div>
-            <div class="pager">
-              <button class="btn" id="evPrev" type="button">← Назад</button>
-              <button class="btn" id="evNext" type="button">Вперёд →</button>
-              <span class="spacer"></span>
-              <span class="info" id="evInfo">—</span>
-            </div>
-          </div>
-        </section>
-
-        <!-- ── настройки ────────────────────────── -->
-        <section id="viewSettings" hidden>
-          <div class="settings-grid">
-            <section class="panel">
-              <div class="panel-head"><h2>Хранение событий</h2><span class="hint">сколько держим статистику</span></div>
-              <label class="field">
-                <span>Дней</span>
-                <input id="retention" type="number" min="0" max="3650" step="1" inputmode="numeric" />
-                <span class="hint">0 — хранить всё время. По умолчанию 90 дней: этого хватает, чтобы видеть сезонность, и база не растёт бесконечно.</span>
-              </label>
-              <button class="solid" id="saveSettings" type="button">Сохранить</button>
-              <p class="fine" id="settingsStamp">—</p>
-            </section>
-
-            <section class="panel">
-              <div class="panel-head"><h2>Очистка</h2><span class="hint">необратимо</span></div>
-              <label class="field">
-                <span>Удалить события старше</span>
-                <input id="purgeDays" type="number" min="0" max="3650" step="1" inputmode="numeric" />
-                <span class="hint">0 — удалить всю статистику. Пользователи сайта этого не заметят, журнал действий останется.</span>
-              </label>
-              <button class="solid danger" id="purge" type="button">Удалить</button>
-              <p class="danger-note" id="purgeNote" hidden></p>
-              <p class="fine" id="dbStamp">—</p>
-            </section>
-          </div>
-
-          <section class="panel" style="margin-top:18px">
-            <div class="panel-head"><h2>Журнал действий</h2><span class="hint">вход, выгрузки, настройки, очистка</span></div>
+        <div class="grid2">
+          <section class="panel">
+            <div class="panel-head"><h2>Журнал действий</h2><span class="hint">выгрузки, настройки, очистка</span></div>
             <div class="audit" id="audit"></div>
           </section>
-        </section>
-      </div>
+          <section class="panel">
+            <div class="panel-head"><h2>Система</h2><span class="hint">состояние сборщика</span></div>
+            <div class="audit" id="health"></div>
+          </section>
+        </div>
+      </section>
     </div>
   </main>
 </div>
@@ -521,23 +570,41 @@
   const $ = (id) => document.getElementById(id)
   const num = (value) => Number(value || 0).toLocaleString('ru-RU')
   const pad = (value) => (value < 10 ? '0' + value : String(value))
-  const ACTION_LABEL = { view: 'визит', open: 'открыл', done: 'файл' }
+  const esc = (value) => String(value == null ? '' : value)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;')
+
+  const ACTION_LABEL = {
+    view: 'страница',
+    open: 'открыл',
+    done: 'файл',
+    error: 'ошибка',
+    leave: 'ушёл',
+    session: 'сессия',
+  }
+
+  const TITLES = {
+    overview: ['обзор · всё сразу', 'Пульт <em>Congix Docs</em>'],
+    live: ['онлайн · последние 5 минут', 'Что <em>сейчас</em> происходит'],
+    tools: ['инструменты · конверсия', 'Чем <em>пользуются</em>'],
+    audience: ['аудитория · откуда и на чём', 'Кто <em>приходит</em>'],
+    events: ['журнал · каждое событие', 'Полный <em>журнал</em>'],
+    settings: ['настройки · хранение и очистка', 'Служебные <em>настройки</em>'],
+  }
 
   const state = {
     tab: 'overview',
     days: 14,
-    ev: { days: '7', action: '', q: '', page: 1 },
-    loaded: { overview: false, events: false, settings: false },
-    settings: null,
+    toolDays: 30,
+    ev: { days: '7', action: '', device: '', lang: '', q: '', page: 1 },
+    pages: 1,
     auto: true,
     purgeArmed: false,
-    page: 1,
-    pages: 1,
     timer: null,
+    liveTimer: null,
     toastTimer: null,
+    loaded: {},
   }
-
-  /* ── мелочи интерфейса ────────────────────── */
 
   function toast(text, bad) {
     const node = $('toast')
@@ -549,107 +616,138 @@
   }
 
   function fmtWhen(ts) {
+    if (!ts) return '—'
     const date = new Date(ts)
     const sameDay = date.toDateString() === new Date().toDateString()
     const time = pad(date.getHours()) + ':' + pad(date.getMinutes())
     return sameDay ? time : pad(date.getDate()) + '.' + pad(date.getMonth() + 1) + ' ' + time
   }
 
+  function fmtDuration(seconds) {
+    const value = Number(seconds) || 0
+    if (!value) return '—'
+    if (value < 60) return value + ' с'
+    return Math.floor(value / 60) + ' мин ' + (value % 60) + ' с'
+  }
+
   function fmtNumDays(days) {
     return days === 0 ? 'всё время' : days + ' дн.'
   }
 
+  function metaDetail(row) {
+    if (!row.meta) return ''
+    try {
+      const meta = JSON.parse(row.meta)
+      const parts = []
+      if (meta.message) parts.push(meta.message)
+      if (meta.source) parts.push(meta.source)
+      if (meta.status) parts.push('HTTP ' + meta.status)
+      if (meta.seconds != null) parts.push(meta.seconds + ' с')
+      return parts.join(' · ').slice(0, 160)
+    } catch {
+      return String(row.meta).slice(0, 160)
+    }
+  }
+
   async function api(path, options) {
     const response = await fetch(path, Object.assign({ credentials: 'same-origin' }, options || {}))
-    if (response.status === 401 && state.tab !== 'login') {
-      showLogin()
-      throw new Error('Сессия истекла — войдите снова.')
-    }
     const type = response.headers.get('content-type') || ''
     const data = type.includes('application/json') ? await response.json().catch(() => ({})) : null
     if (!response.ok) throw new Error((data && data.error) || 'Запрос не удался (' + response.status + ')')
     return data
   }
 
-  /* ── вход ─────────────────────────────────── */
+  /* ── отрисовка списков ─────────────────────────────── */
 
-  function showLogin(message) {
-    $('login').hidden = false
-    $('app').hidden = true
-    $('nav').hidden = true
-    $('stamp').hidden = true
-    $('refresh').hidden = true
-    $('csv').hidden = true
-    $('logout').hidden = true
-    $('loginError').hidden = !message
-    if (message) $('loginError').textContent = message
-    clearInterval(state.timer)
-    state.timer = null
-  }
-
-  function showApp() {
-    $('login').hidden = true
-    $('app').hidden = false
-    $('nav').hidden = false
-    $('stamp').hidden = false
-    $('refresh').hidden = false
-    $('csv').hidden = false
-    $('logout').hidden = false
-    clearInterval(state.timer)
-    state.timer = setInterval(() => {
-      if (state.auto && !document.hidden && state.tab !== 'settings') reloadActive(true)
-    }, 60000)
-  }
-
-  async function submitLogin(event) {
-    if (event) event.preventDefault()
-    const token = $('token').value.trim()
-    if (!token) return
-    const button = $('enter')
-    button.disabled = true
-    button.textContent = 'Проверяем…'
-    $('loginError').hidden = true
-    try {
-      await api('/api/login', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ token }),
-      })
-      $('token').value = ''
-      showApp()
-      await refreshAll()
-      toast('Добро пожаловать')
-    } catch (error) {
-      $('loginError').hidden = false
-      $('loginError').textContent = error.message
-    } finally {
-      button.disabled = false
-      button.textContent = 'Открыть панель'
+  function rankList(target, rows, options) {
+    const config = options || {}
+    const max = Math.max(1, ...rows.map((row) => Number(row[config.value || 'total']) || 0))
+    if (!rows.length) {
+      target.innerHTML = '<p class="empty">Пока нет данных.</p>'
+      return
     }
+    target.innerHTML = rows.slice(0, config.limit || 8).map((row, index) => {
+      const value = Number(row[config.value || 'total']) || 0
+      const label = row[config.label || 'name'] ?? '—'
+      const note = config.note ? config.note(row) : ''
+      return '<div class="row' + (config.note ? '' : ' two') + '">' +
+        '<span class="idx">' + pad(index + 1) + '</span>' +
+        '<span><span class="name" title="' + esc(label) + '">' + esc(label) + '</span>' +
+        '<span class="meter"><u style="width:' + Math.max(2, Math.round(value / max * 100)) + '%"></u></span></span>' +
+        '<span class="n"><b>' + num(value) + '</b><small>' + esc(note) + '</small></span>' +
+        (config.note ? '<span class="n"><b>' + num(row.people) + '</b><small>людей</small></span>' : '') +
+        '</div>'
+    }).join('')
   }
 
-  async function logout() {
-    try {
-      await api('/api/logout', { method: 'POST' })
-    } catch {
-      // выходим локально в любом случае
+  function chips(target, rows, valueKey) {
+    if (!rows.length) {
+      target.innerHTML = '<span class="chip muted">нет данных</span>'
+      return
     }
-    showLogin()
-    $('token').value = ''
-    state.loaded = { overview: false, events: false, settings: false }
+    target.innerHTML = rows.slice(0, 14).map((row) => {
+      const label = row[valueKey] ?? row.name ?? '—'
+      return '<span class="chip">' + esc(label) + ' · ' + num(row.total) + '</span>'
+    }).join('')
   }
 
-  /* ── загрузка данных ──────────────────────── */
+  function chart(target, rows, labelKey, valueKey) {
+    if (!rows.length) {
+      target.innerHTML = '<p class="empty">Пока нет событий за этот период.</p>'
+      return
+    }
+    const width = 760
+    const height = 190
+    const padX = 8
+    const padY = 14
+    const values = rows.map((row) => Number(row[valueKey]) || 0)
+    const max = Math.max(1, ...values)
+    const stepX = rows.length > 1 ? (width - padX * 2) / (rows.length - 1) : 0
+    const point = (index, value) => {
+      const x = padX + index * stepX
+      const y = height - padY - (value / max) * (height - padY * 2)
+      return [x, y]
+    }
+    const points = values.map((value, index) => point(index, value))
+    const line = points.map(([x, y], index) => (index ? 'L' : 'M') + x.toFixed(1) + ' ' + y.toFixed(1)).join(' ')
+    const area = line + ' L' + points[points.length - 1][0].toFixed(1) + ' ' + (height - padY) +
+      ' L' + points[0][0].toFixed(1) + ' ' + (height - padY) + ' Z'
+    const ticks = values.map((value, index) => {
+      if (rows.length > 12 && index % Math.ceil(rows.length / 8) !== 0 && index !== rows.length - 1) return ''
+      const [x] = point(index, value)
+      const label = String(rows[index][labelKey] || '').slice(5)
+      return '<text class="tick" x="' + x.toFixed(1) + '" y="' + (height - 1) + '" text-anchor="middle">' + esc(label) + '</text>'
+    }).join('')
+    const dots = points.map(([x, y]) => '<circle class="dot" cx="' + x.toFixed(1) + '" cy="' + y.toFixed(1) + '" r="2.4" />').join('')
 
-  async function refreshAll() {
-    await Promise.all([loadOverview(false), loadEvents(false), loadSettings()])
+    target.innerHTML = '<svg viewBox="0 0 ' + width + ' ' + height + '" role="img" aria-label="График активности">' +
+      '<line class="grid" x1="0" y1="' + (height - padY) + '" x2="' + width + '" y2="' + (height - padY) + '"/>' +
+      '<path class="area" d="' + area + '"/><path class="line" d="' + line + '"/>' + dots + ticks + '</svg>'
   }
 
-  function reloadActive(silent) {
-    if (state.tab === 'overview') return loadOverview(silent)
-    if (state.tab === 'events') return loadEvents(silent)
-    return loadSettings()
+  function minutesChart(target, rows) {
+    if (!rows.length) {
+      target.innerHTML = '<p class="empty">За последние 30 минут событий не было.</p>'
+      return
+    }
+    const width = 760
+    const height = 150
+    const max = Math.max(1, ...rows.map((row) => Number(row.total) || 0))
+    const slot = width / Math.max(rows.length, 1)
+    const bars = rows.map((row, index) => {
+      const value = Number(row.total) || 0
+      const h = Math.max(2, Math.round(value / max * (height - 30)))
+      const x = index * slot + slot * 0.18
+      const last = index === rows.length - 1
+      return '<rect class="bar' + (last ? ' is-now' : '') + '" x="' + x.toFixed(1) + '" y="' + (height - 18 - h) + '" width="' + Math.max(2, slot * 0.64).toFixed(1) + '" height="' + h + '" />'
+    }).join('')
+    target.innerHTML = '<svg viewBox="0 0 ' + width + ' ' + height + '" role="img" aria-label="События по минутам">' +
+      '<line class="grid" x1="0" y1="' + (height - 18) + '" x2="' + width + '" y2="' + (height - 18) + '"/>' + bars +
+      '<text class="tick" x="0" y="' + (height - 2) + '">' + esc(rows[0].minute) + '</text>' +
+      '<text class="tick" x="' + width + '" y="' + (height - 2) + '" text-anchor="end">' + esc(rows[rows.length - 1].minute) + '</text></svg>'
   }
+
+  /* ── сводка ────────────────────────────────────────── */
 
   async function loadOverview(silent) {
     try {
@@ -662,249 +760,208 @@
     }
   }
 
-  async function loadEvents(silent) {
-    const query = new URLSearchParams({
-      days: state.ev.days,
-      page: String(state.ev.page),
-      limit: '50',
-    })
-    if (state.ev.action) query.set('action', state.ev.action)
-    if (state.ev.q) query.set('q', state.ev.q)
+  function renderOverview(data) {
+    const t = data.totals
+    $('kToday').textContent = num(t.today)
+    $('kTodayNote').textContent = 'за 7 дней: ' + num(t.week) + ' · за 30: ' + num(t.month)
+    $('kPeople').textContent = num(t.people)
+    $('kPeopleNote').textContent = 'всего уникальных'
+    $('kSessions').textContent = num(t.sessions)
+    $('kSessionsNote').textContent = 'за ' + fmtNumDays(data.days)
+    $('kConv').textContent = data.funnel.opens ? Math.round(data.funnel.dones / Math.max(1, data.funnel.opens) * 100) + '%' : '—'
+    $('kTime').textContent = fmtDuration(t.avgDuration)
+    $('kErrors').textContent = num(t.errors)
+    $('range').textContent = 'период: ' + fmtNumDays(data.days) + ' · событий в периоде: ' + num(t.period) +
+      ' · последнее: ' + fmtWhen(t.last)
+    $('navLive').textContent = ''
+
+    chart($('chart'), data.series, 'day', 'total')
+
+    const views = data.funnel.views || 0
+    const opens = data.funnel.opens || 0
+    const dones = data.funnel.dones || 0
+    const base = Math.max(1, views)
+    $('funnel').innerHTML = [
+      ['Просмотры', views, views],
+      ['Открыли инструмент', opens, opens],
+      ['Получили файл', dones, dones],
+    ].map(([label, value, width]) =>
+      '<div class="funnel-step"><span>' + esc(label) + '</span>' +
+      '<span class="bar"><u style="width:' + Math.max(1, Math.round(Number(width) / base * 100)) + '%"></u></span>' +
+      '<b>' + num(value) + '</b></div>').join('')
+
+    if (!data.errors.length) {
+      $('errors').innerHTML = '<p class="empty">Ошибок не зафиксировано.</p>'
+    } else {
+      $('errors').innerHTML = data.errors.map((row) =>
+        '<div class="error-row"><time>' + fmtWhen(row.ts) + '</time><span>' +
+        '<b>' + esc(metaDetail(row) || 'Ошибка') + '</b>' +
+        '<small>' + esc(row.path || '/') + ' · ' + esc(row.device || '—') + ' · ' + esc(row.browser || '—') + '</small>' +
+        '</span></div>').join('')
+    }
+
+    rankList($('toolList'), data.tools.slice(0, 8), { note: (row) => row.total + ' откр.' })
+    rankList($('pageList'), data.pages.slice(0, 8), { label: 'path' })
+    rankList($('sourceList'), data.sources.slice(0, 6), { label: 'source', note: (row) => row.medium || '' })
+    rankList($('deviceList'), data.devices.slice(0, 4), { label: 'device' })
+    rankList($('langList'), data.langs.slice(0, 5), { label: 'lang' })
+    chips($('browserChips'), data.browsers, 'browser')
+    chips($('countryChips'), data.countries, 'country')
+    $('toolsHint').textContent = data.tools.length + ' инструментов в периоде'
+  }
+
+  /* ── онлайн ────────────────────────────────────────── */
+
+  async function loadLive(silent) {
     try {
-      const data = await api('/api/events?' + query)
-      renderEvents(data)
-      state.loaded.events = true
+      const data = await api('/api/live')
+      $('livePeople').textContent = num(data.people)
+      $('liveSessions').textContent = num(data.sessions)
+      $('liveEvents').textContent = num(data.events)
+      $('livePages').textContent = num(data.pages.length)
+      $('liveLast').textContent = data.recent[0] ? fmtWhen(data.recent[0].ts) : '—'
+      $('navLive').textContent = data.people ? String(data.people) : ''
+      minutesChart($('liveChart'), data.minutes)
+      rankList($('livePageList'), data.pages.slice(0, 10), { label: 'path' })
+      $('liveFeed').innerHTML = data.recent.length ? data.recent.map((row) =>
+        '<div class="feed-row"><time>' + fmtWhen(row.ts) + '</time>' +
+        '<span><span class="chip' + (row.action === 'done' ? ' done' : row.action === 'error' ? ' error' : '') + '">' +
+        esc(ACTION_LABEL[row.action] || row.action) + '</span></span>' +
+        '<span class="what">' + esc(row.name) + (metaDetail(row) ? ' — ' + esc(metaDetail(row)) : '') +
+        '<small>' + esc(row.path || '/') + ' · ' + esc(row.device || '—') + ' · ' + esc(row.source || '—') + '</small></span></div>').join('')
+        : '<p class="empty">Пока тихо.</p>'
       $('stamp').textContent = 'обновлено ' + fmtWhen(Date.now())
+      state.loaded.live = true
     } catch (error) {
       if (!silent) toast(error.message, true)
     }
   }
 
+  /* ── инструменты ───────────────────────────────────── */
+
+  async function loadTools(silent) {
+    try {
+      const data = await api('/api/stats?days=' + (state.toolDays || 3650))
+      const rows = (data.tools || []).slice().sort((a, b) => b.total - a.total)
+      $('toolBody').innerHTML = rows.length ? rows.map((row) => {
+        const conversion = row.total ? Math.round(row.done / row.total * 100) : 0
+        return '<tr><td><b>' + esc(row.name) + '</b></td>' +
+          '<td class="num">' + num(row.total) + '</td>' +
+          '<td class="num">' + num(row.done) + '</td>' +
+          '<td class="num">' + (row.total ? conversion + '%' : '—') + '</td>' +
+          '<td class="num">' + num(row.errors) + '</td>' +
+          '<td class="num hide-m">' + num(row.people) + '</td>' +
+          '<td class="num hide-m">' + fmtWhen(row.last) + '</td></tr>'
+      }).join('') : '<tr><td colspan="7"><p class="empty">Нет данных за период.</p></td></tr>'
+      $('stamp').textContent = 'обновлено ' + fmtWhen(Date.now())
+      state.loaded.tools = true
+    } catch (error) {
+      if (!silent) toast(error.message, true)
+    }
+  }
+
+  /* ── аудитория ─────────────────────────────────────── */
+
+  async function loadAudience(silent) {
+    try {
+      const data = await api('/api/stats?days=' + state.days)
+      rankList($('audPages'), data.pages, { label: 'path' })
+      rankList($('audSources'), data.sources, { label: 'source', note: (row) => row.medium || '' })
+      rankList($('audDevices'), data.devices, { label: 'device' })
+      chips($('audBrowsers'), data.browsers, 'browser')
+      chips($('audLangs'), data.langs, 'lang')
+      chips($('audCountries'), data.countries, 'country')
+      $('stamp').textContent = 'обновлено ' + fmtWhen(Date.now())
+      state.loaded.audience = true
+    } catch (error) {
+      if (!silent) toast(error.message, true)
+    }
+  }
+
+  /* ── журнал ────────────────────────────────────────── */
+
+  async function loadEvents(silent) {
+    const query = new URLSearchParams({ days: state.ev.days, page: String(state.ev.page), limit: '50' })
+    if (state.ev.action) query.set('action', state.ev.action)
+    if (state.ev.device) query.set('device', state.ev.device)
+    if (state.ev.lang) query.set('lang', state.ev.lang)
+    if (state.ev.q) query.set('q', state.ev.q)
+    try {
+      const data = await api('/api/events?' + query)
+      state.pages = data.pages
+      state.ev.page = data.page
+      $('evBody').innerHTML = data.rows.length ? data.rows.map((row) => {
+        const detail = metaDetail(row)
+        return '<tr><td class="time">' + fmtWhen(row.ts) + '</td>' +
+          '<td><span class="chip' + (row.action === 'done' ? ' done' : row.action === 'error' ? ' error' : '') + '">' +
+          esc(ACTION_LABEL[row.action] || row.action) + '</span></td>' +
+          '<td><b>' + esc(row.name) + '</b>' + (detail ? '<div class="mono">' + esc(detail) + '</div>' : '') + '</td>' +
+          '<td class="mono hide-m">' + esc(row.path || '/') + '</td>' +
+          '<td class="mono hide-m">' + esc(row.source || '—') + (row.medium && row.medium !== 'none' ? ' / ' + esc(row.medium) : '') + '</td>' +
+          '<td class="mono hide-m">' + esc(row.device || '—') + ' · ' + esc(row.browser || '—') + '</td>' +
+          '<td class="mono hide-m" title="' + esc(row.visitor) + '">' + esc(String(row.session || '—').slice(0, 10)) + '</td></tr>'
+      }).join('') : '<tr><td colspan="7"><p class="empty">Событий за этими фильтрами нет.</p></td></tr>'
+      $('evInfo').textContent = 'всего ' + num(data.total) + ' · страница ' + data.page + ' из ' + data.pages
+      $('evPrev').disabled = data.page <= 1
+      $('evNext').disabled = data.page >= data.pages
+      $('stamp').textContent = 'обновлено ' + fmtWhen(Date.now())
+      state.loaded.events = true
+    } catch (error) {
+      if (!silent) toast(error.message, true)
+    }
+  }
+
+  function applyEventsFilter(immediate) {
+    clearTimeout(state.searchTimer)
+    const run = () => {
+      state.ev.q = $('evSearch').value.trim()
+      state.ev.page = 1
+      loadEvents(false)
+    }
+    if (immediate) run()
+    else state.searchTimer = setTimeout(run, 350)
+  }
+
+  /* ── настройки ─────────────────────────────────────── */
+
   async function loadSettings() {
     try {
-      const [settings, log] = await Promise.all([api('/api/settings'), api('/api/audit?limit=25')])
-      state.settings = settings
+      const [settings, log, health] = await Promise.all([
+        api('/api/settings'),
+        api('/api/audit?limit=25'),
+        api('/api/health'),
+      ])
       $('retention').value = settings.retentionDays
       $('purgeDays').value = settings.retentionDays
-      $('dbStamp').textContent = 'Событий в базе: ' + num(settings.events)
-      $('settingsStamp').textContent = 'Хранение: ' + fmtNumDays(Number(settings.retentionDays))
-      renderAudit(log.rows || [])
+      $('settingsStamp').textContent = 'Хранение: ' + fmtNumDays(Number(settings.retentionDays)) +
+        ' · событий: ' + num(settings.events)
+      $('dbStamp').textContent = 'Событий: ' + num(settings.events) +
+        ' · сессий: ' + num(settings.sessions) + ' · людей: ' + num(settings.people)
+      $('audit').innerHTML = (log.rows || []).length ? log.rows.map((row) =>
+        '<div class="audit-row"><time>' + fmtWhen(row.at) + '</time><span><b>' + esc(row.action) + '</b>' +
+        (row.detail ? '<small style="display:block;color:var(--muted)">' + esc(row.detail) + '</small>' : '') + '</span></div>').join('')
+        : '<p class="empty">Журнал пуст.</p>'
+      $('health').innerHTML =
+        '<div class="audit-row"><time>события</time><span><b>' + num(health.events) + '</b><small style="display:block;color:var(--muted)">записей в D1</small></span></div>' +
+        '<div class="audit-row"><time>аудит</time><span><b>' + num(health.audit) + '</b><small style="display:block;color:var(--muted)">действий владельца</small></span></div>' +
+        '<div class="audit-row"><time>вход</time><span><b>открытый</b><small style="display:block;color:var(--muted)">без токена и ключей</small></span></div>' +
+        '<div class="audit-row"><time>сервер</time><span><b>ok</b><small style="display:block;color:var(--muted)">' + fmtWhen(health.now) + '</small></span></div>'
+      $('stamp').textContent = 'обновлено ' + fmtWhen(Date.now())
       state.loaded.settings = true
     } catch (error) {
       toast(error.message, true)
     }
   }
 
-  /* ── отрисовка сводки ─────────────────────── */
-
-  function chart(days) {
-    if (!days.length) return '<p class="empty">Данных пока нет — открой сайт, и здесь появятся точки.</p>'
-    const narrow = window.matchMedia('(max-width: 680px)').matches
-    const w = narrow ? 340 : 780
-    const h = narrow ? 200 : 200
-    const pl = narrow ? 16 : 28
-    const pr = narrow ? 8 : 12
-    const pt = 18
-    const pb = 24
-    const max = Math.max(...days.map((d) => d.total), 1)
-    const step = days.length > 1 ? (w - pl - pr) / (days.length - 1) : 0
-    const x = (i) => pl + step * i
-    const y = (v) => pt + (h - pt - pb) * (1 - v / max)
-    const pts = days.map((d, i) => [x(i), y(d.total), d])
-    const line = pts.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join(' ')
-    const area = line + ' L ' + x(days.length - 1).toFixed(1) + ' ' + (h - pb) + ' L ' + pl + ' ' + (h - pb) + ' Z'
-    const grid = [0, 0.5, 1].map((f) => {
-      const gy = y(max * f).toFixed(1)
-      return '<line class="grid" x1="' + pl + '" x2="' + (w - pr) + '" y1="' + gy + '" y2="' + gy + '" />'
-    }).join('')
-    const dots = pts.map((p) => {
-      return '<circle class="dot" cx="' + p[0].toFixed(1) + '" cy="' + p[1].toFixed(1) + '" r="2.8">' +
-        '<title>' + esc(p[2].day) + ' · ' + p[2].total + ' событий · ' + p[2].people + ' людей</title></circle>'
-    }).join('')
-    const every = Math.max(1, Math.ceil(days.length / (narrow ? 5 : 10)))
-    const labels = pts.map((p, i) => {
-      const show = i === pts.length - 1 || (i % every === 0 && pts.length - 1 - i >= every / 2)
-      if (!show) return ''
-      return '<text class="tick" x="' + p[0].toFixed(1) + '" y="' + (h - 6) + '" text-anchor="middle">' + p[2].day.slice(5) + '</text>'
-    }).join('')
-    const top = '<text class="tick" x="0" y="' + (pt + 3) + '">' + max + '</text>'
-    return '<svg viewBox="0 0 ' + w + ' ' + h + '" role="img" aria-label="Активность по дням">' +
-      grid + '<path class="area" d="' + area + '" /><path class="line" d="' + line + '" />' + dots + labels + top + '</svg>'
-  }
-
-  function esc(value) {
-    return String(value == null ? '' : value).replace(/[&<>"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[char]))
-  }
-
-  function toolRows(tools) {
-    if (!tools.length) return '<p class="empty">За этот период инструменты не открывали.</p>'
-    const max = Math.max(...tools.map((t) => Number(t.total) || 0), 1)
-    return tools.map((tool, i) => {
-      const opens = Number(tool.total) || 0
-      const done = Number(tool.done) || 0
-      const opensShare = Math.max(2, Math.round((opens / max) * 100))
-      const doneShare = Math.max(done ? 2 : 0, Math.round((done / max) * 100))
-      return '<div class="row" title="' + esc(tool.name) + ': открытий ' + opens + ', до файла ' + done + ', людей ' + tool.people + '">' +
-        '<span class="idx">' + pad(i + 1) + '</span>' +
-        '<span><span class="name">' + esc(tool.name) + '</span>' +
-        '<span class="meter"><u style="width:' + opensShare + '%"></u><i style="width:' + doneShare + '%"></i></span></span>' +
-        '<span class="n"><b>' + opens + '</b><small>откр.</small></span>' +
-        '<span class="n"><b>' + done + '</b><small>файл</small></span>' +
-        '</div>'
-    }).join('')
-  }
-
-  function pageRows(pages) {
-    if (!pages.length) return '<p class="empty">Нет просмотров страниц за период.</p>'
-    const max = Math.max(...pages.map((p) => p.total), 1)
-    return pages.map((page, i) => {
-      const width = Math.max(3, Math.round((page.total / max) * 100))
-      return '<div class="row two">' +
-        '<span class="idx">' + pad(i + 1) + '</span>' +
-        '<span><span class="name">' + esc(page.path) + '</span>' +
-        '<span class="meter"><u style="width:' + width + '%"></u></span></span>' +
-        '<span class="n"><b>' + page.total + '</b><small>раз</small></span>' +
-        '</div>'
-    }).join('')
-  }
-
-  function actionTiles(actions, total) {
-    return ['view', 'open', 'done'].map((name) => {
-      const found = actions.filter((a) => a.action === name)[0]
-      const value = found ? found.total : 0
-      const share = total ? Math.round((value / total) * 100) : 0
-      return '<div class="action"><span>' + ACTION_LABEL[name] + '</span><b>' + num(value) + '</b><small>' + share + '% от всех</small></div>'
-    }).join('')
-  }
-
-  function renderOverview(data) {
-    const t = data.totals
-    const utcToday = new Date().toISOString().slice(0, 10)
-    let todayIndex = -1
-    data.days.forEach((day, i) => { if (day.day === utcToday) todayIndex = i })
-    const previous = todayIndex > 0 ? data.days[todayIndex - 1].total : 0
-    const today = todayIndex >= 0 ? data.days[todayIndex].total : 0
-
-    $('kToday').textContent = num(t.today)
-    $('kPeople').textContent = num(t.people)
-    $('kWeek').textContent = num(t.week)
-
-    const delta = $('kDelta')
-    if (todayIndex === 0) {
-      delta.className = 'delta flat'
-      delta.textContent = 'первый день наблюдений'
-    } else if (previous > 0) {
-      const change = today - previous
-      delta.className = 'delta ' + (change >= 0 ? 'up' : 'flat')
-      delta.textContent = (change > 0 ? '▲ +' : change < 0 ? '▼ ' : '= ') + Math.abs(change) + ' к вчера'
-    } else {
-      delta.className = 'delta flat'
-      delta.textContent = 'вчера было 0'
-    }
-
-    $('kAvg').textContent = 'в среднем ' + (t.week / 7).toFixed(1).replace('.', ',') + ' в день'
-
-    let opens = 0
-    let done = 0
-    data.tools.forEach((tool) => { opens += Number(tool.total) || 0; done += Number(tool.done) || 0 })
-    $('kConv').textContent = opens ? Math.round((done / opens) * 100) + '%' : '—'
-
-    $('chartHint').textContent = 'события по дням · ' + data.days.length + ' сут.'
-    $('toolsHint').textContent = 'за ' + fmtNumDays(data.days)
-    $('range').innerHTML = '<span>' + num(t.events) + '</span> событий всего · <span>' + num(t.period) + '</span> за ' + fmtNumDays(data.days) +
-      ' · <span>' + num(t.month) + '</span> за 30 дней · наблюдение с ' +
-      (t.first ? new Date(t.first).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' }) : 'сегодня')
-
-    $('chart').innerHTML = chart(data.days)
-    $('toolList').innerHTML = toolRows(data.tools)
-    $('pageList').innerHTML = pageRows(data.pages)
-    $('actionList').innerHTML = actionTiles(data.actions, t.period)
-    $('stamp').textContent = 'обновлено ' + fmtWhen(data.updated || Date.now())
-
-    document.querySelectorAll('#periodSeg button').forEach((button) => {
-      button.setAttribute('aria-pressed', String(Number(button.dataset.days) === Number(data.days)))
-    })
-  }
-
-  /* ── отрисовка журнала ────────────────────── */
-
-  function renderEvents(data) {
-    const body = $('evBody')
-    if (!data.rows.length) {
-      body.innerHTML = '<tr><td colspan="5"><p class="empty">Ничего не нашлось. Смените период, действие или запрос.</p></td></tr>'
-    } else {
-      body.innerHTML = data.rows.map((row) => {
-        const label = ACTION_LABEL[row.action] || row.action
-        const visitor = (row.visitor || '').slice(0, 6)
-        return '<tr>' +
-          '<td class="time">' + fmtWhen(row.ts) + '</td>' +
-          '<td><span class="chip ' + esc(row.action) + '">' + esc(label) + '</span></td>' +
-          '<td class="tool">' + esc(row.name) + '</td>' +
-          '<td class="path hide-m">' + esc(row.path || '/') + '</td>' +
-          '<td class="visitor hide-m">' + esc(visitor || '—') + '</td>' +
-          '</tr>'
-      }).join('')
-    }
-
-    state.page = data.page
-    state.pages = data.pages
-    $('evPrev').disabled = data.page <= 1
-    $('evNext').disabled = data.page >= data.pages
-    $('evInfo').textContent = 'стр. ' + data.page + ' из ' + data.pages + ' · всего ' + num(data.total)
-  }
-
-  /* ── журнал действий ──────────────────────── */
-
-  function renderAudit(rows) {
-    if (!rows.length) {
-      $('audit').innerHTML = '<p class="empty">Пока пусто — здесь появятся входы, выгрузки и изменения настроек.</p>'
-      return
-    }
-    $('audit').innerHTML = rows.map((row) => {
-      return '<div class="audit-row">' +
-        '<time>' + fmtWhen(row.at) + '</time>' +
-        '<div><b>' + esc(row.action) + '</b>' + (row.detail ? '<small>' + esc(row.detail) + '</small>' : '') + '</div>' +
-        '</div>'
-    }).join('')
-  }
-
-  /* ── вкладки ──────────────────────────────── */
-
-  const TITLES = {
-    overview: { eyebrow: () => 'обзор · ' + new Date().toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' }), title: 'Пульт <em>Congix Docs</em>' },
-    events: { eyebrow: () => 'журнал · анонимно', title: 'Что <em>происходит</em>' },
-    settings: { eyebrow: () => 'настройки · данные', title: 'Хозяйство <em>панели</em>' },
-  }
-
-  function setTab(tab, push) {
-    if (!TITLES[tab]) tab = 'overview'
-    state.tab = tab
-    if (push !== false && location.hash !== '#/' + tab) history.replaceState(null, '', '#/' + tab)
-
-    document.querySelectorAll('.nav button').forEach((button) => {
-      if (button.dataset.tab === tab) button.setAttribute('aria-current', 'page')
-      else button.removeAttribute('aria-current')
-    })
-
-    $('viewOverview').hidden = tab !== 'overview'
-    $('viewEvents').hidden = tab !== 'events'
-    $('viewSettings').hidden = tab !== 'settings'
-    $('eyebrow').textContent = TITLES[tab].eyebrow()
-    $('title').innerHTML = TITLES[tab].title
-    $('range').hidden = tab !== 'overview'
-
-    if (tab === 'overview' && !state.loaded.overview) loadOverview(false)
-    if (tab === 'events' && !state.loaded.events) loadEvents(false)
-    if (tab === 'settings') loadSettings()
-  }
-
-  /* ── CSV ──────────────────────────────────── */
+  /* ── CSV ───────────────────────────────────────────── */
 
   async function downloadCsv() {
     const button = $('csv')
     const label = button.textContent
     const query = new URLSearchParams({ days: state.ev.days })
     if (state.ev.action) query.set('action', state.ev.action)
+    if (state.ev.device) query.set('device', state.ev.device)
+    if (state.ev.lang) query.set('lang', state.ev.lang)
     if (state.ev.q) query.set('q', state.ev.q)
     button.disabled = true
     button.textContent = 'Готовим…'
@@ -934,46 +991,76 @@
     }
   }
 
-  /* ── события интерфейса ───────────────────── */
+  /* ── вкладки и обновление ──────────────────────────── */
 
-  $('loginForm').addEventListener('submit', submitLogin)
-  $('logout').addEventListener('click', logout)
-  $('refresh').addEventListener('click', () => reloadActive(false))
-  $('csv').addEventListener('click', downloadCsv)
+  function loadActive(silent) {
+    if (state.tab === 'overview') return loadOverview(silent)
+    if (state.tab === 'live') return loadLive(silent)
+    if (state.tab === 'tools') return loadTools(silent)
+    if (state.tab === 'audience') return loadAudience(silent)
+    if (state.tab === 'events') return loadEvents(silent)
+    return loadSettings()
+  }
+
+  function setTab(tab, push) {
+    const next = TITLES[tab] ? tab : 'overview'
+    state.tab = next
+    document.querySelectorAll('.nav button').forEach((button) => {
+      button.setAttribute('aria-current', button.dataset.tab === next ? 'page' : 'false')
+    })
+    $('viewOverview').hidden = next !== 'overview'
+    $('viewLive').hidden = next !== 'live'
+    $('viewTools').hidden = next !== 'tools'
+    $('viewAudience').hidden = next !== 'audience'
+    $('viewEvents').hidden = next !== 'events'
+    $('viewSettings').hidden = next !== 'settings'
+    $('eyebrow').textContent = TITLES[next][0]
+    $('title').innerHTML = TITLES[next][1]
+    if (push !== false) location.hash = '#/' + next
+    if (next === 'live') {
+      clearInterval(state.liveTimer)
+      state.liveTimer = setInterval(() => {
+        if (!document.hidden) loadLive(true)
+      }, 10000)
+    } else {
+      clearInterval(state.liveTimer)
+      state.liveTimer = null
+    }
+    loadActive(false)
+  }
 
   document.querySelectorAll('.nav button').forEach((button) => {
     button.addEventListener('click', () => setTab(button.dataset.tab))
   })
 
+  $('refresh').addEventListener('click', () => loadActive(false))
+  $('csv').addEventListener('click', downloadCsv)
+
   document.querySelectorAll('#periodSeg button').forEach((button) => {
     button.addEventListener('click', () => {
       state.days = Number(button.dataset.days)
-      loadOverview(false)
+      document.querySelectorAll('#periodSeg button').forEach((item) => {
+        item.setAttribute('aria-pressed', item === button ? 'true' : 'false')
+      })
+      if (state.tab === 'overview') loadOverview(false)
+      else if (state.tab === 'audience') loadAudience(false)
     })
   })
 
-  let searchTimer = null
-  function applyEventsFilter(immediate) {
-    clearTimeout(searchTimer)
-    const run = () => {
-      state.ev.q = $('evSearch').value.trim()
-      state.ev.page = 1
-      loadEvents(false)
-    }
-    if (immediate) run()
-    else searchTimer = setTimeout(run, 350)
-  }
+  document.querySelectorAll('[data-days-tools]').forEach((button) => {
+    button.addEventListener('click', () => {
+      state.toolDays = Number(button.dataset.daysTools)
+      document.querySelectorAll('[data-days-tools]').forEach((item) => {
+        item.style.borderColor = item === button ? 'var(--ink)' : ''
+      })
+      loadTools(false)
+    })
+  })
 
-  $('evDays').addEventListener('change', () => {
-    state.ev.days = $('evDays').value
-    state.ev.page = 1
-    loadEvents(false)
-  })
-  $('evAction').addEventListener('change', () => {
-    state.ev.action = $('evAction').value
-    state.ev.page = 1
-    loadEvents(false)
-  })
+  $('evDays').addEventListener('change', () => { state.ev.days = $('evDays').value; state.ev.page = 1; loadEvents(false) })
+  $('evAction').addEventListener('change', () => { state.ev.action = $('evAction').value; state.ev.page = 1; loadEvents(false) })
+  $('evDevice').addEventListener('change', () => { state.ev.device = $('evDevice').value; state.ev.page = 1; loadEvents(false) })
+  $('evLang').addEventListener('change', () => { state.ev.lang = $('evLang').value; state.ev.page = 1; loadEvents(false) })
   $('evSearch').addEventListener('input', () => applyEventsFilter(false))
   $('evSearch').addEventListener('keydown', (event) => {
     if (event.key === 'Enter') applyEventsFilter(true)
@@ -983,18 +1070,20 @@
     $('evSearch').value = ''
     $('evDays').value = '7'
     $('evAction').value = ''
-    state.ev = { days: '7', action: '', q: '', page: 1 }
+    $('evDevice').value = ''
+    $('evLang').value = ''
+    state.ev = { days: '7', action: '', device: '', lang: '', q: '', page: 1 }
     loadEvents(false)
   })
   $('evPrev').addEventListener('click', () => {
-    if (state.page > 1) { state.ev.page = state.page - 1; loadEvents(false) }
+    if (state.ev.page > 1) { state.ev.page -= 1; loadEvents(false) }
   })
   $('evNext').addEventListener('click', () => {
-    if (state.page < state.pages) { state.ev.page = state.page + 1; loadEvents(false) }
+    if (state.ev.page < state.pages) { state.ev.page += 1; loadEvents(false) }
   })
   $('autoRefresh').addEventListener('change', () => { state.auto = $('autoRefresh').checked })
 
-  function saveSettings() {
+  $('saveSettings').addEventListener('click', () => {
     const value = Number($('retention').value)
     if (!Number.isFinite(value) || value < 0 || value > 3650) {
       toast('Срок хранения — от 0 до 3650 дней', true)
@@ -1010,9 +1099,7 @@
       .then(() => { toast('Настройки сохранены'); loadSettings() })
       .catch((error) => toast(error.message, true))
       .finally(() => { button.disabled = false })
-  }
-
-  $('saveSettings').addEventListener('click', saveSettings)
+  })
 
   $('purge').addEventListener('click', async () => {
     const days = Number($('purgeDays').value)
@@ -1020,7 +1107,6 @@
       toast('Укажите число дней от 0 до 3650', true)
       return
     }
-
     if (!state.purgeArmed) {
       state.purgeArmed = true
       $('purge').textContent = 'Точно удалить?'
@@ -1036,7 +1122,6 @@
       }, 8000)
       return
     }
-
     state.purgeArmed = false
     $('purge').textContent = 'Удалить'
     $('purgeNote').hidden = true
@@ -1048,11 +1133,9 @@
         body: JSON.stringify({ days }),
       })
       toast('Удалено событий: ' + num(data.removed))
-      state.loaded.overview = false
-      state.loaded.events = false
+      state.loaded = {}
       await loadSettings()
-      await loadOverview(true)
-      if (state.tab === 'events') await loadEvents(true)
+      await loadActive(true)
     } catch (error) {
       toast(error.message, true)
     } finally {
@@ -1061,7 +1144,6 @@
   })
 
   document.addEventListener('keydown', (event) => {
-    if ($('app').hidden) return
     const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName)
     if (event.key === '/' && !typing) {
       event.preventDefault()
@@ -1069,7 +1151,7 @@
       $('evSearch').focus()
     }
     if ((event.key === 'r' || event.key === 'R') && !typing && !event.metaKey && !event.ctrlKey) {
-      reloadActive(false)
+      loadActive(false)
     }
   })
 
@@ -1078,22 +1160,18 @@
     if (tab !== state.tab) setTab(tab, false)
   })
 
-  /* ── старт ────────────────────────────────── */
+  /* ── старт ─────────────────────────────────────────── */
 
-  async function boot() {
+  function boot() {
     const tab = (location.hash.replace('#/', '') || 'overview').trim()
-    try {
-      const response = await fetch('/api/session', { credentials: 'same-origin' })
-      if (!response.ok) {
-        showLogin()
-        return
-      }
-      showApp()
-      await refreshAll()
-      setTab(TITLES[tab] ? tab : 'overview', false)
-    } catch {
-      showLogin('Нет связи с сервером. Проверьте подключение.')
-    }
+    const initial = TITLES[tab] ? tab : 'overview'
+    document.querySelectorAll('#periodSeg button').forEach((button) => {
+      button.setAttribute('aria-pressed', Number(button.dataset.days) === state.days ? 'true' : 'false')
+    })
+    setTab(initial, false)
+    state.timer = setInterval(() => {
+      if (state.auto && !document.hidden && state.tab !== 'settings') loadActive(true)
+    }, 60000)
   }
 
   boot()
