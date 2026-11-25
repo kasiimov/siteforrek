@@ -603,7 +603,6 @@
     timer: null,
     liveTimer: null,
     toastTimer: null,
-    loaded: {},
   }
 
   function toast(text, bad) {
@@ -753,7 +752,6 @@
     try {
       const data = await api('/api/stats?days=' + state.days)
       renderOverview(data)
-      state.loaded.overview = true
       $('stamp').textContent = 'обновлено ' + fmtWhen(Date.now())
     } catch (error) {
       if (!silent) toast(error.message, true)
@@ -773,8 +771,6 @@
     $('kErrors').textContent = num(t.errors)
     $('range').textContent = 'период: ' + fmtNumDays(data.days) + ' · событий в периоде: ' + num(t.period) +
       ' · последнее: ' + fmtWhen(t.last)
-    $('navLive').textContent = ''
-
     chart($('chart'), data.series, 'day', 'total')
 
     const views = data.funnel.views || 0
@@ -823,15 +819,16 @@
       $('navLive').textContent = data.people ? String(data.people) : ''
       minutesChart($('liveChart'), data.minutes)
       rankList($('livePageList'), data.pages.slice(0, 10), { label: 'path' })
-      $('liveFeed').innerHTML = data.recent.length ? data.recent.map((row) =>
-        '<div class="feed-row"><time>' + fmtWhen(row.ts) + '</time>' +
-        '<span><span class="chip' + (row.action === 'done' ? ' done' : row.action === 'error' ? ' error' : '') + '">' +
-        esc(ACTION_LABEL[row.action] || row.action) + '</span></span>' +
-        '<span class="what">' + esc(row.name) + (metaDetail(row) ? ' — ' + esc(metaDetail(row)) : '') +
-        '<small>' + esc(row.path || '/') + ' · ' + esc(row.device || '—') + ' · ' + esc(row.source || '—') + '</small></span></div>').join('')
+      $('liveFeed').innerHTML = data.recent.length ? data.recent.map((row) => {
+        const detail = metaDetail(row)
+        return '<div class="feed-row"><time>' + fmtWhen(row.ts) + '</time>' +
+          '<span><span class="chip' + (row.action === 'done' ? ' done' : row.action === 'error' ? ' error' : '') + '">' +
+          esc(ACTION_LABEL[row.action] || row.action) + '</span></span>' +
+          '<span class="what">' + esc(row.name) + (detail ? ' — ' + esc(detail) : '') +
+          '<small>' + esc(row.path || '/') + ' · ' + esc(row.device || '—') + ' · ' + esc(row.source || '—') + '</small></span></div>'
+      }).join('')
         : '<p class="empty">Пока тихо.</p>'
       $('stamp').textContent = 'обновлено ' + fmtWhen(Date.now())
-      state.loaded.live = true
     } catch (error) {
       if (!silent) toast(error.message, true)
     }
@@ -854,7 +851,6 @@
           '<td class="num hide-m">' + fmtWhen(row.last) + '</td></tr>'
       }).join('') : '<tr><td colspan="7"><p class="empty">Нет данных за период.</p></td></tr>'
       $('stamp').textContent = 'обновлено ' + fmtWhen(Date.now())
-      state.loaded.tools = true
     } catch (error) {
       if (!silent) toast(error.message, true)
     }
@@ -872,7 +868,6 @@
       chips($('audLangs'), data.langs, 'lang')
       chips($('audCountries'), data.countries, 'country')
       $('stamp').textContent = 'обновлено ' + fmtWhen(Date.now())
-      state.loaded.audience = true
     } catch (error) {
       if (!silent) toast(error.message, true)
     }
@@ -905,7 +900,6 @@
       $('evPrev').disabled = data.page <= 1
       $('evNext').disabled = data.page >= data.pages
       $('stamp').textContent = 'обновлено ' + fmtWhen(Date.now())
-      state.loaded.events = true
     } catch (error) {
       if (!silent) toast(error.message, true)
     }
@@ -947,7 +941,6 @@
         '<div class="audit-row"><time>вход</time><span><b>открытый</b><small style="display:block;color:var(--muted)">без токена и ключей</small></span></div>' +
         '<div class="audit-row"><time>сервер</time><span><b>ok</b><small style="display:block;color:var(--muted)">' + fmtWhen(health.now) + '</small></span></div>'
       $('stamp').textContent = 'обновлено ' + fmtWhen(Date.now())
-      state.loaded.settings = true
     } catch (error) {
       toast(error.message, true)
     }
@@ -1133,7 +1126,6 @@
         body: JSON.stringify({ days }),
       })
       toast('Удалено событий: ' + num(data.removed))
-      state.loaded = {}
       await loadSettings()
       await loadActive(true)
     } catch (error) {

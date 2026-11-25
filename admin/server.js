@@ -426,8 +426,6 @@ async function stats(request, env, url) {
       dones: funnel?.dones ?? 0,
     },
     settings,
-    now: now(),
-    updated: now(),
   })
 }
 

@@ -202,10 +202,7 @@ export function initTracking() {
   initialized = true
   if (!analyticsEnabled()) return
 
-  track('сессия', 'session', {
-    landing: window.location.pathname,
-    ref: context().ref || 'direct',
-  })
+  track('сессия', 'session', { landing: window.location.pathname })
 
   window.addEventListener('pagehide', leavePage)
   document.addEventListener('visibilitychange', () => {
