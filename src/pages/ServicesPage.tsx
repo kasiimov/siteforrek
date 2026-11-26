@@ -1,5 +1,3 @@
-import { AdRect } from '../components/Ads'
-import { PromoBanner } from '../components/PromoBanner'
 import { Arrow } from '../components/ui'
 import { Link } from '../lib/router'
 
@@ -111,14 +109,6 @@ export function ServicesPage() {
             </Link>
           </div>
         </article>
-      </div>
-
-      <div className="promo-slot">
-        <PromoBanner slot="services-page" />
-      </div>
-
-      <div className="promo-slot">
-        <AdRect slot="services-grid" />
       </div>
 
       <section className="cta">

@@ -1,4 +1,3 @@
-import { AdRect } from '../components/Ads'
 import { Link, ROUTES } from '../lib/router'
 import type { SeoLang } from '../lib/seoToolPages'
 
@@ -209,10 +208,6 @@ export function TermsPage({ lang }: { lang: SeoLang }) {
           ))}
         </div>
       </section>
-
-      <div className="promo-slot">
-        <AdRect slot={`terms-${lang}`} />
-      </div>
 
       <section className="cta">
         <div className="cta-inner">

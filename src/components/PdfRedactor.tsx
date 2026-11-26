@@ -50,7 +50,6 @@ import type { DocKind } from '../lib/openDoc'
 import { pagesToDocx, pagesToText } from '../lib/exportDoc'
 import { autoCropDocument } from '../lib/autocrop'
 import { snapFrame } from '../lib/frame'
-import { AdMini } from './Ads'
 
 type Tool =
   | 'select'
@@ -3042,7 +3041,7 @@ export function PdfRedactor() {
                     <span>Рамкой «Стереть» убираются старый текст, картинки и штампы.</span>
                   </div>
                 </div>
-                <AdMini slot="editor-empty" />
+                
               </div>
             </div>
           )}
@@ -3365,7 +3364,6 @@ export function PdfRedactor() {
                     <li>«Стереть» → рамка по области — старый текст и фото исчезают</li>
                   </ul>
 
-                  <AdMini slot="editor-panel" />
                 </>
               ) : (
                 <>
@@ -3454,7 +3452,6 @@ export function PdfRedactor() {
                       <span>в браузере</span>
                     </li>
                   </ul>
-                  <AdMini slot="editor-panel-empty" />
                 </>
               )}
             </div>
@@ -3501,7 +3498,7 @@ export function PdfRedactor() {
 
         {hasDoc && (
           <div className="ed-status-ad">
-            <AdMini slot="editor-status" />
+            
           </div>
         )}
 

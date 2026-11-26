@@ -1,4 +1,3 @@
-import { AdRect } from '../components/Ads'
 import { Tool } from '../components/Tool'
 import { Link } from '../lib/router'
 import { COMMON, PRIVACY_SLUG, SEO_TOOL_PAGES, toolPageBySlug } from '../lib/seoToolPages'
@@ -27,10 +26,6 @@ export function ToolSeoPage({ slug, lang }: { slug: string; lang: SeoLang }) {
       </section>
 
       <Tool key={page.toolId} only={page.toolId} />
-
-      <div className="promo-slot">
-        <AdRect slot={`tool-${slug}`} />
-      </div>
 
       <section className="how" id="how">
         <div className="section-head">

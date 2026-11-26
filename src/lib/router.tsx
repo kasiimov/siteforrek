@@ -6,9 +6,9 @@ export const ROUTES = {
   home: '/',
   tools: '/tools',
   services: '/services',
-  profile: '/profile',
-  settings: '/settings',
   editor: '/editor',
+  about: '/about',
+  contacts: '/contacts',
   uz: '/uz',
   en: '/en',
 } as const
@@ -22,8 +22,18 @@ function normalize(pathname: string): string {
 
 const KNOWN = new Set<string>(Object.values(ROUTES))
 
+const STATIC = new Set<string>([
+  '/terms',
+  '/privacy-policy',
+  '/about',
+  '/contacts',
+])
+
 export function isKnownRoute(path: string): boolean {
-  return KNOWN.has(normalize(path))
+  const n = normalize(path)
+  if (KNOWN.has(n)) return true
+  if (STATIC.has(n)) return true
+  return false
 }
 
 /** Текущий путь с подпиской на кнопки «назад/вперёд» браузера. */

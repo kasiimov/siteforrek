@@ -40,23 +40,25 @@ const PAGES: Record<string, PageMeta> = {
     keywords: 'редактор PDF онлайн, конвертер PDF, работа с PDF в браузере',
     lang: 'ru',
   },
-  [ROUTES.profile]: {
-    title: 'Профиль — Congix Docs',
-    description: 'История обработки файлов хранится только на вашем устройстве.',
-    keywords: 'Congix Docs профиль',
-    lang: 'ru',
-  },
-  [ROUTES.settings]: {
-    title: 'Настройки — Congix Docs',
-    description: 'Приватность, история и анонимная статистика Congix Docs.',
-    keywords: 'Congix Docs настройки',
-    lang: 'ru',
-  },
   [ROUTES.editor]: {
     title: 'Редактор PDF онлайн — добавляйте текст и фото в PDF',
     description:
       'Редактируйте PDF прямо в браузере: текст, фото, пустые листы, удаление пометок. Скачайте готовый PDF без регистрации и загрузки на сервер.',
     keywords: 'редактор PDF онлайн, редактировать PDF, добавить текст в PDF, добавить фото в PDF',
+    lang: 'ru',
+  },
+  '/about': {
+    title: 'О сервисе — Congix Docs',
+    description:
+      'Congix Docs — бесплатные инструменты для PDF в браузере: конвертация, редактирование, страницы и утилиты. Файлы не загружаются на сервер.',
+    keywords: 'Congix Docs о сервисе, PDF инструменты бесплатно, конвертер PDF онлайн, редактор PDF, обработка файлов в браузере',
+    lang: 'ru',
+  },
+  '/contacts': {
+    title: 'Контакты — Congix Docs',
+    description:
+      'Связь с разработчиками Congix Docs: рабочая почта и вопросы по сервису, инструментам и обработке файлов.',
+    keywords: 'Congix Docs контакты, связь с разработчиком, вопросы по PDF инструментам, email разработчика',
     lang: 'ru',
   },
   [ROUTES.uz]: {
@@ -164,6 +166,11 @@ export function applySeo(path: string) {
       )
       return
     }
+  }
+
+  if (path === '/about' || path === '/contacts') {
+    publish(PAGES[path], path)
+    return
   }
 
   publish(PAGES[path] ?? PAGES[ROUTES.home], path)

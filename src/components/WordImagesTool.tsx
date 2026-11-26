@@ -2,8 +2,6 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { DragEvent as ReactDragEvent } from 'react'
 import type { DocxStats } from '../lib/toWord'
 import { baseName, download, formatSize, saveOutputs } from '../lib/download'
-import { addHistory } from '../lib/profile'
-import { track } from '../lib/analytics'
 import { pagesLabel } from '../lib/pages'
 import {
   MAX_BATCH_FILES,
@@ -53,7 +51,6 @@ export function WordImagesTool({ mode }: { mode: 'word' | 'images' }) {
   const [items, setItems] = useState<Item[]>([])
   const [loadingFile, setLoadingFile] = useState(false)
   const [loadingNote, setLoadingNote] = useState('Открываем документ…')
-  const [demoLoading, setDemoLoading] = useState(false)
   const [job, setJob] = useState<Job | null>(null)
   const [warning, setWarning] = useState<{ job: Job; text: string } | null>(null)
   const [progress, setProgress] = useState(0)
@@ -169,22 +166,6 @@ export function WordImagesTool({ mode }: { mode: 'word' | 'images' }) {
     [items, job, loadingFile],
   )
 
-  const loadDemo = useCallback(async () => {
-    setDemoLoading(true)
-    setMessage(null)
-    try {
-      const response = await fetch(`${import.meta.env.BASE_URL}demo.pdf`)
-      if (!response.ok) throw new Error(`demo.pdf: ${response.status}`)
-      const blob = await response.blob()
-      await readItems([new File([blob], 'demo-schet.pdf', { type: 'application/pdf' })], false)
-    } catch (error) {
-      console.error(error)
-      setMessage({ tone: 'error', text: 'Не удалось открыть демо-документ. Выберите свой PDF.' })
-    } finally {
-      setDemoLoading(false)
-    }
-  }, [readItems])
-
   const handleDrop = useCallback(
     (event: ReactDragEvent<HTMLDivElement>) => {
       event.preventDefault()
@@ -212,8 +193,6 @@ export function WordImagesTool({ mode }: { mode: 'word' | 'images' }) {
       setJob(nextJob)
       setProgress(0)
       setProgressNote('')
-      setMessage(null)
-      const startedAt = Date.now()
 
       try {
         if (nextJob === 'word') {
@@ -252,18 +231,6 @@ export function WordImagesTool({ mode }: { mode: 'word' | 'images' }) {
 
           if (outputs.length === 1) download(outputs[0].blob, outputs[0].name)
           else await saveOutputs(outputs, zipName(items[0].file.name, 'word'))
-
-          track(nextJob === 'word' ? 'PDF → Word' : 'Картинки из PDF', 'done', {
-            ms: Date.now() - startedAt,
-            pages: stats.pages,
-            size: Math.round(items.reduce((sum, item) => sum + item.file.size, 0) / 1024),
-            kind: 'pdf',
-          })
-          addHistory({
-            tool: nextJob === 'word' ? 'PDF → Word' : 'Картинки из PDF',
-            fileName: items[0].file.name,
-            result: pagesLabel(stats.pages),
-          })
           setMessage({ tone: 'ok', text: wordSummary(items, stats) })
         } else if (total === 1) {
           const [{ openPdf }, { extractImages, imagesToZip }] = await Promise.all([
@@ -281,16 +248,6 @@ export function WordImagesTool({ mode }: { mode: 'word' | 'images' }) {
               return
             }
             download(await imagesToZip(images), `${baseName(items[0].file.name)}-images.zip`)
-            track('Картинки из PDF', 'done', {
-              ms: Date.now() - startedAt,
-              size: Math.round(items[0].file.size / 1024),
-              kind: 'pdf',
-            })
-            addHistory({
-              tool: 'Картинки из PDF',
-              fileName: items[0].file.name,
-              result: `${images.length} изображений`,
-            })
             setMessage({ tone: 'ok', text: imagesSummary(images.length, 1) })
           } finally {
             await pdf.destroy()
@@ -342,12 +299,6 @@ export function WordImagesTool({ mode }: { mode: 'word' | 'images' }) {
           })
         } else {
           console.error(error)
-          const message = error instanceof Error && error.message ? error.message : 'Не получилось собрать файл'
-          track(nextJob === 'word' ? 'PDF → Word' : 'Картинки из PDF', 'error', {
-            message,
-            ms: Date.now() - startedAt,
-            kind: 'pdf',
-          })
           setMessage({ tone: 'error', text: 'Не получилось собрать файл. Попробуйте другой документ.' })
         }
       } finally {
@@ -572,19 +523,6 @@ export function WordImagesTool({ mode }: { mode: 'word' | 'images' }) {
               {message.text}
             </p>
           )}
-        </div>
-      )}
-
-      {!items.length && (
-        <div className="actions">
-          <button
-            className="btn btn-soft"
-            type="button"
-            onClick={loadDemo}
-            disabled={demoLoading || loadingFile}
-          >
-            {demoLoading ? 'Готовим пример…' : 'Открыть демо-документ'}
-          </button>
         </div>
       )}
 

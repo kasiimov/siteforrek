@@ -9,6 +9,8 @@ import { loadPrefs } from './profile'
  */
 const ENDPOINT = 'https://rekpdf-admin-pwbv0q.freebuff.site/api/collect'
 const OVERVIEW = 'https://rekpdf-admin-pwbv0q.freebuff.site/api/overview'
+
+const disabled = typeof process !== 'undefined' && process.env?.DISABLE_ANALYTICS === '1'
 const VISITOR_KEY = 'rekpdf.visitor'
 const SESSION_KEY = 'rekpdf.session'
 
@@ -44,6 +46,7 @@ function sessionId(): string {
 }
 
 export function analyticsEnabled(): boolean {
+  if (disabled) return false
   return loadPrefs().analytics !== false
 }
 
@@ -58,6 +61,19 @@ export async function fetchOverview(): Promise<Overview | null> {
     const data = (await response.json()) as Partial<Overview>
     if (typeof data?.people !== 'number' || typeof data?.today !== 'number') return null
     return { people: data.people, today: data.today, week: typeof data.week === 'number' ? data.week : 0 }
+  } catch {
+    return null
+  }
+}
+
+export async function fetchStats(): Promise<{ events: number; audit: number } | null> {
+  try {
+    if (!analyticsEnabled()) return null
+    const response = await fetch('/api/health', { headers: { accept: 'application/json' } })
+    if (!response.ok) return null
+    const data = await response.json()
+    if (typeof data?.events !== 'number' || typeof data?.audit !== 'number') return null
+    return { events: data.events, audit: data.audit }
   } catch {
     return null
   }

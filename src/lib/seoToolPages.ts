@@ -353,6 +353,8 @@ export function resolvePath(path: string): ResolvedPath {
 
   if (first === PRIVACY_SLUG) return { kind: 'privacy', lang: 'ru' }
   if (first === TERMS_SLUG) return { kind: 'terms', lang: 'ru' }
+  if (first === 'about') return { kind: 'static', path: '/about' }
+  if (first === 'contacts') return { kind: 'static', path: '/contacts' }
   if (TOOL_SLUGS.has(first) && !rest.length) return { kind: 'tool', slug: first, lang: 'ru' }
 
   return { kind: 'static', path }
