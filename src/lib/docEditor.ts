@@ -1,4 +1,3 @@
-import { LineCapStyle, PDFDocument, PDFName, rgb, degrees } from 'pdf-lib'
 import type { PDFFont, PDFPage } from 'pdf-lib'
 
 export { parsePageOrder } from './pageOrder'
@@ -257,13 +256,13 @@ function fontFileFor(family: TextFamily = 'sans', bold?: boolean, italic?: boole
   return files.regular
 }
 
-function hexToRgb(hex: string) {
+function hexToRgb(hex: string): [number, number, number] {
   const value = /^#?([0-9a-f]{6})$/i.exec(hex)?.[1] ?? '111111'
-  return rgb(
+  return [
     parseInt(value.slice(0, 2), 16) / 255,
     parseInt(value.slice(2, 4), 16) / 255,
     parseInt(value.slice(4, 6), 16) / 255,
-  )
+  ]
 }
 
 /** Переводит точку страницы в координаты PDF: учитывает поворот исходной страницы. */
@@ -285,6 +284,7 @@ export type ComposeOptions = {
 export async function composePdf(options: ComposeOptions): Promise<{ blob: Blob; objects: number; pages: number }> {
   if (!options.pages.length) throw new Error('В документе нет ни одной страницы')
 
+  const { PDFDocument, PDFName, LineCapStyle, rgb, degrees } = await import('pdf-lib')
   const out = await PDFDocument.create()
   // fontkit (1,1 МБ) нужен только при сборке готового PDF — грузим его здесь, а не при открытии редактора.
   const { default: fontkit } = await import('@pdf-lib/fontkit')
@@ -332,7 +332,7 @@ export async function composePdf(options: ComposeOptions): Promise<{ blob: Blob;
       if (!object.text.trim()) return
       const font = await getFont(object.family, object.bold, object.italic)
       const [x, top] = options.toPdf(index, object.x, object.y)
-      const color = hexToRgb(object.color)
+      const color = rgb(...hexToRgb(object.color))
       const size = object.size
       const align = object.align ?? 'left'
       const step = size * lineHeightOf(object)
@@ -392,7 +392,7 @@ export async function composePdf(options: ComposeOptions): Promise<{ blob: Blob;
     }
 
     if (object.kind === 'mark') {
-      const color = hexToRgb(object.color)
+      const color = rgb(...hexToRgb(object.color))
       const stroke = Math.max(0.4, object.stroke)
       const opacity = object.opacity
       const left = object.x
@@ -517,7 +517,7 @@ export async function composePdf(options: ComposeOptions): Promise<{ blob: Blob;
         y: Math.min(y1, y2),
         width,
         height,
-        color: hexToRgb(cover.color ?? 'FFFFFF'),
+        color: rgb(...hexToRgb(cover.color ?? 'FFFFFF')),
       })
     }
 

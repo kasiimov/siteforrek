@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { DragEvent as ReactDragEvent, PointerEvent as ReactPointerEvent, ReactNode } from 'react'
 import type { PDFDocumentProxy, PDFPageProxy } from 'pdfjs-dist'
-import { openPdf } from '../lib/pdf'
 import { baseName, download, formatSize } from '../lib/download'
 import { addHistory } from '../lib/profile'
 import { track } from '../lib/analytics'
@@ -34,7 +33,6 @@ import type {
   ToPdfPoint,
 } from '../lib/docEditor'
 import { ColorPicker } from './ColorPicker'
-import { readPageRuns, renderPageRaster } from '../lib/pdfText'
 import type { TextRun } from '../lib/pdfText'
 import { OCR_LANGS, recognizeImage } from '../lib/ocr'
 import type { OcrLang } from '../lib/ocr'
@@ -550,7 +548,7 @@ export function PdfRedactor() {
     if (!proxy) return
     pageCache.current.set(model.source, proxy)
     try {
-      const list = await readPageRuns(proxy)
+      const list = await (await import('../lib/pdfText')).readPageRuns(proxy)
       if (runsRef.current[model.source]) return
       runsRef.current = { ...runsRef.current, [model.source]: list }
       setRuns(runsRef.current)
@@ -632,6 +630,8 @@ export function PdfRedactor() {
       setFile(next)
 
       if (nextKind === 'pdf') {
+        // pdf.js (406 КБ) подключается только когда файл уже выбран.
+        const { openPdf } = await import('../lib/pdf')
         const doc = await openPdf(next)
         docRef.current = doc
         setPdf(doc)
@@ -1526,6 +1526,7 @@ export function PdfRedactor() {
       const proxy =
         pageCache.current.get(model.source) ?? (await docRef.current.getPage(model.source + 1))
       pageCache.current.set(model.source, proxy)
+      const { renderPageRaster } = await import('../lib/pdfText')
       return renderPageRaster(proxy, 1600)
     }
 

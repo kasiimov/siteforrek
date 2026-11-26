@@ -1,4 +1,4 @@
-import { Packer, Document, PageBreak, Paragraph, TextRun } from 'docx'
+import type { Paragraph as DocxParagraph } from 'docx'
 import type { EditorPage } from './docEditor'
 
 /** Экспорт того, что собрано в редакторе: Word, текст и чистый список строк. */
@@ -25,7 +25,9 @@ export function pagesToText(pages: EditorPage[]): Blob {
 
 /** Собирает DOCX из текстовых блоков: размер и цвет сохраняются. */
 export async function pagesToDocx(pages: EditorPage[]): Promise<Blob> {
-  const children: Paragraph[] = []
+  // docx (193 КБ) нужен только при экспорте — не тянем его при открытии редактора.
+  const { Packer, Document, PageBreak, Paragraph, TextRun } = await import('docx')
+  const children: DocxParagraph[] = []
 
   pages.forEach((page, pageIndex) => {
     if (pageIndex > 0) children.push(new Paragraph({ children: [new PageBreak()] }))

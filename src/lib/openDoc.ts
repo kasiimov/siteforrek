@@ -1,4 +1,3 @@
-import JSZip from 'jszip'
 import { fitImage } from './docEditor'
 import type { EditorPage, ImageObject, TextObject } from './docEditor'
 
@@ -47,6 +46,8 @@ function decodeEntities(text: string): string {
 }
 
 async function readDocx(file: File): Promise<string> {
+  // jszip нужен только для DOCX — не грузим его вместе с редактором.
+  const { default: JSZip } = await import('jszip')
   const zip = await JSZip.loadAsync(await file.arrayBuffer())
   const entry = zip.file('word/document.xml')
   if (!entry) throw new Error('Внутри DOCX нет документа — файл повреждён или это не Word.')
