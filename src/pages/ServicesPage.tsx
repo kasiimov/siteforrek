@@ -114,7 +114,7 @@ export function ServicesPage() {
       </div>
 
       <div className="promo-slot">
-        <PromoBanner slot="services-page" size="inline" />
+        <PromoBanner slot="services-page" />
       </div>
 
       <div className="promo-slot">

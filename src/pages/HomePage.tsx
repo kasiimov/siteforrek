@@ -203,7 +203,7 @@ export function HomePage() {
         </div>
         <Tool compact />
         <div className="promo-slot">
-          <PromoBanner slot="after-tool" size="inline" />
+          <PromoBanner slot="after-tool" />
         </div>
       </section>
 

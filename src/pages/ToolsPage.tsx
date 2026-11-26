@@ -19,7 +19,7 @@ export function ToolsPage() {
       <Tool compact />
 
       <div className="promo-slot">
-        <PromoBanner slot="tools-page" size="inline" />
+        <PromoBanner slot="tools-page" />
       </div>
 
       <div className="promo-slot">
