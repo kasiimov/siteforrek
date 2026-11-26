@@ -1,3 +1,4 @@
+import { parsePageOrder } from '../lib/pageOrder'
 import { parsePageList, parseRangeGroups } from '../lib/pages'
 import type { ToolSpec, Values } from './toolTypes'
 
@@ -177,7 +178,7 @@ export const catalog: ToolSpec[] = [
     ],
     run: async (files, values, onProgress) => {
       const total = await pdfFile(files[0])
-      const order = (await import('../lib/docEditor')).parsePageOrder(values.order, total)
+      const order = parsePageOrder(values.order, total)
       return (await loadPdfEdit()).reorderPages(files[0], order, onProgress)
     },
   },

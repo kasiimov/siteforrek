@@ -1,6 +1,7 @@
 import { LineCapStyle, PDFDocument, PDFName, rgb, degrees } from 'pdf-lib'
-import fontkit from '@pdf-lib/fontkit'
 import type { PDFFont, PDFPage } from 'pdf-lib'
+
+export { parsePageOrder } from './pageOrder'
 
 /** Модель редактора: страница-источник + объекты, которые пользователь добавил. */
 
@@ -201,25 +202,6 @@ export function clampPosition(
   }
 }
 
-/** Новый порядок страниц: «3, 1, 2» — все страницы ровно по одному разу. */
-export function parsePageOrder(input: string, total: number): number[] {
-  const tokens = input
-    .split(/[^\d]+/)
-    .filter(Boolean)
-    .map(Number)
-
-  if (!tokens.length) throw new Error('Укажите новый порядок страниц, например: 3, 1, 2')
-  if (tokens.some((page) => !Number.isInteger(page) || page < 1 || page > total)) {
-    throw new Error(`Страницы должны быть от 1 до ${total}`)
-  }
-  if (new Set(tokens).size !== tokens.length) throw new Error('Одна и та же страница указана дважды')
-  if (tokens.length !== total) {
-    throw new Error(`Нужно перечислить все страницы: их ${total}, а в списке ${tokens.length}`)
-  }
-
-  return tokens
-}
-
 export function describeOrder(order: number[]): string {
   if (order.every((page, index) => page === index + 1)) return 'порядок не меняется'
   return order.join(' → ')
@@ -304,6 +286,8 @@ export async function composePdf(options: ComposeOptions): Promise<{ blob: Blob;
   if (!options.pages.length) throw new Error('В документе нет ни одной страницы')
 
   const out = await PDFDocument.create()
+  // fontkit (1,1 МБ) нужен только при сборке готового PDF — грузим его здесь, а не при открытии редактора.
+  const { default: fontkit } = await import('@pdf-lib/fontkit')
   out.registerFontkit(fontkit)
   const fontCache = new Map<string, PDFFont>()
   // Начертания и семейства подключаем только если они действительно есть в тексте.

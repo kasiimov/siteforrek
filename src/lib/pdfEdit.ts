@@ -1,5 +1,4 @@
 import { PDFArray, PDFDocument, PDFName, StandardFonts, degrees, rgb } from 'pdf-lib'
-import fontkit from '@pdf-lib/fontkit'
 import { pdfjsLib } from './pdf'
 import { baseName, formatSize, type Output } from './download'
 
@@ -194,6 +193,8 @@ export async function addWatermark(file: File, options: WatermarkOptions): Promi
   if (!text) throw new Error('Введите текст водяного знака')
 
   const doc = await load(await file.arrayBuffer())
+  // Шрифт с кириллицей требует fontkit (1,1 МБ) — грузим его только здесь, а не вместе с инструментом.
+  const { default: fontkit } = await import('@pdf-lib/fontkit')
   doc.registerFontkit(fontkit)
   const font = await doc.embedFont(await loadWatermarkFont(), { subset: true })
 
