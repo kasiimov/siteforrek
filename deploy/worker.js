@@ -5,12 +5,50 @@
 
 const DREX_ENDPOINT = 'https://console.nace.ai/v1/systemone'
 const DREX_MODEL = 'drex-latest'
+const MAX_BODY = 256 * 1024
+const RATE_LIMIT = 20
+const RATE_WINDOW = 60 * 1000
 
-function json(data, status = 200) {
+const buckets = new Map()
+
+function json(data, status = 200, headers = {}) {
   return new Response(JSON.stringify(data), {
     status,
-    headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' },
+    headers: {
+      'content-type': 'application/json; charset=utf-8',
+      'cache-control': 'no-store',
+      'x-content-type-options': 'nosniff',
+      ...headers,
+    },
   })
+}
+
+function clientIp(request) {
+  return request.headers.get('cf-connecting-ip') || request.headers.get('x-forwarded-for') || 'local'
+}
+
+/** Счётчик в памяти изолята: ключ Drex платный, поэтому чужой флуд отсекаем. */
+function allow(key, limit, windowMs) {
+  const at = Date.now()
+  const bucket = buckets.get(key)
+  if (!bucket || bucket.reset <= at) {
+    if (buckets.size > 5000) buckets.clear()
+    buckets.set(key, { count: 1, reset: at + windowMs })
+    return true
+  }
+  bucket.count += 1
+  return bucket.count <= limit
+}
+
+/** Только свой сайт: чужой Origin не должен тратить ключ. */
+function sameOrigin(request) {
+  const origin = request.headers.get('Origin')
+  if (!origin) return true
+  try {
+    return new URL(origin).host === new URL(request.url).host
+  } catch {
+    return false
+  }
 }
 
 /**
@@ -18,14 +56,23 @@ function json(data, status = 200) {
  * Ответ отдаём как есть — с вероятностями по каждому варианту.
  */
 async function decide(request, env) {
+  if (request.method === 'OPTIONS') return new Response(null, { status: 204 })
   if (request.method !== 'POST') return json({ error: 'Только POST.' }, 405)
+  if (!sameOrigin(request)) return json({ error: 'Запрос с чужого источника отклонён.' }, 403)
 
   const key = env.NACE_API_KEY
   if (!key) return json({ error: 'NACE_API_KEY не настроен на сервере.' }, 503)
 
+  if (!allow('decide:' + clientIp(request), RATE_LIMIT, RATE_WINDOW)) {
+    return json({ error: 'Слишком много запросов. Подождите минуту.' }, 429, { 'retry-after': '60' })
+  }
+
+  const raw = await request.text()
+  if (raw.length > MAX_BODY) return json({ error: 'Слишком большое тело запроса.' }, 413)
+
   let body
   try {
-    body = await request.json()
+    body = JSON.parse(raw)
   } catch {
     return json({ error: 'Тело запроса должно быть JSON.' }, 400)
   }

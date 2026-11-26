@@ -63,7 +63,7 @@ export type ImageObject = ObjectBase & {
   base?: boolean
 }
 
-export type MarkKind = 'highlight' | 'rect' | 'line' | 'arrow' | 'check' | 'cross' | 'ink'
+export type MarkKind = 'highlight' | 'frame' | 'rect' | 'line' | 'arrow' | 'check' | 'cross' | 'ink'
 
 /**
  * Пометка на странице: выделение, рамка, линия, стрелка, галочка, крестик и рисунок от руки.
@@ -433,8 +433,30 @@ export async function composePdf(options: ComposeOptions): Promise<{ blob: Blob;
         return { x: Math.min(x1, x2), y: Math.min(y1, y2), width: Math.abs(x2 - x1), height: Math.abs(y2 - y1) }
       }
 
-      if (object.mark === 'highlight') {
+      if (object.mark === 'highlight' && !(object.points && object.points.length > 1)) {
+        // Старые документы хранили маркер полосой — их рисуем как раньше.
         target.drawRectangle({ ...rect(left, top, object.width, object.height), color, opacity: opacity ?? 0.35 })
+        return
+      }
+      if (object.mark === 'frame') {
+        const gap = Math.max(3, stroke * 3)
+        target.drawRectangle({
+          ...rect(left, top, object.width, object.height),
+          borderColor: color,
+          borderWidth: stroke,
+          opacity: opacity ?? 1,
+        })
+        target.drawRectangle({
+          ...rect(
+            left + gap,
+            top + gap,
+            Math.max(1, object.width - gap * 2),
+            Math.max(1, object.height - gap * 2),
+          ),
+          borderColor: color,
+          borderWidth: Math.max(0.4, stroke / 2),
+          opacity: opacity ?? 1,
+        })
         return
       }
       if (object.mark === 'rect') {
@@ -470,6 +492,7 @@ export async function composePdf(options: ComposeOptions): Promise<{ blob: Blob;
         line(right - object.width * 0.12, top + object.height * 0.12, left + object.width * 0.12, bottom - object.height * 0.12)
         return
       }
+      // Карандаш и маркер: свободный штрих по точкам.
       const points = object.points ?? []
       for (let position = 1; position < points.length; position++) {
         line(points[position - 1].x, points[position - 1].y, points[position].x, points[position].y)

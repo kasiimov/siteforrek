@@ -1,9 +1,11 @@
 /**
  * Админка Congix Docs: D1 с анонимными событиями сайта, журналом, ошибками и настройками.
  *
- * Вход пока открытый: без токена, ключей и cookie — это осознанное временное
- * решение владельца. Изменяющие запросы по-прежнему принимаются только с того же
- * Origin, а сами события сайта не содержат файлов, имён и почты.
+ * Вход: если в окружении задан ADMIN_PASSWORD, панель закрыта подписанной
+ * cookie-сессией (HttpOnly, SameSite=Strict, 7 дней) и паролем на форме входа.
+ * Без ADMIN_PASSWORD вход открытый — так панель работает на превью.
+ * Изменяющие запросы принимаются только с того же Origin, а сами события сайта
+ * не содержат файлов, имён и почты.
  *
  * Файл — только серверная часть. Страница лежит в page.html и встраивается
  * в worker.js сборщиком: `node admin/build.mjs`.
@@ -15,6 +17,14 @@ const MAX_FIELD = 120
 const MAX_META = 600
 const MAX_PERIOD = 3650
 const LIVE_WINDOW_MS = 5 * 60 * 1000
+
+const SESSION_COOKIE = 'congix_admin'
+const SESSION_TTL = 7 * 86400000
+const LOGIN_LIMIT = 6
+const LOGIN_WINDOW = 15 * 60 * 1000
+const COLLECT_LIMIT = 300
+const COLLECT_WINDOW = 60 * 1000
+const PRUNE_EVERY = 60 * 60 * 1000
 
 const ACTIONS = new Set(['view', 'open', 'done', 'error', 'leave', 'session'])
 const ACTION_LABEL = {
@@ -159,6 +169,100 @@ function sameOrigin(request) {
   return origin === new URL(request.url).origin || ALLOWED_ORIGINS.has(origin)
 }
 
+/* ── сессии и лимиты ─────────────────────────────────────────── */
+
+const encoder = new TextEncoder()
+const buckets = new Map()
+let lastPrune = 0
+
+function base64url(bytes) {
+  let binary = ''
+  for (const byte of bytes) binary += String.fromCharCode(byte)
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+}
+
+function timingSafeEqual(a, b) {
+  if (a.length !== b.length) return false
+  let diff = 0
+  for (let index = 0; index < a.length; index += 1) diff |= a.charCodeAt(index) ^ b.charCodeAt(index)
+  return diff === 0
+}
+
+async function sign(secret, data) {
+  const key = await crypto.subtle.importKey('raw', encoder.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, [
+    'sign',
+  ])
+  return new Uint8Array(await crypto.subtle.sign('HMAC', key, encoder.encode(data)))
+}
+
+/** Пароль из секрета окружения: без него панель работает в открытом режиме. */
+function openMode(env) {
+  return !env.ADMIN_PASSWORD
+}
+
+function sessionSecret(env) {
+  return env.ADMIN_SECRET || env.ADMIN_PASSWORD || 'congix-open'
+}
+
+function sessionCookie(request) {
+  const cookie = request.headers.get('Cookie') || ''
+  const match = cookie.match(new RegExp('(?:^|; )' + SESSION_COOKIE + '=([^;]*)'))
+  return match ? decodeURIComponent(match[1]) : ''
+}
+
+async function issueSession(env) {
+  const expires = String(Date.now() + SESSION_TTL)
+  return expires + '.' + base64url(await sign(sessionSecret(env), expires))
+}
+
+async function validSession(request, env) {
+  if (openMode(env)) return true
+  const token = sessionCookie(request)
+  const [payload, signature] = token.split('.')
+  if (!payload || !signature) return false
+  const expires = Number(payload)
+  if (!Number.isFinite(expires) || expires < Date.now()) return false
+  return timingSafeEqual(base64url(await sign(sessionSecret(env), payload)), signature)
+}
+
+function cookieHeader(request, value, maxAge) {
+  const secure = new URL(request.url).protocol === 'https:' ? '; Secure' : ''
+  return `${SESSION_COOKIE}=${encodeURIComponent(value)}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${maxAge}${secure}`
+}
+
+function clientIp(request) {
+  return request.headers.get('cf-connecting-ip') || request.headers.get('x-forwarded-for') || 'local'
+}
+
+/** Простой счётчик в памяти изолята: защита от перебора пароля и флуда событиями. */
+function allow(key, limit, windowMs) {
+  const at = Date.now()
+  const bucket = buckets.get(key)
+  if (!bucket || bucket.reset <= at) {
+    if (buckets.size > 5000) buckets.clear()
+    buckets.set(key, { count: 1, reset: at + windowMs })
+    return true
+  }
+  bucket.count += 1
+  return bucket.count <= limit
+}
+
+/** Чистка по сроку хранения: не чаще раза в час и без ошибок наружу. */
+async function pruneExpired(env) {
+  if (Date.now() - lastPrune < PRUNE_EVERY) return
+  lastPrune = Date.now()
+  try {
+    const { retentionDays } = await readSettings(env)
+    if (retentionDays > 0) {
+      await env.DB.prepare('DELETE FROM events WHERE ts < ?')
+        .bind(now() - retentionDays * 86400000)
+        .run()
+    }
+  } catch {
+    // Если база занята — попробуем в следующий раз.
+  }
+}
+
 /* ── аудит и настройки ───────────────────────────────────────── */
 
 async function audit(env, action, detail = '') {
@@ -187,6 +291,10 @@ async function collect(request, env) {
 
   const origin = request.headers.get('Origin') ?? ''
   if (origin && !ALLOWED_ORIGINS.has(origin)) return cors(request, new Headers(), 403)
+
+  if (!allow('collect:' + clientIp(request), COLLECT_LIMIT, COLLECT_WINDOW)) {
+    return cors(request, new Headers(), 429)
+  }
 
   let body
   try {
@@ -248,6 +356,8 @@ async function collect(request, env) {
     )
     .run()
 
+  await pruneExpired(env)
+
   return cors(request, new Headers(), 204)
 }
 
@@ -278,19 +388,45 @@ async function overview(request, env) {
   return response
 }
 
-/* ── открытый вход ───────────────────────────────────────────── */
+/* ── вход в панель ───────────────────────────────────────────── */
 
-async function login() {
-  return json({ ok: true, open: true })
+async function login(request, env) {
+  if (openMode(env)) return json({ ok: true, open: true })
+  if (request.method !== 'POST') return json({ error: 'Вход — POST с паролем.' }, 405)
+
+  const ip = clientIp(request)
+  if (!allow('login:' + ip, LOGIN_LIMIT, LOGIN_WINDOW)) {
+    return json({ error: 'Слишком много попыток. Подождите 15 минут.' }, 429)
+  }
+
+  let body
+  try {
+    body = await request.json()
+  } catch {
+    return json({ error: 'Нужен JSON с паролем.' }, 400)
+  }
+  const password = typeof body?.password === 'string' ? body.password.slice(0, 200) : ''
+  if (!password || !timingSafeEqual(password, String(env.ADMIN_PASSWORD))) {
+    await audit(env, 'неудачный вход', ip)
+    return json({ error: 'Неверный пароль.' }, 401)
+  }
+
+  const token = await issueSession(env)
+  await audit(env, 'вход в панель', ip)
+  return json({ ok: true, open: false }, 200, {
+    'set-cookie': cookieHeader(request, token, Math.floor(SESSION_TTL / 1000)),
+  })
 }
 
-async function logout() {
-  return json({ ok: true })
+async function logout(request, env) {
+  await ensureSchema(env)
+  await audit(env, 'выход из панели', clientIp(request))
+  return json({ ok: true }, 200, { 'set-cookie': cookieHeader(request, '', 0) })
 }
 
 async function session(request, env) {
   await ensureSchema(env)
-  return json({ authenticated: true, open: true })
+  return json({ authenticated: await validSession(request, env), open: openMode(env) })
 }
 
 /* ── статистика ──────────────────────────────────────────────── */
@@ -1110,7 +1246,7 @@ async function health(request, env) {
     ok: true,
     events: events?.value ?? 0,
     audit: auditCount?.value ?? 0,
-    auth: 'open',
+    auth: openMode(env) ? 'open' : 'password',
     now: now(),
   })
 }
@@ -1124,6 +1260,14 @@ export default {
     if (request.method === 'OPTIONS') return cors(request, new Headers(), 204)
 
     if (!sameOrigin(request)) return json({ error: 'Запрос с чужого источника отклонён.' }, 403)
+
+    // Открыты только приём событий, мини-свод и вход: всё остальное — после пароля.
+    const publicRoutes = new Set(['/api/collect', '/api/overview', '/api/health', '/api/session', '/api/login', '/api/logout'])
+    if (url.pathname.startsWith('/api/') && !publicRoutes.has(url.pathname)) {
+      if (!(await validSession(request, env))) {
+        return json({ error: 'Нужен вход в панель.' }, 401)
+      }
+    }
 
     const routes = {
       '/api/collect': () => collect(request, env),

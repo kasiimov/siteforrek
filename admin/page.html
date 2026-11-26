@@ -427,6 +427,23 @@
     .funnel-step { grid-template-columns: 78px minmax(0,1fr) 48px; }
     .seg { margin-left: 0; }
   }
+
+  /* ── вход по паролю ──────────────────────────────────── */
+
+  .gate {
+    position: fixed; inset: 0; z-index: 60; display: grid; place-items: center;
+    padding: 24px; background: var(--bg);
+  }
+  .gate-card {
+    display: grid; gap: 10px; width: min(360px, 100%); padding: 22px;
+    background: var(--surface); border: 1px solid var(--line);
+    border-radius: var(--radius); box-shadow: var(--shadow);
+  }
+  .gate-card .brand-mark { width: 36px; height: 36px; font-size: 17px; }
+  .gate-card h1 { margin: 2px 0 0; font-size: 16px; letter-spacing: -.01em; }
+  .gate-card p { margin: 0; color: var(--muted); font-size: 11.5px; }
+  .gate-card .solid { width: 100%; }
+  .gate-note { color: var(--accent) !important; }
 </style>
 </head>
 <body>
@@ -450,7 +467,8 @@
     </nav>
 
     <div class="rail-foot">
-      <span class="open-badge">открытый вход</span>
+      <span class="open-badge" id="authBadge">открытый вход</span>
+      <button class="ghost" id="logout" type="button" hidden>Выйти <span>⏻</span></button>
       <p class="stamp" id="stamp">—</p>
     </div>
   </aside>
@@ -896,6 +914,17 @@
   <div class="drawer-body" id="udBody"></div>
 </aside>
 
+<div class="gate" id="gate" hidden>
+  <form class="gate-card" id="gateForm">
+    <span class="brand-mark">C</span>
+    <h1>Congix Docs</h1>
+    <p>Панель закрыта паролем. Введите его — сессия останется на 7 дней.</p>
+    <input class="control" id="gatePass" type="password" autocomplete="current-password" placeholder="Пароль" required />
+    <button class="solid" type="submit">Войти</button>
+    <p class="fine gate-note" id="gateNote" hidden></p>
+  </form>
+</div>
+
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
 <script>
@@ -1023,6 +1052,10 @@
     const response = await fetch(path, Object.assign({ credentials: 'same-origin' }, options || {}))
     const type = response.headers.get('content-type') || ''
     const data = type.includes('application/json') ? await response.json().catch(() => ({})) : null
+    if (response.status === 401) {
+      showGate('Сессия истекла — введите пароль заново.')
+      throw new Error('Нужен вход в панель.')
+    }
     if (!response.ok) throw new Error((data && data.error) || 'Запрос не удался (' + response.status + ')')
     return data
   }
@@ -1893,6 +1926,49 @@
 
   /* ── старт ─────────────────────────────────────────── */
 
+  function showGate(message) {
+    const gate = $('gate')
+    if (!gate) return
+    gate.hidden = false
+    const note = $('gateNote')
+    if (note && message) {
+      note.hidden = false
+      note.textContent = message
+    }
+  }
+
+  function bindGate() {
+    const form = $('gateForm')
+    if (form) {
+      form.addEventListener('submit', async (event) => {
+        event.preventDefault()
+        const input = $('gatePass')
+        try {
+          await api('/api/login', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ password: input.value }),
+          })
+          location.reload()
+        } catch (error) {
+          showGate(error && error.message ? error.message : 'Неверный пароль.')
+        }
+      })
+    }
+
+    const logout = $('logout')
+    if (logout) {
+      logout.addEventListener('click', async () => {
+        try {
+          await api('/api/logout', { method: 'POST' })
+        } catch (error) {
+          // Всё равно перезагружаем: cookie уже погашена на сервере.
+        }
+        location.reload()
+      })
+    }
+  }
+
   function boot() {
     const tab = (location.hash.replace('#/', '') || 'overview').trim()
     const initial = TITLES[tab] ? tab : 'overview'
@@ -1905,7 +1981,28 @@
     }, 60000)
   }
 
-  boot()
+  async function start() {
+    bindGate()
+    try {
+      const info = await api('/api/session')
+      if (info && info.open === false) {
+        const badge = $('authBadge')
+        if (badge) badge.textContent = 'вход по паролю'
+        const logout = $('logout')
+        if (logout) logout.hidden = false
+      }
+      if (info && info.authenticated === false) {
+        showGate()
+        return
+      }
+    } catch (error) {
+      showGate('Не удалось связаться с сервером.')
+      return
+    }
+    boot()
+  }
+
+  start()
 })()
 </script>
 </body>

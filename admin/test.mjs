@@ -471,6 +471,51 @@ check('выход не закрывает открытую панель, health 
   assert.equal(health.auth, 'open')
 })
 
+check('с паролем панель закрыта, а вход выдаёт подписанную сессию', async () => {
+  const locked = { DB: makeD1(), ADMIN_PASSWORD: 'секрет-42' }
+  const request = (path, init = {}) => worker.fetch(new Request(origin + path, init), locked)
+
+  assert.equal((await request('/api/stats')).status, 401)
+  assert.equal((await request('/api/users')).status, 401)
+  assert.equal((await request('/api/overview')).status, 200)
+  assert.equal((await request('/api/health')).status, 200)
+
+  const session = await (await request('/api/session')).json()
+  assert.equal(session.authenticated, false)
+  assert.equal(session.open, false)
+
+  const wrong = await request('/api/login', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ password: 'не тот' }),
+  })
+  assert.equal(wrong.status, 401)
+
+  const ok = await request('/api/login', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ password: 'секрет-42' }),
+  })
+  assert.equal(ok.status, 200)
+  const cookie = ok.headers.get('set-cookie')
+  assert.match(cookie, /congix_admin=/)
+  assert.match(cookie, /HttpOnly/)
+  assert.match(cookie, /SameSite=Strict/)
+
+  const auth = { Cookie: cookie.split(';')[0] }
+  assert.equal((await request('/api/stats', { headers: auth })).status, 200)
+
+  const forged = await request('/api/stats', { headers: { Cookie: 'congix_admin=1.deadbeef' } })
+  assert.equal(forged.status, 401)
+
+  const out = await request('/api/logout', { method: 'POST', headers: auth })
+  assert.equal(out.status, 200)
+  assert.match(out.headers.get('set-cookie'), /Max-Age=0/)
+
+  const health = await (await request('/api/health')).json()
+  assert.equal(health.auth, 'password')
+})
+
 /* ── прогон ──────────────────────────────────────────────── */
 
 let failed = 0

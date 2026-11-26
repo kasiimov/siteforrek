@@ -51,6 +51,7 @@ import {
 import type { DocKind } from '../lib/openDoc'
 import { pagesToDocx, pagesToText } from '../lib/exportDoc'
 import { autoCropDocument } from '../lib/autocrop'
+import { snapFrame } from '../lib/frame'
 import { AdMini } from './Ads'
 
 type Tool =
@@ -60,6 +61,7 @@ type Tool =
   | 'highlight'
   | 'ink'
   | 'rect'
+  | 'frame'
   | 'line'
   | 'arrow'
   | 'check'
@@ -76,7 +78,8 @@ const HINTS: Record<Tool, string> = {
   select: 'Щёлкните объект, чтобы выбрать. Тащите мышкой или пальцем, а за уголок меняйте размер.',
   text: 'Нажмите на готовую строку — её текст откроется справа и его можно править. Пустое место — новый текст.',
   erase: 'Проведите по странице рамкой — эта область станет белой. Так убирают старый текст, фото и штампы.',
-  highlight: 'Проведите по строке — сверху ляжет полупрозрачная полоса. Цвет и толщину — справа.',
+  highlight: 'Проведите как карандашом — маркер ляжет полупрозрачным штрихом по тексту. Цвет и толщину — справа.',
+  frame: 'Обведите блок — рамка сама встанет по его краям с ровными полями. Цвет и толщину — справа.',
   ink: 'Рисуйте от руки мышкой или пальцем. Толщина и цвет пера — справа.',
   rect: 'Растяните рамку вокруг важного места.',
   line: 'Проведите линию: подчеркнуть или зачеркнуть.',
@@ -88,7 +91,7 @@ const HINTS: Record<Tool, string> = {
 /** Одиночные штампы: один тап ставит готовую отметку. */
 const STAMP_TOOLS: Tool[] = ['check', 'cross']
 /** Фигуры рисуются протяжкой рамки. */
-const DRAG_TOOLS: Tool[] = ['highlight', 'rect', 'line', 'arrow', 'ink']
+const DRAG_TOOLS: Tool[] = ['highlight', 'frame', 'rect', 'line', 'arrow', 'ink']
 
 /** Что сейчас делает распознавание: на телефоне загрузка языка — самое долгое место. */
 const OCR_STATUS_LABELS: Record<string, string> = {
@@ -274,6 +277,7 @@ const ICONS = {
   marker: 'M5 19l3-1 9-9-3-3-9 9-1 3zM14 5l3 3',
   pen: 'M4 20l3.5-.8L19 7.7l-2.7-2.7L4.8 16.5zM15 4.5l3 3',
   rect: 'M4 5h16v14H4z',
+  frame: 'M4 5h16v14H4zM7 8h10v8H7z',
   line: 'M5 19L19 5',
   arrow: 'M5 19L19 5M19 5h-6M19 5v6',
   check: 'M5 13l4 4L19 7',
@@ -439,6 +443,7 @@ export function PdfRedactor() {
   const [markColor, setMarkColor] = useState('FDE047')
   const [penColor, setPenColor] = useState('111111')
   const [penWidth, setPenWidth] = useState(2)
+  const [markWidth, setMarkWidth] = useState(12)
   const [stampSize, setStampSize] = useState(32)
   const [drawing, setDrawing] = useState<MarkObject | null>(null)
   const [signOpen, setSignOpen] = useState(false)
@@ -1073,42 +1078,50 @@ export function PdfRedactor() {
     const width = Math.abs(end.x - start.x)
     const height = Math.abs(end.y - start.y)
 
-    if (tool === 'ink') {
+    if (tool === 'ink' || tool === 'highlight') {
       const xs = points.map((point) => point.x)
       const ys = points.map((point) => point.y)
       const left = Math.min(...xs)
       const top = Math.min(...ys)
+      const marker = tool === 'highlight'
+      const thickness = marker ? Math.max(6, markWidth) : penWidth
+      // Штрих маркера толще пера — расширяем его рамку на половину толщины,
+      // иначе тонкая горизонтальная полоса превратится в точку.
+      const half = marker ? thickness / 2 : 0
+      const boxLeft = Math.max(0, left - half)
+      const boxTop = Math.max(0, top - half)
       return {
         kind: 'mark',
-        mark: 'ink',
+        mark: marker ? 'highlight' : 'ink',
         id,
-        x: left,
-        y: top,
-        width: Math.max(0.5, Math.max(...xs) - left),
-        height: Math.max(0.5, Math.max(...ys) - top),
-        color: penColor,
-        stroke: penWidth,
+        x: boxLeft,
+        y: boxTop,
+        width: Math.max(0.5, Math.max(...xs) + half - boxLeft),
+        height: Math.max(0.5, Math.max(...ys) + half - boxTop),
+        color: marker ? markColor : penColor,
+        stroke: thickness,
+        opacity: marker ? 0.35 : undefined,
         points,
-      }
-    }
-
-    if (tool === 'highlight') {
-      return {
-        kind: 'mark',
-        mark: 'highlight',
-        id,
-        x,
-        y,
-        width: Math.max(2, width),
-        height: Math.max(9, height),
-        color: markColor,
-        stroke: 0,
-        opacity: 0.35,
       }
     }
 
     if (tool === 'rect') {
       return { kind: 'mark', mark: 'rect', id, x, y, width, height, color: penColor, stroke: penWidth }
+    }
+
+    if (tool === 'frame') {
+      // Края подгонит snapFrame в момент отпускания — здесь только черновик.
+      return {
+        kind: 'mark',
+        mark: 'frame',
+        id,
+        x,
+        y,
+        width: Math.max(8, width),
+        height: Math.max(8, height),
+        color: penColor,
+        stroke: penWidth,
+      }
     }
 
     // Линия и стрелка: направление задаётся тем, куда тянули.
@@ -1314,7 +1327,7 @@ export function PdfRedactor() {
         const x = Math.max(0, Math.min((event.clientX - stage.left) / scale, model.box.width))
         const y = Math.max(0, Math.min((event.clientY - stage.top) / scale, model.box.height))
         const current = markRef.current
-        if (current.tool === 'ink') {
+        if (current.tool === 'ink' || current.tool === 'highlight') {
           const last = current.points[current.points.length - 1]
           if (!last || Math.hypot(x - last.x, y - last.y) > 0.7) current.points.push({ x, y })
         }
@@ -1381,7 +1394,42 @@ export function PdfRedactor() {
         if (preview) {
           const inked = (preview.points?.length ?? 0) > 1
           const drawn = preview.width > 2 || preview.height > 2
-          if (preview.mark === 'ink' ? inked : drawn) addMark({ ...preview, id: uid() })
+          const keep = preview.points ? inked : drawn
+          if (keep) {
+            if (preview.mark === 'frame') {
+              const model = pagesRef.current[index]
+              if (model) {
+                const targets = model.objects
+                  .filter((object) => !(object.kind === 'image' && object.base))
+                  .map((object) => ({
+                    x: object.x,
+                    y: object.y,
+                    width: object.width,
+                    height: object.kind === 'text' ? object.size * 1.5 : object.height,
+                  }))
+                const snapped = snapFrame(preview, targets, model.box)
+                addMark({
+                  ...preview,
+                  x: snapped.x,
+                  y: snapped.y,
+                  width: snapped.width,
+                  height: snapped.height,
+                  id: uid(),
+                })
+                setMessage({
+                  tone: 'ok',
+                  text:
+                    snapped.snap === 'content'
+                      ? 'Рамка встала по краям содержимого — поля ровные.'
+                      : snapped.snap === 'page'
+                        ? 'Рамка встала по полям листа — отступы со всех сторон одинаковые.'
+                        : 'Рамка выровнена по сетке. Её можно перетащить за край.',
+                })
+              }
+            } else {
+              addMark({ ...preview, id: uid() })
+            }
+          }
         }
       }
 
@@ -2215,6 +2263,12 @@ export function PdfRedactor() {
                     onClick={() => setTool('rect')}
                   />
                   <RibbonBtn
+                    icon={ICONS.frame}
+                    label="Авторамка"
+                    active={tool === 'frame'}
+                    onClick={() => setTool('frame')}
+                  />
+                  <RibbonBtn
                     icon={ICONS.line}
                     label="Линия"
                     active={tool === 'line'}
@@ -2549,6 +2603,12 @@ export function PdfRedactor() {
                     label="Рамка"
                     active={tool === 'rect'}
                     onClick={() => setTool('rect')}
+                  />
+                  <RibbonBtn
+                    icon={ICONS.frame}
+                    label="Авторамка"
+                    active={tool === 'frame'}
+                    onClick={() => setTool('frame')}
                   />
                   <RibbonBtn
                     icon={ICONS.line}
@@ -3148,8 +3208,10 @@ export function PdfRedactor() {
                 <>
                   <p className="panel-note">
                     {selectedObject.mark === 'highlight'
-                      ? 'Полупрозрачная полоса поверх текста — сам текст остаётся виден и не меняется.'
-                      : 'Пометка лежит поверх содержимого страницы и попадает в готовый PDF.'}
+                      ? 'Полупрозрачный штрих маркера поверх текста — сам текст остаётся виден и не меняется.'
+                      : selectedObject.mark === 'frame'
+                        ? 'Рамка стоит по краям содержимого с ровными полями и попадает в готовый PDF.'
+                        : 'Пометка лежит поверх содержимого страницы и попадает в готовый PDF.'}
                   </p>
 
                   <div className="field">
@@ -3161,20 +3223,18 @@ export function PdfRedactor() {
                     />
                   </div>
 
-                  {selectedObject.mark !== 'highlight' && (
-                    <div className="field">
-                      <span className="field-label">Толщина</span>
-                      <input
-                        className="field-input"
-                        type="range"
-                        min={1}
-                        max={14}
-                        value={Math.round(selectedObject.stroke)}
-                        onChange={(event) => updateObject(selectedObject.id, { stroke: Number(event.target.value) })}
-                        aria-label="Толщина линии"
-                      />
-                    </div>
-                  )}
+                  <div className="field">
+                    <span className="field-label">Толщина</span>
+                    <input
+                      className="field-input"
+                      type="range"
+                      min={1}
+                      max={30}
+                      value={Math.round(selectedObject.stroke)}
+                      onChange={(event) => updateObject(selectedObject.id, { stroke: Number(event.target.value) })}
+                      aria-label="Толщина пометки"
+                    />
+                  </div>
 
                   <div className="field">
                     <span className="field-label">Размер</span>
@@ -3319,7 +3379,7 @@ export function PdfRedactor() {
                           label="Цвет инструмента"
                         />
                       </div>
-                      {(tool === 'ink' || tool === 'rect' || tool === 'line' || tool === 'arrow') && (
+                      {(tool === 'ink' || tool === 'frame' || tool === 'rect' || tool === 'line' || tool === 'arrow') && (
                         <div className="field">
                           <span className="field-label">Толщина</span>
                           <input
@@ -3330,6 +3390,20 @@ export function PdfRedactor() {
                             value={penWidth}
                             onChange={(event) => setPenWidth(Number(event.target.value))}
                             aria-label="Толщина линии"
+                          />
+                        </div>
+                      )}
+                      {tool === 'highlight' && (
+                        <div className="field">
+                          <span className="field-label">Толщина маркера</span>
+                          <input
+                            className="field-input"
+                            type="range"
+                            min={6}
+                            max={30}
+                            value={markWidth}
+                            onChange={(event) => setMarkWidth(Number(event.target.value))}
+                            aria-label="Толщина маркера"
                           />
                         </div>
                       )}
@@ -3616,7 +3690,7 @@ function MarkView({ object }: { object: MarkObject }) {
     strokeLinejoin: 'round' as const,
   }
 
-  if (object.mark === 'highlight') {
+  if (object.mark === 'highlight' && !(object.points && object.points.length > 1)) {
     return (
       <span
         className="redactor-mark-highlight"
@@ -3640,6 +3714,27 @@ function MarkView({ object }: { object: MarkObject }) {
       preserveAspectRatio="none"
       aria-hidden="true"
     >
+      {object.mark === 'frame' && (
+        <>
+          <rect
+            x={stroke / 2}
+            y={stroke / 2}
+            width={Math.max(0.5, w - stroke)}
+            height={Math.max(0.5, h - stroke)}
+            {...common}
+          />
+          <rect
+            x={Math.max(3, stroke * 3)}
+            y={Math.max(3, stroke * 3)}
+            width={Math.max(0.5, w - Math.max(3, stroke * 3) * 2)}
+            height={Math.max(0.5, h - Math.max(3, stroke * 3) * 2)}
+            {...common}
+            strokeWidth={Math.max(0.4, stroke / 2)}
+            opacity={0.7}
+          />
+        </>
+      )}
+
       {object.mark === 'rect' && (
         <rect x={stroke / 2} y={stroke / 2} width={Math.max(0.5, w - stroke)} height={Math.max(0.5, h - stroke)} {...common} />
       )}
@@ -3665,6 +3760,18 @@ function MarkView({ object }: { object: MarkObject }) {
           <line x1={w * 0.12} y1={h * 0.12} x2={w * 0.88} y2={h * 0.88} {...common} />
           <line x1={w * 0.88} y1={h * 0.12} x2={w * 0.12} y2={h * 0.88} {...common} />
         </>
+      )}
+
+      {object.mark === 'highlight' && object.points && object.points.length > 1 && (
+        <polyline
+          points={object.points.map((point) => `${point.x - object.x},${point.y - object.y}`).join(' ')}
+          fill="none"
+          stroke={color}
+          strokeWidth={stroke}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          opacity={object.opacity ?? 0.35}
+        />
       )}
 
       {object.mark === 'ink' && object.points && object.points.length > 1 && (
