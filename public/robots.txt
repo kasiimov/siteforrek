@@ -1,4 +1,23 @@
 User-agent: *
 Allow: /
 
+# Поиск и проверка объявлений Google: страницы должны открываться без ограничений.
+User-agent: Googlebot
+Allow: /
+
+User-agent: Googlebot-Image
+Allow: /
+
+User-agent: AdsBot-Google
+Allow: /
+
+User-agent: AdsBot-Google-Mobile
+Allow: /
+
+User-agent: Mediapartners-Google
+Allow: /
+
+User-agent: Google-Adwords-Instant
+Allow: /
+
 Sitemap: https://rekpdf-ircn71.freebuff.site/sitemap.xml

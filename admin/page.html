@@ -1052,7 +1052,8 @@
     const response = await fetch(path, Object.assign({ credentials: 'same-origin' }, options || {}))
     const type = response.headers.get('content-type') || ''
     const data = type.includes('application/json') ? await response.json().catch(() => ({})) : null
-    if (response.status === 401) {
+    // 401 на самом входе — это неверный пароль, а не истёкшая сессия.
+    if (response.status === 401 && path !== '/api/login') {
       showGate('Сессия истекла — введите пароль заново.')
       throw new Error('Нужен вход в панель.')
     }

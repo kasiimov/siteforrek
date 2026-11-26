@@ -2124,6 +2124,32 @@ select.field-input option {
   box-shadow: 0 0 0 3px rgba(74, 222, 128, 0.16);
 }
 
+.footer-contact {
+  flex: 1 1 100%;
+  font-size: 0.78rem;
+  color: #8a8ba0;
+}
+
+.footer-contact a {
+  color: #d9d9e8;
+  text-decoration: none;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.18);
+}
+
+.footer-contact a:hover {
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.45);
+}
+
+.footer-bottom a {
+  color: #8a8ba0;
+  text-decoration: none;
+}
+
+.footer-bottom a:hover {
+  color: #f4f4f8;
+}
+
 .footer-links {
   display: flex;
   flex-wrap: wrap;

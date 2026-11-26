@@ -111,12 +111,41 @@ const PRIVACY_META: Record<SeoLang, PageMeta> = {
   },
 }
 
+const TERMS_META: Record<SeoLang, PageMeta> = {
+  ru: {
+    title: 'Условия использования — Congix Docs',
+    description:
+      'Условия использования Congix Docs: бесплатные инструменты для PDF, обработка файлов в браузере, допустимое использование, реклама и контакты.',
+    keywords: 'условия использования Congix Docs, правила сервиса, PDF онлайн',
+    lang: 'ru',
+  },
+  uz: {
+    title: 'Foydalanish shartlari — Congix Docs',
+    description:
+      "Congix Docs foydalanish shartlari: bepul PDF vositalar, fayllar brauzerda qayta ishlanadi, ruxsat etilgan foydalanish, reklama va bog'lanish.",
+    keywords: "foydalanish shartlari, PDF onlayn, xizmat qoidalari",
+    lang: 'uz',
+  },
+  en: {
+    title: 'Terms of use — Congix Docs',
+    description:
+      'Congix Docs terms of use: free PDF tools with in-browser processing, acceptable use, advertising and contact details.',
+    keywords: 'terms of use, PDF online, service rules',
+    lang: 'en',
+  },
+}
+
 /** Подставляет заголовок, описание и canonical под текущий маршрут. */
 export function applySeo(path: string) {
   const resolved = resolvePath(path)
 
   if (resolved.kind === 'privacy') {
     publish(PRIVACY_META[resolved.lang], path)
+    return
+  }
+
+  if (resolved.kind === 'terms') {
+    publish(TERMS_META[resolved.lang], path)
     return
   }
 

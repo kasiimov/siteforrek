@@ -7,6 +7,7 @@ import { SettingsPage } from './pages/SettingsPage'
 import { SeoPage } from './pages/SeoPage'
 import { ToolSeoPage } from './pages/ToolSeoPage'
 import { PrivacyPage } from './pages/PrivacyPage'
+import { TermsPage } from './pages/TermsPage'
 import { AdFooter, AdLeaderboard } from './components/Ads'
 import { applySeo } from './lib/seo'
 import { resolvePath } from './lib/seoToolPages'
@@ -33,8 +34,11 @@ const FOOTER_LINKS = [
   { to: ROUTES.settings, label: 'Настройки' },
   { to: ROUTES.uz, label: "O'zbekcha" },
   { to: ROUTES.en, label: 'English' },
+  { to: '/terms', label: 'Условия использования' },
   { to: '/privacy-policy', label: 'Конфиденциальность' },
 ]
+
+const CONTACT_EMAIL = 'likedissdei@gmail.com'
 
 function NotFound({ path }: { path: string }) {
   return (
@@ -153,6 +157,7 @@ export default function App() {
         {resolved.kind === 'lang' && <SeoPage lang={resolved.lang} />}
         {resolved.kind === 'tool' && <ToolSeoPage slug={resolved.slug} lang={resolved.lang} />}
         {resolved.kind === 'privacy' && <PrivacyPage lang={resolved.lang} />}
+        {resolved.kind === 'terms' && <TermsPage lang={resolved.lang} />}
       </main>
 
       {/* нижний рекламный слот перед подвалом — на каждой странице */}
@@ -172,6 +177,10 @@ export default function App() {
             <span className="footer-dot" aria-hidden="true" />
             {live ? `Пользователей: ${live.people} · сегодня ${live.today}` : 'Ноль загрузок'}
           </span>
+          <p className="footer-contact">
+            Связь с нами:{' '}
+            <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>
+          </p>
         </div>
 
         <nav className="footer-links" aria-label="Разделы сайта">
@@ -186,6 +195,9 @@ export default function App() {
         <div className="footer-bottom">
           <p className="footer-copy">© {new Date().getFullYear()} Congix Docs</p>
           <p className="footer-stack">pdf.js · docx · pdf-lib — всё считается на вашем устройстве</p>
+          <p className="footer-copy">
+            <Link to="/terms">Условия</Link> · <Link to="/privacy-policy">Конфиденциальность</Link>
+          </p>
         </div>
       </footer>
     </div>

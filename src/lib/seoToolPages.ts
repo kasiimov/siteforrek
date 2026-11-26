@@ -324,12 +324,14 @@ export function toolPageBySlug(slug: string): SeoToolPage | undefined {
 }
 
 export const PRIVACY_SLUG = 'privacy-policy'
+export const TERMS_SLUG = 'terms'
 
 export type ResolvedPath =
   | { kind: 'static'; path: string }
   | { kind: 'lang'; lang: 'uz' | 'en' }
   | { kind: 'tool'; slug: string; lang: SeoLang }
   | { kind: 'privacy'; lang: SeoLang }
+  | { kind: 'terms'; lang: SeoLang }
   | { kind: 'notfound'; path: string }
 
 /** Разбирает адрес: язык в первом сегменте, дальше slug инструмента или политика. */
@@ -344,11 +346,13 @@ export function resolvePath(path: string): ResolvedPath {
     const next = rest.join('/')
     if (!next) return { kind: 'lang', lang }
     if (next === PRIVACY_SLUG) return { kind: 'privacy', lang }
+    if (next === TERMS_SLUG) return { kind: 'terms', lang }
     if (TOOL_SLUGS.has(next)) return { kind: 'tool', slug: next, lang }
     return { kind: 'notfound', path }
   }
 
   if (first === PRIVACY_SLUG) return { kind: 'privacy', lang: 'ru' }
+  if (first === TERMS_SLUG) return { kind: 'terms', lang: 'ru' }
   if (TOOL_SLUGS.has(first) && !rest.length) return { kind: 'tool', slug: first, lang: 'ru' }
 
   return { kind: 'static', path }
