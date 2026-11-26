@@ -4784,7 +4784,12 @@ select.field-input option {
 }
 
 @media (max-width: 760px) {
-  .ad-rail,
+  /* На телефоне верхний баннер съедал первый экран: заголовок страницы
+     должен быть виден сразу, поэтому оставляем только нижний блок. */
+  .ad-rail {
+    display: none;
+  }
+
   .ad-footer {
     width: calc(100% - 24px);
     margin-top: 14px;
