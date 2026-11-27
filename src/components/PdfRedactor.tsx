@@ -47,7 +47,6 @@ import {
 } from '../lib/openDoc'
 import type { DocKind } from '../lib/openDoc'
 import { pagesToDocx, pagesToText } from '../lib/exportDoc'
-import { autoCropDocument } from '../lib/autocrop'
 import { snapFrame } from '../lib/frame'
 
 type Tool =
@@ -111,16 +110,6 @@ function pageMargin(width: number): number {
 }
 
 const uid = () => Math.random().toString(36).slice(2, 10)
-
-/** Какие края бумаги пришлось дорисовать — для сообщения пользователю. */
-function paperPadNote(padded: { left: number; top: number; right: number; bottom: number }): string {
-  const sides: string[] = []
-  if (padded.left) sides.push('слева')
-  if (padded.top) sides.push('сверху')
-  if (padded.right) sides.push('справа')
-  if (padded.bottom) sides.push('снизу')
-  return sides.length ? `, бумагу дополнили ${sides.join(', ')}` : ''
-}
 
 const iconStroke = {
   fill: 'none',
@@ -198,8 +187,6 @@ type EditorSettings = {
   showThumbs: boolean
   showPanel: boolean
   showHints: boolean
-  /** обрезать бумагу на фото документов при вставке */
-  autoCrop: boolean
 }
 
 const SETTINGS_KEY = 'congix-editor-settings'
@@ -211,7 +198,6 @@ const DEFAULT_SETTINGS: EditorSettings = {
   showThumbs: true,
   showPanel: true,
   showHints: true,
-  autoCrop: true,
 }
 
 function loadSettings(): EditorSettings {
@@ -233,7 +219,6 @@ function loadSettings(): EditorSettings {
       showThumbs: parsed.showThumbs !== false,
       showPanel: parsed.showPanel !== false,
       showHints: parsed.showHints !== false,
-      autoCrop: parsed.autoCrop !== false,
     }
   } catch {
     return { ...DEFAULT_SETTINGS }
@@ -443,7 +428,6 @@ export function PdfRedactor() {
   const [stampSize, setStampSize] = useState(32)
   const [drawing, setDrawing] = useState<MarkObject | null>(null)
   const [signOpen, setSignOpen] = useState(false)
-  const [cropBusy, setCropBusy] = useState(false)
 
   const docRef = useRef<PDFDocumentProxy | null>(null)
   const pageCache = useRef(new Map<number, PDFPageProxy>())
@@ -884,17 +868,7 @@ export function PdfRedactor() {
     try {
       const bytes = new Uint8Array(await next.arrayBuffer())
       const type = /png/i.test(next.type) || /\.png$/i.test(next.name) ? 'png' : 'jpg'
-      let data: Uint8Array = bytes
-      let crop: Awaited<ReturnType<typeof autoCropDocument>> = null
-      if (settings.autoCrop) {
-        try {
-          crop = await autoCropDocument(bytes, type)
-        } catch (error) {
-          // Не разобрали фото — не страшно, вставим как есть.
-          console.error(error)
-        }
-      }
-      if (crop) data = crop.bytes
+      const data: Uint8Array = bytes
       const mime = type === 'png' ? 'image/png' : 'image/jpeg'
       const bitmap = await createImageBitmap(new Blob([data as BlobPart], { type: mime }))
       const size = fitImage(page.box, bitmap.width, bitmap.height)
@@ -920,52 +894,11 @@ export function PdfRedactor() {
       setTool('select')
       setMessage({
         tone: 'ok',
-        text: crop
-          ? `Фото документа обрезано по краю листа${paperPadNote(crop.padded)}. Фото уже выделено — тащите или меняйте размер.`
-          : settings.autoCrop
-            ? 'На фото не нашли лист документа — вставили как есть. Тащите фото или меняйте размер за уголок.'
-            : 'Фото добавлено и уже выделено — тащите его по странице или за уголок меняйте размер.',
+        text: 'Фото добавлено и уже выделено — тащите его по странице или за уголок меняйте размер.',
       })
     } catch (error) {
       console.error(error)
       setMessage({ tone: 'error', text: 'Не получилось прочитать картинку. Подойдут PNG и JPG.' })
-    }
-  }
-
-  /** Автообрезка уже вставленного фото: лист найдётся — заменим картинку. */
-  const cropSelectedImage = async (object: ImageObject) => {
-    if (cropBusy) return
-    setCropBusy(true)
-    try {
-      const crop = await autoCropDocument(object.data, object.type)
-      if (!crop) {
-        setMessage({
-          tone: 'info',
-          text: 'На этом фото не нашли лист документа — автообрезка не применена. Она работает только со снимками бумаги.',
-        })
-        return
-      }
-      const bitmap = await createImageBitmap(
-        new Blob([crop.bytes as BlobPart], { type: crop.type === 'png' ? 'image/png' : 'image/jpeg' }),
-      )
-      const ratio = bitmap.height / Math.max(1, bitmap.width)
-      bitmap.close()
-      // Старый URL картинки больше не нужен: объект остался с тем же id.
-      imageUrls.delete(object.id)
-      updateObject(object.id, {
-        data: crop.bytes,
-        type: crop.type,
-        height: Math.max(12, Math.round(object.width * ratio)),
-      })
-      setMessage({
-        tone: 'ok',
-        text: `Обрезали по краю листа${paperPadNote(crop.padded)}. Размер и место на странице сохранили.`,
-      })
-    } catch (error) {
-      console.error(error)
-      setMessage({ tone: 'error', text: 'Не получилось обрезать фото. Попробуйте снимок поровнее и посветлее.' })
-    } finally {
-      setCropBusy(false)
     }
   }
 
@@ -2293,18 +2226,6 @@ export function PdfRedactor() {
                 </div>
               </RibbonGroup>
 
-              <RibbonGroup label="Фото документа">
-                <div className="ed-group-row">
-                  <RibbonBtn
-                    icon={ICONS.crop}
-                    label="Автообрезка"
-                    active={settings.autoCrop}
-                    onClick={() => changeSettings({ autoCrop: !settings.autoCrop })}
-                    title="Обрезать бумагу на фото документа при вставке и дорисовать края"
-                  />
-                </div>
-              </RibbonGroup>
-
               <RibbonGroup label="Пометки">
                 <div className="ed-group-row">
                   <RibbonBtn
@@ -3279,17 +3200,6 @@ export function PdfRedactor() {
                     />
                     <span className="panel-note">{Math.round(selectedObject.width)} pt по ширине страницы</span>
                   </label>
-
-                  <button
-                    type="button"
-                    className="btn btn-quiet"
-                    onClick={() => void cropSelectedImage(selectedObject)}
-                    disabled={cropBusy}
-                    title="Найти лист документа на фото и обрезать поля"
-                  >
-                    <Icon d={ICONS.crop} />
-                    {cropBusy ? 'Ищем лист…' : 'Автообрезка фото'}
-                  </button>
                 </>
               )}
 
@@ -4104,16 +4014,6 @@ function SettingsDialog({
             onChange={(event) => onChange({ showHints: event.target.checked })}
           />
           <span>Подсказки под лентой</span>
-        </label>
-
-        <p className="ed-settings-group">Фото</p>
-        <label className="ed-check ed-check-row">
-          <input
-            type="checkbox"
-            checked={settings.autoCrop}
-            onChange={(event) => onChange({ autoCrop: event.target.checked })}
-          />
-          <span>Автообрезка документа на фото</span>
         </label>
 
         <div className="ed-modal-row">
