@@ -2904,6 +2904,20 @@ select.field-input option {
   background: #fff;
 }
 
+/* Обёртка рабочей области: прокручивается только лист, а зум и уведомление
+   лежат снаружи прокрутки и остаются на месте при скролле. */
+.ed-canvas-holder {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+}
+
+.ed-canvas-holder > .ed-canvas-area {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
 .ed-canvas-area {
   position: relative;
   display: block;
@@ -4246,7 +4260,7 @@ select.field-input option {
     max-height: 68px;
   }
 
-  .editor-app.show-thumbs .ed-canvas-area {
+  .editor-app.show-thumbs .ed-canvas-holder {
     grid-row: 2;
     grid-column: 2 / -1;
   }
@@ -4278,7 +4292,7 @@ select.field-input option {
 }
 
 @media (max-width: 760px) {
-  .editor-app.show-thumbs .ed-canvas-area {
+  .editor-app.show-thumbs .ed-canvas-holder {
     grid-column: 1 / -1;
   }
 }

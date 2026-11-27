@@ -2812,237 +2812,239 @@ export function PdfRedactor() {
           </aside>
         )}
 
-        <div className="ed-canvas-area" ref={stageWrapRef}>
-          <div className="ed-canvas-inner">
-          {page ? (
-            <div
-              className={`redactor-stage tool-${tool}`}
-              style={{ width: Math.floor(page.box.width * scale), height: Math.floor(page.box.height * scale) }}
-              onPointerDown={onStageDown}
-            >
-              <canvas ref={canvasRef} className="redactor-canvas" />
+        <div className="ed-canvas-holder">
+          <div className="ed-canvas-area" ref={stageWrapRef}>
+            <div className="ed-canvas-inner">
+            {page ? (
+              <div
+                className={`redactor-stage tool-${tool}`}
+                style={{ width: Math.floor(page.box.width * scale), height: Math.floor(page.box.height * scale) }}
+                onPointerDown={onStageDown}
+              >
+                <canvas ref={canvasRef} className="redactor-canvas" />
 
-              {covers.map((cover, coverIndex) => (
-                <span
-                  key={`cover-${coverIndex}`}
-                  className={`redactor-cover${tool === 'erase' ? ' is-visible' : ''}${
-                    tool === 'erase' || tool === 'select' ? ' is-clickable' : ''
-                  }${selectedCover === coverIndex ? ' is-selected' : ''}`}
-                  title="Белое пятно: закрывает старый текст. Щёлкните, чтобы убрать (Delete)."
-                  style={{
-                    left: Math.round(cover.x * scale),
-                    top: Math.round(cover.y * scale),
-                    width: Math.round(cover.width * scale),
-                    height: Math.round(cover.height * scale),
-                    background: cover.color ? `#${cover.color}` : undefined,
-                  }}
-                  onPointerDown={(event) => {
-                    if (tool !== 'erase' && tool !== 'select') return
-                    event.stopPropagation()
-                    event.preventDefault()
-                    setSelected(null)
-                    setSelectedCover(coverIndex)
-                    setPanelOpen(true)
-                  }}
-                />
-              ))}
-
-              {tool === 'text' &&
-                pageRuns
-                  .filter((run) => !coveredBy(run))
-                  .slice(0, 600)
-                  .map((run, runIndex) => (
-                    <span
-                      key={`run-${runIndex}`}
-                      className="redactor-run"
-                      style={{
-                        left: Math.round(run.x * scale),
-                        top: Math.round(run.y * scale),
-                        width: Math.round(run.width * scale),
-                        height: Math.round(run.height * scale),
-                      }}
-                    />
-                  ))}
-
-              {page.objects.map((object) => {
-                const size = objectSize(object)
-                const isSelected = object.id === selected
-                return (
-                  <div
-                    key={object.id}
-                    className={`redactor-object${isSelected ? ' is-selected' : ''}${
-                      object.kind === 'image' && object.base ? ' is-base' : ''
-                    }`}
+                {covers.map((cover, coverIndex) => (
+                  <span
+                    key={`cover-${coverIndex}`}
+                    className={`redactor-cover${tool === 'erase' ? ' is-visible' : ''}${
+                      tool === 'erase' || tool === 'select' ? ' is-clickable' : ''
+                    }${selectedCover === coverIndex ? ' is-selected' : ''}`}
+                    title="Белое пятно: закрывает старый текст. Щёлкните, чтобы убрать (Delete)."
                     style={{
-                      left: Math.round(object.x * scale),
-                      top: Math.round(object.y * scale),
-                      width: Math.round(size.width * scale),
-                      ...(object.kind === 'text'
-                        ? { minHeight: Math.round(size.height * scale) }
-                        : { height: Math.round(size.height * scale) }),
+                      left: Math.round(cover.x * scale),
+                      top: Math.round(cover.y * scale),
+                      width: Math.round(cover.width * scale),
+                      height: Math.round(cover.height * scale),
+                      background: cover.color ? `#${cover.color}` : undefined,
                     }}
                     onPointerDown={(event) => {
+                      if (tool !== 'erase' && tool !== 'select') return
                       event.stopPropagation()
-                      if (tool === 'erase') return
                       event.preventDefault()
-                      if (tool === 'text' && object.kind === 'text') {
-                        setSelected(object.id)
-                        setPanelOpen(true)
-                        setFocusToken((value) => value + 1)
-                        return
-                      }
-                      setSelected(object.id)
-                      setSelectedCover(null)
+                      setSelected(null)
+                      setSelectedCover(coverIndex)
                       setPanelOpen(true)
-                      resizeRef.current = null
-                      dragRef.current = {
-                        id: object.id,
-                        startX: event.clientX,
-                        startY: event.clientY,
-                        originX: object.x,
-                        originY: object.y,
-                        moved: false,
-                      }
+                    }}
+                  />
+                ))}
+
+                {tool === 'text' &&
+                  pageRuns
+                    .filter((run) => !coveredBy(run))
+                    .slice(0, 600)
+                    .map((run, runIndex) => (
+                      <span
+                        key={`run-${runIndex}`}
+                        className="redactor-run"
+                        style={{
+                          left: Math.round(run.x * scale),
+                          top: Math.round(run.y * scale),
+                          width: Math.round(run.width * scale),
+                          height: Math.round(run.height * scale),
+                        }}
+                      />
+                    ))}
+
+                {page.objects.map((object) => {
+                  const size = objectSize(object)
+                  const isSelected = object.id === selected
+                  return (
+                    <div
+                      key={object.id}
+                      className={`redactor-object${isSelected ? ' is-selected' : ''}${
+                        object.kind === 'image' && object.base ? ' is-base' : ''
+                      }`}
+                      style={{
+                        left: Math.round(object.x * scale),
+                        top: Math.round(object.y * scale),
+                        width: Math.round(size.width * scale),
+                        ...(object.kind === 'text'
+                          ? { minHeight: Math.round(size.height * scale) }
+                          : { height: Math.round(size.height * scale) }),
+                      }}
+                      onPointerDown={(event) => {
+                        event.stopPropagation()
+                        if (tool === 'erase') return
+                        event.preventDefault()
+                        if (tool === 'text' && object.kind === 'text') {
+                          setSelected(object.id)
+                          setPanelOpen(true)
+                          setFocusToken((value) => value + 1)
+                          return
+                        }
+                        setSelected(object.id)
+                        setSelectedCover(null)
+                        setPanelOpen(true)
+                        resizeRef.current = null
+                        dragRef.current = {
+                          id: object.id,
+                          startX: event.clientX,
+                          startY: event.clientY,
+                          originX: object.x,
+                          originY: object.y,
+                          moved: false,
+                        }
+                      }}
+                    >
+                      {object.kind === 'text' ? (
+                        <span
+                          className={`redactor-text${object.text ? '' : ' is-placeholder'}`}
+                          style={{
+                            fontSize: Math.max(4, object.size * scale),
+                            lineHeight: lineHeightOf(object),
+                            color: `#${object.color}`,
+                            fontFamily: fontStackFor(object.family),
+                            fontWeight: object.bold ? 700 : 400,
+                            fontStyle: object.italic ? 'italic' : 'normal',
+                            textAlign: object.align ?? 'left',
+                            textDecoration: [object.underline ? 'underline' : '', object.strike ? 'line-through' : '']
+                              .filter(Boolean)
+                              .join(' ') || 'none',
+                          }}
+                        >
+                          {object.text || 'Введите текст'}
+                        </span>
+                      ) : object.kind === 'mark' ? (
+                        <MarkView object={object} />
+                      ) : (
+                        <>
+                          <img className="redactor-image" src={imageUrl(object)} alt="" draggable={false} />
+                          {isSelected && (
+                            <span
+                              className="redactor-handle"
+                              title="Потяните, чтобы изменить размер"
+                              onPointerDown={(event) => {
+                                event.stopPropagation()
+                                event.preventDefault()
+                                setSelected(object.id)
+                                dragRef.current = null
+                                resizeRef.current = {
+                                  id: object.id,
+                                  startX: event.clientX,
+                                  originWidth: size.width,
+                                  ratio: size.width ? size.height / size.width : 1,
+                                  moved: false,
+                                }
+                              }}
+                            />
+                          )}
+                        </>
+                      )}
+                    </div>
+                  )
+                })}
+
+                {drawing && (
+                  <div
+                    className="redactor-object redactor-mark"
+                    style={{
+                      left: Math.round(drawing.x * scale),
+                      top: Math.round(drawing.y * scale),
+                      width: Math.max(1, Math.round(drawing.width * scale)),
+                      height: Math.max(1, Math.round(drawing.height * scale)),
                     }}
                   >
-                    {object.kind === 'text' ? (
-                      <span
-                        className={`redactor-text${object.text ? '' : ' is-placeholder'}`}
-                        style={{
-                          fontSize: Math.max(4, object.size * scale),
-                          lineHeight: lineHeightOf(object),
-                          color: `#${object.color}`,
-                          fontFamily: fontStackFor(object.family),
-                          fontWeight: object.bold ? 700 : 400,
-                          fontStyle: object.italic ? 'italic' : 'normal',
-                          textAlign: object.align ?? 'left',
-                          textDecoration: [object.underline ? 'underline' : '', object.strike ? 'line-through' : '']
-                            .filter(Boolean)
-                            .join(' ') || 'none',
-                        }}
-                      >
-                        {object.text || 'Введите текст'}
-                      </span>
-                    ) : object.kind === 'mark' ? (
-                      <MarkView object={object} />
-                    ) : (
-                      <>
-                        <img className="redactor-image" src={imageUrl(object)} alt="" draggable={false} />
-                        {isSelected && (
-                          <span
-                            className="redactor-handle"
-                            title="Потяните, чтобы изменить размер"
-                            onPointerDown={(event) => {
-                              event.stopPropagation()
-                              event.preventDefault()
-                              setSelected(object.id)
-                              dragRef.current = null
-                              resizeRef.current = {
-                                id: object.id,
-                                startX: event.clientX,
-                                originWidth: size.width,
-                                ratio: size.width ? size.height / size.width : 1,
-                                moved: false,
-                              }
-                            }}
-                          />
-                        )}
-                      </>
-                    )}
+                    <MarkView object={drawing} />
                   </div>
-                )
-              })}
+                )}
 
-              {drawing && (
+                {erasePreview && erasePreview.width > 0 && (
+                  <span
+                    className="redactor-erase"
+                    style={{
+                      left: Math.round(erasePreview.x * scale),
+                      top: Math.round(erasePreview.y * scale),
+                      width: Math.round(erasePreview.width * scale),
+                      height: Math.round(erasePreview.height * scale),
+                    }}
+                  />
+                )}
+              </div>
+            ) : (
+              <div className="ed-empty">
                 <div
-                  className="redactor-object redactor-mark"
-                  style={{
-                    left: Math.round(drawing.x * scale),
-                    top: Math.round(drawing.y * scale),
-                    width: Math.max(1, Math.round(drawing.width * scale)),
-                    height: Math.max(1, Math.round(drawing.height * scale)),
+                  className={`dropzone ed-dropzone${dragging ? ' is-dragging' : ''}${loading ? ' is-loading' : ''}`}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => inputRef.current?.click()}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault()
+                      inputRef.current?.click()
+                    }
                   }}
-                >
-                  <MarkView object={drawing} />
-                </div>
-              )}
-
-              {erasePreview && erasePreview.width > 0 && (
-                <span
-                  className="redactor-erase"
-                  style={{
-                    left: Math.round(erasePreview.x * scale),
-                    top: Math.round(erasePreview.y * scale),
-                    width: Math.round(erasePreview.width * scale),
-                    height: Math.round(erasePreview.height * scale),
-                  }}
-                />
-              )}
-            </div>
-          ) : (
-            <div className="ed-empty">
-              <div
-                className={`dropzone ed-dropzone${dragging ? ' is-dragging' : ''}${loading ? ' is-loading' : ''}`}
-                role="button"
-                tabIndex={0}
-                onClick={() => inputRef.current?.click()}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter' || event.key === ' ') {
+                  onDragOver={(event) => {
                     event.preventDefault()
-                    inputRef.current?.click()
-                  }
-                }}
-                onDragOver={(event) => {
-                  event.preventDefault()
-                  setDragging(true)
-                }}
-                onDragLeave={() => setDragging(false)}
-                onDrop={onDrop}
-              >
-                <div className="dropzone-icon">
-                  <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                    <path
-                      d="M4 7.5A2.5 2.5 0 0 1 6.5 5H10l2 2h5.5A2.5 2.5 0 0 1 20 9.5v7A2.5 2.5 0 0 1 17.5 19h-11A2.5 2.5 0 0 1 4 16.5z"
-                      stroke="currentColor"
-                      strokeWidth="1.6"
-                      strokeLinejoin="round"
-                    />
-                    <path d="M9 13h6M12 10v6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-                  </svg>
+                    setDragging(true)
+                  }}
+                  onDragLeave={() => setDragging(false)}
+                  onDrop={onDrop}
+                >
+                  <div className="dropzone-icon">
+                    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                      <path
+                        d="M4 7.5A2.5 2.5 0 0 1 6.5 5H10l2 2h5.5A2.5 2.5 0 0 1 20 9.5v7A2.5 2.5 0 0 1 17.5 19h-11A2.5 2.5 0 0 1 4 16.5z"
+                        stroke="currentColor"
+                        strokeWidth="1.6"
+                        strokeLinejoin="round"
+                      />
+                      <path d="M9 13h6M12 10v6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+                    </svg>
+                  </div>
+                  <p className="dropzone-title">Откройте документ</p>
+                  <p className="dropzone-hint">PDF, DOCX, MD, TXT и фото документа — перетащите или нажмите</p>
+                  <span className="dropzone-note">до {MAX_FILE_MB} МБ · файл остаётся в браузере</span>
                 </div>
-                <p className="dropzone-title">Откройте документ</p>
-                <p className="dropzone-hint">PDF, DOCX, MD, TXT и фото документа — перетащите или нажмите</p>
-                <span className="dropzone-note">до {MAX_FILE_MB} МБ · файл остаётся в браузере</span>
-              </div>
 
-              <div className="ed-quick">
-                <p className="ed-quick-title">Что можно сделать в редакторе</p>
-                <div className="ed-quick-grid">
-                  <div className="ed-quick-item">
-                    <Icon d={ICONS.text} />
-                    <b>Править готовый текст</b>
-                    <span>Нажмите «Текст» и щёлкните строку PDF — её можно изменить или удалить.</span>
+                <div className="ed-quick">
+                  <p className="ed-quick-title">Что можно сделать в редакторе</p>
+                  <div className="ed-quick-grid">
+                    <div className="ed-quick-item">
+                      <Icon d={ICONS.text} />
+                      <b>Править готовый текст</b>
+                      <span>Нажмите «Текст» и щёлкните строку PDF — её можно изменить или удалить.</span>
+                    </div>
+                    <div className="ed-quick-item">
+                      <Icon d={ICONS.scan} />
+                      <b>Распознать скан</b>
+                      <span>Фото документа или скан PDF → «Распознать», и текст станет редактируемым.</span>
+                    </div>
+                    <div className="ed-quick-item">
+                      <Icon d={ICONS.image} />
+                      <b>Фото и печати</b>
+                      <span>PNG или JPG встанет на лист, тащите и тяните за уголок.</span>
+                    </div>
+                    <div className="ed-quick-item">
+                      <Icon d={ICONS.erase} />
+                      <b>Стереть лишнее</b>
+                      <span>Рамкой «Стереть» убираются старый текст, картинки и штампы.</span>
+                    </div>
                   </div>
-                  <div className="ed-quick-item">
-                    <Icon d={ICONS.scan} />
-                    <b>Распознать скан</b>
-                    <span>Фото документа или скан PDF → «Распознать», и текст станет редактируемым.</span>
-                  </div>
-                  <div className="ed-quick-item">
-                    <Icon d={ICONS.image} />
-                    <b>Фото и печати</b>
-                    <span>PNG или JPG встанет на лист, тащите и тяните за уголок.</span>
-                  </div>
-                  <div className="ed-quick-item">
-                    <Icon d={ICONS.erase} />
-                    <b>Стереть лишнее</b>
-                    <span>Рамкой «Стереть» убираются старый текст, картинки и штампы.</span>
-                  </div>
-                </div>
                 
+                </div>
               </div>
+            )}
             </div>
-          )}
           </div>
 
           {page && (
