@@ -3,7 +3,7 @@ import { resolvePath, toolPageBySlug } from './seoToolPages'
 import type { SeoLang } from './seoToolPages'
 
 /** Базовый адрес прод-сайта: нужен для canonical, og:url и карты сайта. */
-export const SITE_URL = 'https://rekpdf-ircn71.freebuff.site'
+export const SITE_URL = 'https://congix-convert.netlify.app'
 
 type PageMeta = {
   title: string

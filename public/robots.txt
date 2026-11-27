@@ -20,4 +20,4 @@ Allow: /
 User-agent: Google-Adwords-Instant
 Allow: /
 
-Sitemap: https://rekpdf-ircn71.freebuff.site/sitemap.xml
+Sitemap: https://congix-convert.netlify.app/sitemap.xml
