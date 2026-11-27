@@ -1,21 +1,70 @@
 import { Tool } from '../components/Tool'
 import { Link } from '../lib/router'
 import { COMMON, PRIVACY_SLUG, SEO_TOOL_PAGES, toolPageBySlug } from '../lib/seoToolPages'
+import { toolDetail } from '../lib/toolDetails'
 import type { SeoLang } from '../lib/seoToolPages'
 
 function prefix(lang: SeoLang) {
   return lang === 'ru' ? '' : '/' + lang
 }
 
-/** Страница одного инструмента: рабочая зона, инструкция, преимущества, FAQ и перелинковка. */
+const LABELS: Record<
+  SeoLang,
+  {
+    aboutEyebrow: string
+    about: string
+    useCases: string
+    steps: string
+    example: string
+    tips: string
+    limits: string
+    faqExtra: string
+  }
+> = {
+  ru: {
+    aboutEyebrow: 'Подробно',
+    about: 'Что это и зачем нужно',
+    useCases: 'Когда пригодится',
+    steps: 'Пошаговая инструкция',
+    example: 'Пример',
+    tips: 'На что обратить внимание',
+    limits: 'Чего инструмент не делает',
+    faqExtra: 'Вопросы об инструменте',
+  },
+  uz: {
+    aboutEyebrow: 'Batafsil',
+    about: 'Bu nima va nima uchun kerak',
+    useCases: 'Qachon kerak bo‘ladi',
+    steps: "Bosqichma-bosqich yo'riqnoma",
+    example: 'Misol',
+    tips: "Nimaga e'tibor berish kerak",
+    limits: 'Vosita nima qilmaydi',
+    faqExtra: 'Vosita haqida savollar',
+  },
+  en: {
+    aboutEyebrow: 'In detail',
+    about: 'What it does and why it matters',
+    useCases: 'When you need it',
+    steps: 'Step by step',
+    example: 'Example',
+    tips: 'What to watch out for',
+    limits: 'What the tool does not do',
+    faqExtra: 'Questions about this tool',
+  },
+}
+
+/** Страница одного инструмента: рабочая зона, статья, инструкция, пример, советы, FAQ и перелинковка. */
 export function ToolSeoPage({ slug, lang }: { slug: string; lang: SeoLang }) {
   const page = toolPageBySlug(slug)
   if (!page) return null
 
   const copy = page.copy[lang]
   const common = COMMON[lang]
+  const labels = LABELS[lang]
+  const detail = toolDetail(slug, lang)
   const base = prefix(lang)
   const others = SEO_TOOL_PAGES.filter((item) => item.slug !== slug)
+  const steps = detail?.steps?.length ? detail.steps : common.steps
 
   return (
     <>
@@ -27,13 +76,34 @@ export function ToolSeoPage({ slug, lang }: { slug: string; lang: SeoLang }) {
 
       <Tool key={page.toolId} only={page.toolId} />
 
+      {detail && (
+        <>
+          <section className="page-hero">
+            <span className="eyebrow">{labels.aboutEyebrow}</span>
+            <h2>{labels.about}</h2>
+            {detail.intro.map((paragraph) => (
+              <p key={paragraph.slice(0, 24)}>{paragraph}</p>
+            ))}
+          </section>
+
+          <div className="page-grid">
+            {detail.useCases.map((item) => (
+              <article className="page-card" key={item.title}>
+                <h3>{item.title}</h3>
+                <p>{item.text}</p>
+              </article>
+            ))}
+          </div>
+        </>
+      )}
+
       <section className="how" id="how">
         <div className="section-head">
-          <span className="eyebrow">1 · 2 · 3</span>
-          <h2>{common.howTitle}</h2>
+          <span className="eyebrow">1 · 2 · 3 · 4</span>
+          <h2>{detail ? labels.steps : common.howTitle}</h2>
         </div>
         <div className="step-grid">
-          {common.steps.map((step, index) => (
+          {steps.map((step, index) => (
             <article className="step" key={step.title}>
               <span className="step-number">0{index + 1}</span>
               <h3>{step.title}</h3>
@@ -42,6 +112,38 @@ export function ToolSeoPage({ slug, lang }: { slug: string; lang: SeoLang }) {
           ))}
         </div>
       </section>
+
+      {detail?.example && (
+        <div className="page-grid">
+          <article className="page-card">
+            <h3>{detail.example.title}</h3>
+            <p>{detail.example.text}</p>
+          </article>
+        </div>
+      )}
+
+      {detail?.tips?.length || detail?.limits ? (
+        <div className="page-grid">
+          {detail?.tips?.length ? (
+            <article className="page-card">
+              <h3>{labels.tips}</h3>
+              <ul className="page-list">
+                {detail.tips.map((tip) => (
+                  <li key={tip.title}>
+                    <b>{tip.title}.</b> {tip.text}
+                  </li>
+                ))}
+              </ul>
+            </article>
+          ) : null}
+          {detail?.limits ? (
+            <article className="page-card">
+              <h3>{labels.limits}</h3>
+              <p>{detail.limits}</p>
+            </article>
+          ) : null}
+        </div>
+      ) : null}
 
       <section className="features">
         <div className="section-head">
@@ -63,10 +165,10 @@ export function ToolSeoPage({ slug, lang }: { slug: string; lang: SeoLang }) {
       <section className="faq" id="faq">
         <div className="section-head">
           <span className="eyebrow">FAQ</span>
-          <h2>{common.faqTitle}</h2>
+          <h2>{detail ? labels.faqExtra : common.faqTitle}</h2>
         </div>
         <div className="faq-list">
-          {common.faq.map((item) => (
+          {[...(detail?.faq ?? []), ...common.faq].map((item) => (
             <details className="faq-item" key={item.q}>
               <summary>
                 <span>{item.q}</span>

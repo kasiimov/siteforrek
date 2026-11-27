@@ -35,6 +35,8 @@ const CONTENT: Record<Lang, Text> = {
       { title: "PDF ni bo'lish", text: 'PDF ni sahifalarga ajratib, kerakli qismini yuklab oling.', slug: 'split-pdf' },
       { title: 'Rasmni PDF qilish', text: 'JPG yoki PNG rasmlarni bitta PDF ga aylantiring.', slug: 'jpg-to-pdf' },
       { title: 'PDF ni rasmga aylantirish', text: 'PDF sahifalarini JPG yoki PNG rasm sifatida saqlang.', slug: 'pdf-to-jpg' },
+      { title: 'PDF ni tahrirlash', text: "Matnni tuzating, rasm va sahifa qo'shing, izohlarni o'chiring — brauzerda.", slug: 'pdf-editor' },
+      { title: 'PDF dan rasmlarni ajratish', text: "Ichki rasmlarni asl sifatida bitta ZIP arxivda oling.", slug: 'extract-images' },
     ],
     faqHeading: 'Ko‘p beriladigan savollar',
     faq: [
@@ -74,6 +76,8 @@ const CONTENT: Record<Lang, Text> = {
       { title: 'Split PDF', text: 'Split PDF pages and download only the part you need.', slug: 'split-pdf' },
       { title: 'JPG to PDF', text: 'Turn JPG or PNG photos into a single PDF file.', slug: 'jpg-to-pdf' },
       { title: 'PDF to JPG', text: 'Save PDF pages as high quality JPG or PNG images.', slug: 'pdf-to-jpg' },
+      { title: 'Edit PDF', text: 'Fix text, insert photos and pages, erase comments — all in the browser.', slug: 'pdf-editor' },
+      { title: 'Extract images', text: 'Get every embedded image as one ZIP archive at original quality.', slug: 'extract-images' },
     ],
     faqHeading: 'Frequently asked questions',
     faq: [

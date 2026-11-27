@@ -234,6 +234,72 @@ export const SEO_TOOL_PAGES: SeoToolPage[] = [
       },
     },
   },
+  {
+    slug: 'pdf-editor',
+    toolId: 'redactor',
+    copy: {
+      ru: {
+        name: 'Редактор PDF',
+        h1: 'Редактор PDF онлайн: правка текста, страниц и пометок',
+        title: 'Редактор PDF онлайн — править текст и страницы бесплатно — Congix Docs',
+        description:
+          'Редактируйте PDF в браузере: исправьте текст, вставьте фото и страницы, сотрите комментарии и штампы. Бесплатно, без регистрации, файл не загружается на сервер.',
+        lead:
+          'Откройте документ и правьте его на месте: текст, картинки, пустые страницы и пометки. Всё остаётся в браузере, исходный файл не меняется.',
+      },
+      uz: {
+        name: 'PDF tahrirlovchi',
+        h1: 'PDF tahrirlovchi — matn va sahifalarni onlayn tuzatish',
+        title: 'PDF ni onlayn tahrirlash — bepul — Congix Docs',
+        description:
+          "PDF ni brauzerda tahrirlang: matnni tuzating, rasm va sahifa qo'shing, izoh va shtamplarni o'chiring. Bepul, ro'yxatdan o'tishsiz, fayl serverga yuklanmaydi.",
+        lead:
+          "Hujjatni ochib, joyida tahrirlang: matn, rasmlar, bo'sh sahifalar va izohlar. Hammasi brauzerda qoladi, asl fayl o'zgarmaydi.",
+      },
+      en: {
+        name: 'PDF editor',
+        h1: 'PDF editor online: fix text, pages and marks',
+        title: 'Edit PDF online free — Congix Docs',
+        description:
+          'Edit a PDF in your browser: fix text, insert photos and pages, erase comments and stamps. Free, no sign-up, the file is never uploaded.',
+        lead:
+          'Open a document and edit it in place: text, pictures, blank pages and marks. Everything stays in the browser and the source file is untouched.',
+      },
+    },
+  },
+  {
+    slug: 'extract-images',
+    toolId: 'images',
+    copy: {
+      ru: {
+        name: 'Картинки из PDF',
+        h1: 'Извлечь картинки из PDF онлайн в исходном качестве',
+        title: 'Извлечь изображения из PDF онлайн — Congix Docs',
+        description:
+          'Достаньте все встроенные изображения из PDF одним ZIP-архивом: исходное разрешение, без пересжатия и скриншотов. Бесплатно, без регистрации.',
+        lead:
+          'Вытащите фотографии, схемы и сканы, встроенные в документ, в исходном качестве. Готовые файлы приходят одним архивом.',
+      },
+      uz: {
+        name: 'PDF dan rasmlar',
+        h1: "PDF dan rasmlarni asl sifatida ajratib olish",
+        title: 'PDF dan rasmlarni ajratish onlayn — Congix Docs',
+        description:
+          "PDF ichidagi barcha rasmlarni bitta ZIP arxivda oling: asl o'lcham, qayta siqish va skrinshotsiz. Bepul, ro'yxatdan o'tishsiz.",
+        lead:
+          "Hujjatga qo'shilgan foto, sxema va skanlarni asl sifatida chiqaring. Tayyor fayllar bitta arxiv bilan keladi.",
+      },
+      en: {
+        name: 'Images from PDF',
+        h1: 'Extract images from a PDF at original quality',
+        title: 'Extract images from PDF online — Congix Docs',
+        description:
+          'Pull every embedded image out of a PDF as one ZIP archive at original resolution, with no re-compression and no screenshots. Free, no sign-up.',
+        lead:
+          'Get the photos, diagrams and scans embedded in the document at their original quality. The files arrive in a single archive.',
+      },
+    },
+  },
 ]
 
 export const COMMON: Record<SeoLang, CommonCopy> = {

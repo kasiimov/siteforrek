@@ -244,7 +244,7 @@ async function loadEditorFontBytes(name = 'watermark'): Promise<ArrayBuffer> {
 const FAMILY_FILES: Record<TextFamily, { regular: string; bold?: string; italic?: string; bolditalic?: string }> = {
   sans: { regular: 'watermark', bold: 'ptsans-bold', italic: 'ptsans-italic', bolditalic: 'ptsans-bolditalic' },
   serif: { regular: 'ptserif', bold: 'ptserif-bold' },
-  mono: { regular: 'plexmono', bold: 'plexmono-bold' },
+  mono: { regular: 'plexmono' },
 }
 
 /** Файл шрифта: семейство плюс начертание (обычное, жирное, курсив, жирный курсив). */

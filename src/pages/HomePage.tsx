@@ -118,6 +118,44 @@ const INSTRUMENTS = [
       en: 'You can choose several ranges — each becomes a separate file. The original is not changed.',
     },
   },
+  {
+    slug: 'pdf-editor',
+    title: { ru: 'Редактор PDF', uz: 'PDF tahrirlovchi', en: 'PDF editor' },
+    what: {
+      ru: 'Открывает документ и даёт править его на месте: исправить текст, вставить фото или пустую страницу, стереть чужие комментарии и штампы. Исходный файл остаётся нетронутым, результат собирается в настоящий PDF.',
+      uz: "Hujjatni ochib, joyida tahrirlash imkonini beradi: matnni tuzatish, rasm yoki bo'sh sahifa qo'shish, boshqalarning izoh va shtamplarini o'chirish. Asl fayl o'zgarmaydi.",
+      en: 'Opens a document and lets you edit it in place: fix text, insert a photo or a blank page, erase other people’s comments and stamps. The source stays untouched and the result is a real PDF.',
+    },
+    steps: {
+      ru: ['Откройте редактор и загрузите PDF.', 'Выберите текст, картинку или пометку и внесите правки.', 'Скачайте готовый PDF — страницы не пересжимаются.'],
+      uz: ['Tahrirlovchini oching va PDF yuklang.', "Matn, rasm yoki izohni tanlab, o'zgartirish kiriting.", 'Tayyor PDF ni yuklab oling — sahifalar qayta siqilmaydi.'],
+      en: ['Open the editor and upload a PDF.', 'Select text, a picture or a mark and make your edits.', 'Download the PDF — pages are not re-compressed.'],
+    },
+    note: {
+      ru: 'В скане нет текстового слоя: «текст» там — картинка. Править его нельзя, но можно закрыть плашкой и написать поверх.',
+      uz: "Skanda matn qatlami bo'lmaydi: u yerda «matn» — rasm. Uni tahrirlab bo'lmaydi, lekin plashka bilan yopib, ustiga yozish mumkin.",
+      en: 'A scan has no text layer: its “text” is a picture. You cannot edit it, but you can cover it and type on top.',
+    },
+  },
+  {
+    slug: 'extract-images',
+    title: { ru: 'Картинки из PDF', uz: 'PDF dan rasmlar', en: 'Images from PDF' },
+    what: {
+      ru: 'Достаёт все встроенные изображения из PDF в исходном разрешении и складывает в ZIP. Никаких скриншотов и пересжатия: ровно те файлы, что лежали внутри документа.',
+      uz: "PDF ichidagi barcha rasmlarni asl o'lchamda chiqarib, ZIP ga yig'adi. Skrinshot va qayta siqish yo'q: hujjat ichida qanday bo'lsa, shunday.",
+      en: 'Pulls every embedded image out of a PDF at its original resolution and packs them into a ZIP. No screenshots, no re-compression — exactly the files that were inside.',
+    },
+    steps: {
+      ru: ['Добавьте PDF — один или сразу несколько.', 'Дождитесь поиска встроенных изображений.', 'Скачайте ZIP и заберите картинки.'],
+      uz: ['PDF qo‘shing — bitta yoki bir nechta.', 'Ichki rasmlar qidirilishini kuting.', 'ZIP ni yuklab, rasmlarni oling.'],
+      en: ['Add one PDF or several at once.', 'Wait while embedded images are collected.', 'Download the ZIP and take the images.'],
+    },
+    note: {
+      ru: 'Если архив пустой, значит внутри только текст и векторная графика. Для изображений страниц используйте PDF → JPG.',
+      uz: "Agar arxiv bo'sh bo'lsa, ichida faqat matn va vektor grafika bor. Sahifa rasmlari uchun PDF → JPG dan foydalaning.",
+      en: 'An empty archive means the file holds only text and vector graphics. Use PDF to JPG for page images.',
+    },
+  },
 ]
 
 const features = [
