@@ -93,21 +93,21 @@ const PRIVACY_META: Record<SeoLang, PageMeta> = {
   ru: {
     title: 'Политика конфиденциальности — Congix Docs',
     description:
-      'Как Congix Docs обращается с файлами и данными: документы не загружаются на сервер, статистика анонимная, реклама congix.uz.',
+      'Как Congix Docs обращается с файлами и данными: документы не загружаются на сервер, статистика анонимная, рекламных блоков нет.',
     keywords: 'политика конфиденциальности Congix Docs, обработка файлов, cookie, аналитика',
     lang: 'ru',
   },
   uz: {
     title: 'Maxfiylik siyosati — Congix Docs',
     description:
-      "Congix Docs fayllar va ma'lumotlar bilan qanday ishlaydi: hujjatlar serverga yuklanmaydi, statistika anonim, reklama congix.uz.",
+      "Congix Docs fayllar va ma'lumotlar bilan qanday ishlaydi: hujjatlar serverga yuklanmaydi, statistika anonim, reklama bloklari yo'q.",
     keywords: 'maxfiylik siyosati, PDF fayllar, cookie, statistika',
     lang: 'uz',
   },
   en: {
     title: 'Privacy policy — Congix Docs',
     description:
-      'How Congix Docs handles files and data: documents are never uploaded, statistics are anonymous and ads come from congix.uz.',
+      'How Congix Docs handles files and data: documents are never uploaded, statistics are anonymous and there are no ad blocks.',
     keywords: 'privacy policy, PDF files, cookies, analytics',
     lang: 'en',
   },

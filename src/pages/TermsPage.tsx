@@ -39,9 +39,9 @@ const CONTENT: Record<SeoLang, TermsCopy> = {
         ],
       },
       {
-        title: '4. Реклама и внешние ссылки',
+        title: '4. Внешние ссылки',
         text: [
-          'На страницах есть блоки с пометкой «Реклама». Переход по ним ведёт на сторонние сайты, у которых свои правила и политика конфиденциальности; мы не отвечаем за их содержание и работу.',
+          'На страницах могут быть ссылки на сторонние сайты — у них свои правила и политика конфиденциальности. Мы не отвечаем за их содержание и работу.',
         ],
       },
       {
@@ -95,9 +95,9 @@ const CONTENT: Record<SeoLang, TermsCopy> = {
         ],
       },
       {
-        title: '4. Reklama va tashqi havolalar',
+        title: '4. Tashqi havolalar',
         text: [
-          "Sahifalarda «Reklama» belgisi bilan bloklar bor. Ularga o'tish uchinchi saytlarga olib boradi: ularning o'z qoidalari va maxfiylik siyosati mavjud, biz ularning mazmuni va ishi uchun javob bermaymiz.",
+          "Sahifalarda uchinchi saytlarga havolalar bo'lishi mumkin: ularning o'z qoidalari va maxfiylik siyosati mavjud, biz ularning mazmuni va ishi uchun javob bermaymiz.",
         ],
       },
       {
@@ -151,9 +151,9 @@ const CONTENT: Record<SeoLang, TermsCopy> = {
         ],
       },
       {
-        title: '4. Advertising and external links',
+        title: '4. External links',
         text: [
-          'Pages contain blocks marked as advertising. Following them leads to third-party sites with their own terms and privacy policies; we are not responsible for their content or operation.',
+          'Pages may contain links to third-party sites with their own terms and privacy policies; we are not responsible for their content or operation.',
         ],
       },
       {
