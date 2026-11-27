@@ -1,3 +1,4 @@
+import { FaqJsonLd } from '../components/FaqJsonLd'
 import { Tool } from '../components/Tool'
 import { Link } from '../lib/router'
 import { COMMON, PRIVACY_SLUG, SEO_TOOL_PAGES, toolPageBySlug } from '../lib/seoToolPages'
@@ -65,9 +66,12 @@ export function ToolSeoPage({ slug, lang }: { slug: string; lang: SeoLang }) {
   const base = prefix(lang)
   const others = SEO_TOOL_PAGES.filter((item) => item.slug !== slug)
   const steps = detail?.steps?.length ? detail.steps : common.steps
+  const faqItems = [...(detail?.faq ?? []), ...common.faq]
 
   return (
     <>
+      <FaqJsonLd items={faqItems} />
+
       <section className="page-hero">
         <span className="eyebrow">{common.toolLabel}</span>
         <h1>{copy.h1}</h1>
@@ -168,7 +172,7 @@ export function ToolSeoPage({ slug, lang }: { slug: string; lang: SeoLang }) {
           <h2>{detail ? labels.faqExtra : common.faqTitle}</h2>
         </div>
         <div className="faq-list">
-          {[...(detail?.faq ?? []), ...common.faq].map((item) => (
+          {faqItems.map((item) => (
             <details className="faq-item" key={item.q}>
               <summary>
                 <span>{item.q}</span>

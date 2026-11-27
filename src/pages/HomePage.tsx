@@ -1,3 +1,4 @@
+import { FaqJsonLd } from '../components/FaqJsonLd'
 import { Tool } from '../components/Tool'
 import { catalog } from '../components/toolCatalog'
 import { Arrow } from '../components/ui'
@@ -285,6 +286,8 @@ const faq = [
 export function HomePage() {
   return (
     <>
+      <FaqJsonLd items={faq} />
+
       <section className="hero">
         <div className="hero-copy">
           <span className="badge">

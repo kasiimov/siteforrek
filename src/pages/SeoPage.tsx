@@ -1,3 +1,4 @@
+import { FaqJsonLd } from '../components/FaqJsonLd'
 import { Arrow } from '../components/ui'
 import { Link, ROUTES } from '../lib/router'
 
@@ -108,6 +109,8 @@ export function SeoPage({ lang }: { lang: Lang }) {
 
   return (
     <>
+      <FaqJsonLd items={text.faq} />
+
       <section className="page-hero">
         <span className="eyebrow">{text.eyebrow}</span>
         <h1>{text.title}</h1>
