@@ -8,7 +8,10 @@ export type OcrLine = {
   height: number
 }
 
-type RawWord = { text: string; bbox: { x0: number; y0: number; x1: number; y1: number } }
+type RawWord = { text: string; confidence?: number; bbox: { x0: number; y0: number; x1: number; y1: number } }
+
+/** Ниже этого доверия Tesseract обычно выдаёт мусор из теней и фона. */
+const MIN_WORD_CONFIDENCE = 35
 
 export const OCR_LANGS = [
   { value: 'rus+eng', label: 'Русский + English' },
@@ -24,6 +27,7 @@ export function groupWords(words: RawWord[], scale: number): OcrLine[] {
 
   for (const word of words) {
     if (!word.text.trim()) continue
+    if (typeof word.confidence === 'number' && word.confidence < MIN_WORD_CONFIDENCE) continue
     const height = word.bbox.y1 - word.bbox.y0
     const row = rows.find(
       (candidate) =>
@@ -46,7 +50,8 @@ export function groupWords(words: RawWord[], scale: number): OcrLine[] {
     let previousRight: number | null = null
 
     for (const word of sorted) {
-      if (previousRight !== null && word.bbox.x0 - previousRight > row.height * 0.3) text += ' '
+      // Tesseract отдаёт отдельные слова без пробелов: между ними пробел ставим сами.
+      if (previousRight !== null) text += ' '
       text += word.text.trim()
       previousRight = word.bbox.x1
     }
@@ -85,10 +90,11 @@ const LOCAL_WORKER = () => new URL('tesseract/worker.min.js', document.baseURI).
 const LOCAL_CORE = () => new URL('tesseract/tesseract-core-simd-lstm.wasm.js', document.baseURI).href
 
 const OCR_ATTEMPTS: OcrAttempt[] = [
-  // Быстрые модели: пара языков весит ~3–5 МБ вместо 10–20 МБ.
-  { langPath: 'https://tessdata.projectnaptha.com/4.0.0_fast' },
-  { langPath: 'https://raw.githack.com/naptha/tessdata/gh-pages/4.0.0_fast' },
+  // Полные модели: точнее «быстрых», поэтому идут первыми.
   { langPath: 'https://tessdata.projectnaptha.com/4.0.0' },
+  { langPath: 'https://raw.githack.com/naptha/tessdata/gh-pages/4.0.0' },
+  // Если полные не скачались — быстрые: пара языков весит ~3–5 МБ вместо 10–20 МБ.
+  { langPath: 'https://tessdata.projectnaptha.com/4.0.0_fast' },
   // Последняя попытка — штатные адреса tesseract.js на случай, если наш
   // домен отдаёт статику как-то иначе.
   {
@@ -106,8 +112,8 @@ async function loadWorker(
   attempt: OcrAttempt,
   onProgress?: (progress: number, status?: string) => void,
 ) {
-  const { createWorker } = await import('tesseract.js')
-  return createWorker(lang, 1, {
+  const { createWorker, PSM } = await import('tesseract.js')
+  const worker = await createWorker(lang, 1, {
     workerPath: attempt.workerPath ?? LOCAL_WORKER(),
     corePath: attempt.corePath ?? LOCAL_CORE(),
     ...(attempt.langPath ? { langPath: attempt.langPath } : {}),
@@ -117,6 +123,14 @@ async function loadWorker(
       onProgress?.(message.progress, message.status)
     },
   })
+  // Авторазметка страницы, пробелы между словами и подсказка про 300 dpi:
+  // без этого строки склеиваются и Tesseract мельчит текст.
+  await worker.setParameters({
+    tessedit_pageseg_mode: PSM.AUTO,
+    preserve_interword_spaces: '1',
+    user_defined_dpi: '300',
+  })
+  return worker
 }
 
 /**
@@ -129,6 +143,8 @@ export async function recognizeImage(
   onProgress?: (progress: number, status?: string) => void,
   /** во сколько раз растр крупнее страницы: координаты слов возвращаем в точках страницы */
   rasterScale = 1,
+  /** пересчёт точки из координат растра (если растр выравнивали поворотом) */
+  mapPoint?: (x: number, y: number) => { x: number; y: number },
 ): Promise<OcrLine[]> {
   const order = [preferredAttempt, ...OCR_ATTEMPTS.map((_, index) => index)].filter(
     (value, position, list) => list.indexOf(value) === position,
@@ -144,7 +160,29 @@ export async function recognizeImage(
       const result = await worker.recognize(canvas)
       const page = result.data as unknown as { words?: RawWord[] }
       preferredAttempt = index
-      return groupWords(page.words ?? [], Math.max(0.01, rasterScale))
+      // Строки считаем в пикселях растра, потом переводим в точки страницы:
+      // при выравнивании растр повёрнут, и просто делить на масштаб мало.
+      const raw = groupWords(page.words ?? [], 1)
+      const toPage = 1 / Math.max(0.01, rasterScale)
+      if (!mapPoint) {
+        return raw.map((line) => ({
+          ...line,
+          x: line.x * toPage,
+          y: line.y * toPage,
+          width: line.width * toPage,
+          height: line.height * toPage,
+        }))
+      }
+      return raw.map((line) => {
+        const center = mapPoint(line.x + line.width / 2, line.y + line.height / 2)
+        return {
+          ...line,
+          x: (center.x - line.width / 2) * toPage,
+          y: (center.y - line.height / 2) * toPage,
+          width: line.width * toPage,
+          height: line.height * toPage,
+        }
+      })
     } catch (error) {
       lastError = error
       console.warn('OCR: не удалось запустить распознавание', attempt, error)

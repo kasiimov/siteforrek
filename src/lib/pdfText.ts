@@ -112,7 +112,7 @@ export async function renderPageRaster(
   targetWidth = 1600,
 ): Promise<{ canvas: HTMLCanvasElement; scale: number }> {
   const base = page.getViewport({ scale: 1 })
-  const scale = Math.min(3, Math.max(1, targetWidth / Math.max(1, base.width)))
+  const scale = Math.min(4, Math.max(1, targetWidth / Math.max(1, base.width)))
   const viewport = page.getViewport({ scale })
   const canvas = document.createElement('canvas')
   canvas.width = Math.max(1, Math.round(viewport.width))

@@ -34,6 +34,7 @@ import type {
 import { ColorPicker } from './ColorPicker'
 import type { TextRun } from '../lib/pdfText'
 import { OCR_LANGS, recognizeImage } from '../lib/ocr'
+import { prepareForOcr } from '../lib/ocrImage'
 import type { OcrLang } from '../lib/ocr'
 import {
   A4_BOX,
@@ -1458,10 +1459,10 @@ export function PdfRedactor() {
         pageCache.current.get(model.source) ?? (await docRef.current.getPage(model.source + 1))
       pageCache.current.set(model.source, proxy)
       const { renderPageRaster } = await import('../lib/pdfText')
-      return renderPageRaster(proxy, 1600)
+      return renderPageRaster(proxy, 2400)
     }
 
-    const ratio = Math.min(3, Math.max(1.2, 1600 / Math.max(1, model.box.width)))
+    const ratio = Math.min(4, Math.max(1.2, 2400 / Math.max(1, model.box.width)))
     const canvas = document.createElement('canvas')
     canvas.width = Math.round(model.box.width * ratio)
     canvas.height = Math.round(model.box.height * ratio)
@@ -1494,14 +1495,18 @@ export function PdfRedactor() {
 
     try {
       const { canvas, scale: rasterScale } = await rasterPage(model)
+      // Распознаём по подготовленной копии: крупнее, серым и без теней. Цвет фона
+      // для заплаток берём из исходного растра, поэтому его не трогаем.
+      const prepared = prepareForOcr(canvas)
       const lines = await recognizeImage(
-        canvas,
+        prepared.canvas,
         ocrLang,
         (progress, status) => {
           setOcrProgress(progress)
           setOcrStatus(status ?? '')
         },
-        rasterScale,
+        rasterScale * prepared.scale,
+        prepared.toSource,
       )
       // Растр ещё нужен: из него берём цвет фона для заплаток.
 
