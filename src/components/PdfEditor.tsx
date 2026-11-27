@@ -1,7 +1,6 @@
 import { useCallback, useRef, useState } from 'react'
 import type { DragEvent as ReactDragEvent } from 'react'
 import { formatSize, saveOutputs } from '../lib/download'
-import { addHistory } from '../lib/profile'
 import { track } from '../lib/analytics'
 import type { ToolSpec } from './toolTypes'
 
@@ -102,11 +101,6 @@ export function PdfEditor({ spec }: { spec: ToolSpec }) {
       const zipName = `${files[0].name.replace(/\.[^.]+$/, '') || 'document'}-congix-docs.zip`
       await saveOutputs(outputs, zipName)
       track(spec.name, 'done', { ms: Date.now() - startedAt, size: sizeKb, kind, files: files.length })
-      addHistory({
-        tool: spec.name,
-        fileName: files.map((file) => file.name).join(', '),
-        result: outputs.length > 1 ? `${outputs.length} файлов в ZIP` : outputs[0]?.name ?? 'файл',
-      })
       setMessage({
         tone: note ? 'info' : 'ok',
         text:

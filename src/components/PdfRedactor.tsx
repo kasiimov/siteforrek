@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { DragEvent as ReactDragEvent, PointerEvent as ReactPointerEvent, ReactNode } from 'react'
 import type { PDFDocumentProxy, PDFPageProxy } from 'pdfjs-dist'
 import { baseName, download, formatSize } from '../lib/download'
-import { addHistory } from '../lib/profile'
 import { track } from '../lib/analytics'
 import { Link, ROUTES } from '../lib/router'
 import {
@@ -1720,7 +1719,6 @@ export function PdfRedactor() {
       const name = (docName || 'document').replace(/[\\/:*?"<>|]+/g, '-')
       download(result.blob, `${name}-edited.pdf`)
       track('Редактор PDF', 'done')
-      addHistory({ tool: 'Редактор PDF', fileName: name, result: `объектов: ${result.objects}` })
       setMessage({ tone: 'ok', text: `Готово — PDF скачивается: ${result.pages} страниц(ы), объектов ${result.objects}.` })
     } catch (error) {
       console.error(error)
@@ -3495,12 +3493,6 @@ export function PdfRedactor() {
             →
           </button>
         </div>
-
-        {hasDoc && (
-          <div className="ed-status-ad">
-            
-          </div>
-        )}
 
         {hasDoc && (
           <div className="ed-status-group ed-status-zoom">

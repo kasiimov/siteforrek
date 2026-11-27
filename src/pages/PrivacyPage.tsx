@@ -28,16 +28,16 @@ const CONTENT: Record<SeoLang, PrivacyCopy> = {
       {
         title: '2. Сбор персональных данных',
         text: [
-          'Для работы с инструментами регистрация не требуется. Имя, которое вы указываете в профиле, хранится только в памяти браузера (localStorage) и никуда не отправляется.',
+          'Для работы с инструментами регистрация и аккаунт не нужны. Мы не просим имя, электронную почту или телефон и не создаём профили пользователей.',
           'Адрес электронной почты мы не запрашиваем и не сохраняем. Платная подписка на сайте отсутствует.',
         ],
       },
       {
         title: '3. Файлы cookie, статистика и реклама',
         text: [
-          'Сайт использует localStorage для настроек и истории обработки — эти данные остаются на вашем устройстве и удаляются в настройках браузера.',
-          'Мы собираем анонимную статистику: название инструмента, действие, путь страницы и случайный идентификатор посетителя. Ни файлов, ни имён, ни почты в ней нет. Сбор можно отключить в разделе «Настройки».',
-          'В рекламном блоке показываются объявления congix.uz. Рекламная сеть может использовать собственные cookie — их правила описаны на сайте congix.uz.',
+          'Сайт использует localStorage только для настроек — эти данные остаются на вашем устройстве и удаляются в настройках браузера.',
+          'Мы собираем анонимную статистику: название инструмента, действие, путь страницы и случайный идентификатор посетителя. Ни файлов, ни имён, ни почты в ней нет.',
+          'Для показа рекламы могут использоваться сторонние рекламные сети, в том числе Google AdSense. Они применяют файлы cookie (включая cookie DoubleClick) и идентификаторы устройства, чтобы показывать объявления с учётом ваших интересов и предыдущих посещений сайтов. Персонализированную рекламу можно отключить в настройках рекламы Google (adssettings.google.com) или в настройках браузера. Правила Google описаны на policies.google.com/technologies/ads.',
         ],
       },
       {
@@ -67,16 +67,16 @@ const CONTENT: Record<SeoLang, PrivacyCopy> = {
       {
         title: "2. Shaxsiy ma'lumotlar",
         text: [
-          "Vositalardan foydalanish uchun ro'yxatdan o'tish kerak emas. Profilda ko'rsatilgan ism faqat brauzer xotirasida (localStorage) saqlanadi va hech qayerga yuborilmaydi.",
+          "Vositalardan foydalanish uchun ro'yxatdan o'tish va akkaunt kerak emas. Biz ism, elektron pochta yoki telefon so'ramaymiz va foydalanuvchi profillarini yaratmaymiz.",
           "Elektron pochta manzilini so'ramaymiz va saqlamaymiz. Saytda pullik obuna yo'q.",
         ],
       },
       {
         title: '3. Cookie fayllar, statistika va reklama',
         text: [
-          "Sayt sozlamalar va ishlash tarixi uchun localStorage dan foydalanadi — bu ma'lumotlar qurilmangizda qoladi va brauzer sozlamalarida o'chiriladi.",
-          "Biz anonim statistika yig'amiz: vosita nomi, amal, sahifa manzili va tasodifiy tashrif buyuruvchi identifikatori. Unda fayllar, ismlar va pochta yo'q. Yig'ishni «Sozlamalar» bo'limida o'chirish mumkin.",
-          "Reklama blokida congix.uz e'lonlari ko'rsatiladi. Reklama tarmog'i o'z cookie fayllaridan foydalanishi mumkin — qoidalari congix.uz saytida yozilgan.",
+          "Sayt localStorage dan faqat sozlamalar uchun foydalanadi — bu ma'lumotlar qurilmangizda qoladi va brauzer sozlamalarida o'chiriladi.",
+          "Biz anonim statistika yig'amiz: vosita nomi, amal, sahifa manzili va tasodifiy tashrif buyuruvchi identifikatori. Unda fayllar, ismlar va pochta yo'q.",
+          "Reklama ko'rsatish uchun uchinchi tomon reklama tarmoqlari, jumladan Google AdSense ishlatilishi mumkin. Ular cookie fayllari (DoubleClick cookie ham) va qurilma identifikatorlaridan foydalanib, sizning qiziqishlaringiz va boshqa saytlarga tashriflaringizga mos e'lonlarni ko'rsatadi. Shaxsiylashtirilgan reklamani Google reklama sozlamalarida (adssettings.google.com) yoki brauzer sozlamalarida o'chirish mumkin. Google qoidalari policies.google.com/technologies/ads sahifasida yozilgan.",
         ],
       },
       {
@@ -106,16 +106,16 @@ const CONTENT: Record<SeoLang, PrivacyCopy> = {
       {
         title: '2. Personal data',
         text: [
-          'No registration is required to use the tools. The name you enter in the profile is kept in your browser storage (localStorage) and is not sent anywhere.',
+          'No registration or account is required to use the tools. We do not ask for a name, email or phone number and do not create user profiles.',
           'We do not ask for or store an email address. The site has no paid subscription.',
         ],
       },
       {
         title: '3. Cookies, statistics and advertising',
         text: [
-          'The site uses localStorage for preferences and processing history — this data stays on your device and can be cleared in your browser settings.',
-          'We collect anonymous statistics: tool name, action, page path and a random visitor identifier. It contains no files, names or emails. Collection can be disabled in Settings.',
-          'The ad slot shows congix.uz advertisements. The ad network may use its own cookies, described on congix.uz.',
+          'The site uses localStorage for preferences only — this data stays on your device and can be cleared in your browser settings.',
+          'We collect anonymous statistics: tool name, action, page path and a random visitor identifier. It contains no files, names or emails.',
+          'Advertising may be served by third-party ad networks, including Google AdSense. They use cookies (including the DoubleClick cookie) and device identifiers to show ads based on your interests and previous visits to other sites. You can turn off personalized advertising in Google Ads Settings (adssettings.google.com) or in your browser settings. Google data practices are described at policies.google.com/technologies/ads.',
         ],
       },
       {

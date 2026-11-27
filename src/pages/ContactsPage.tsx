@@ -101,10 +101,10 @@ export function ContactsPage({ lang }: { lang: 'ru' | 'uz' | 'en' }) {
             <h3>{lang === 'ru' ? 'Сервис не требует регистрации' : lang === 'uz' ? 'Xizmat ro‘yxatdan o‘tirishni talab qilmaydi' : 'The service does not require sign-up'}</h3>
             <p>
               {lang === 'ru'
-                ? 'Контакты нужны только для вопросов и связи — войти, зарегистрироваться или создавать профиль не обязательно. Инструменты работают сразу после открытия страницы.'
+                ? 'Контакты нужны только для вопросов и связи — входить или регистрироваться не нужно. Инструменты работают сразу после открытия страницы.'
                 : lang === 'uz'
-                ? 'Kontaktlar faqat savollar va aloqa uchinda kerak — kirmaslik, ro‘yxatdan o‘tmagan yahud profil yaratmaslik shart emas. Vositalar sahifa ochilganidan keyin darhol ishlaydi.'
-                : 'Contacts are needed only for questions and communication — you do not have to sign in, register or create a profile. The tools work right after opening the page.'}
+                ? 'Kontaktlar faqat savollar va aloqa uchun kerak — kirish yoki ro‘yxatdan o‘tish shart emas. Vositalar sahifa ochilgan zahoti ishlaydi.'
+                : 'Contacts are only for questions and communication — there is no sign-in or registration. The tools work the moment the page opens.'}
             </p>
             <div className="form-actions" style={{ marginTop: 14 }}>
               <Link className="btn btn-soft" to={ROUTES.tools}>
